@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD 17)
 # ##############################################################################
 
 # python
-set(Python_ROOT_DIR "/home/reece/miniconda3/envs/robodiff")
+set(Python_ROOT_DIR "/home/reece/miniforge3/envs/beso")
 find_package(Python COMPONENTS Interpreter Development)
 
 # raisim

@@ -1,11 +1,12 @@
 defaults:
   - agents: beso_raisim
   - workspaces: raisim_manager
+  - _self_
 
 log_dir: logs/raisim/
 plot_dir: plots/raisim/
 plot_name: ${now:%Y-%m-%d}.png
-data_path: /path/to/beso/environments/data/cbet_datasets/multimodal_push_fixed_target
+data_path: /home/reece/Workspace/Projects/beso/beso/envs/raisim/data/random_acts.npy
 
 hydra:
   run:
@@ -14,7 +15,7 @@ hydra:
     dir: ${log_dir}/sweeps/${now:%Y-%m-%d}/${now:%H-%M-%S}
     subdir: ${hydra.job.override_dirname}
 
-group: group_name
+group: first_tests
 
 wandb:
   entity: reeceomahoney
@@ -24,24 +25,24 @@ wandb:
 device: 'cuda'
 seed: 6
 scale_data: True
-future_seq_length: 1
-window_size: 5
+future_seq_length: 0
+window_size: 3
 mask_targets: False
-reduce_obs_dim: true
+reduce_obs_dim: false
 
-goal_conditioning: True
+goal_conditioning: False
 goal_conditional: 'future'
-action_dim: 2
-input_dim: 18
-obs_dim: 10
-goal_dim: 4
+action_dim: 12
+# input_dim: 18
+obs_dim: 33
+goal_dim: 0
 
 # policy model params
 hidden_dim: 240 # for transformer, must be a multiple of n_heads (6 in diffusion_gpt)
 use_spectral_norm: false
 num_hidden_layers: 4
 train_method: 'steps'
-max_train_steps: 60000
+max_train_steps: 10
 max_epochs: 100
 eval_every_n_steps: 4000
 
@@ -65,3 +66,43 @@ sigma_data: 0.5
 cond_mask_prob: 0.1
 cond_lambda: 2 # only required for inference of CFG-BESO
 n_timesteps: 3 # number of diffusion steps during inference
+
+env:
+  render: True
+  num_envs: 1
+  num_threads: 'auto'
+  simulation_dt: 0.005
+  control_dt: 0.02
+  max_time: 10000
+  enable_dynamics_randomization: True
+  action_scaling: 1.0
+  use_actuator_network: True
+  server_port: 8080
+  early_termination: True
+  normalize_observation: False
+
+  velocity_command:
+    limit_heading_velocity: 1.0
+    limit_lateral_velocity: 0.75
+    limit_yaw_rate: 1.25
+
+    # Less than this is considered to be a zero velocity command
+    limit_velocity_magnitude: 0.1
+
+    # These values are rescaled if their sum is not equal to 1
+    probability_zero_command: 0.2
+    probability_heading_command: 0.0
+    probability_lateral_command: 0.0
+    probability_yaw_command: 0.0
+    probability_direction_command: 0.0
+    probability_constant_command: 0.8   # includes all three velocities
+
+    # Time range in seconds when the next command is sampled
+    command_sampling_time_min: 3.0
+    command_sampling_time_max: 4.0
+
+  reward:
+    base_linear_velocity_tracking:
+      coeff: 1.0
+    base_angular_velocity_tracking:
+      coeff: 1.0

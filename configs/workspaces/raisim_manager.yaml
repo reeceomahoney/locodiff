@@ -2,7 +2,7 @@ _target_: beso.workspaces.raisim_workspace.RaisimManager
 _recursive_: false
 
 dataset_fn:
-  _target_: beso.envs.block_pushing.data.dataloader.get_push_train_val
+  _target_: beso.envs.raisim.data.dataloader.get_raisim_train_val
   data_directory: ${data_path}
   train_fraction: 0.95
   random_seed: ${seed}
@@ -14,6 +14,7 @@ dataset_fn:
   reduce_obs_dim: ${reduce_obs_dim}
   only_sample_tail: false # true change again 
   only_sample_seq_end: False 
+  obs_dim: ${obs_dim}
   transform:
     # NOTE: blockpush_mask_targets: for future conditional
     # mask out targets in obs; only keep block positions in future obs conditionals

@@ -19,7 +19,7 @@ OmegaConf.register_new_resolver(
 )
 
 
-@hydra.main(config_path="../configs", config_name="block_push_main_config.yaml")
+@hydra.main(config_path="../configs", config_name="raisim_main_config.yaml", version_base=None)
 def main(cfg: DictConfig) -> None:
     
     np.random.seed(cfg.seed)
@@ -31,8 +31,8 @@ def main(cfg: DictConfig) -> None:
 
     run = wandb.init(
         project=cfg.wandb.project, 
-        entity=cfg.wandb.entity,
-        group=cfg.group,
+        # entity=cfg.wandb.entity,
+        # group=cfg.group,
         # mode="disabled",
         config=wandb.config
     )
@@ -56,6 +56,8 @@ def main(cfg: DictConfig) -> None:
             log.info(f'using cond lambda_value of {cfg.cond_lambda}')
             result_dict = workspace_manager.test_agent(
                 agent,
+                cfg,
+                cfg.env,
                 cfg.evaluate_multigoal,
                 cfg.evaluate_sequential,
                 log_wandb=True,

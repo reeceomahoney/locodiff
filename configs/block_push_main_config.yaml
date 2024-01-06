@@ -5,7 +5,7 @@ defaults:
 log_dir: logs/block_pushing/
 plot_dir: plots/block_pushing/
 plot_name: ${now:%Y-%m-%d}.png
-data_path: /path/to/beso/environments/data/cbet_datasets/multimodal_push_fixed_target
+data_path: /home/reece/Workspace/Projects/beso/beso/envs/block_pushing/data/
 
 hydra:
   run:

@@ -1,7 +1,8 @@
 import logging
 import os 
+import time
 
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 import numpy as np
 import torch
 import hydra
@@ -12,8 +13,9 @@ from beso.workspaces.base_workspace_manager import BaseWorkspaceManger
 from beso.networks.scaler.scaler_class import MinMaxScaler
 from beso.envs.block_pushing.block_pushing_multimodal import BlockPushMultimodal
 from beso.envs.utils import get_split_idx
-from beso.envs.block_pushing.data.dataloader import PushTrajectoryDataset
+from beso.envs.raisim.data.dataloader import RaisimTrajectoryDataset
 from beso.agents.diffusion_agents.beso_agent import BesoAgent
+from beso.envs.raisim.raisim_env import RaisimEnv
 
 log = logging.getLogger(__name__)
 
@@ -36,6 +38,7 @@ class RaisimManager(BaseWorkspaceManger):
             use_minmax_scaler: bool = False,
     ):
         super().__int__(seed, device)
+        print("Using Raisim environment")
         self.eval_n_times = eval_n_times
         self.eval_n_steps = eval_n_steps
         self.train_batch_size = train_batch_size
@@ -50,10 +53,10 @@ class RaisimManager(BaseWorkspaceManger):
         self.data_loader = self.make_dataloaders()
         self.render = render
         # get goal function for evaluation
-        self.goals_fn = hydra.utils.call(goal_fn)
+        # self.goals_fn = hydra.utils.call(goal_fn)
         self.mask_obs = dataset_fn.transform.mask_targets if hasattr(dataset_fn.transform, 'mask_targets') else False
         self.reduce_obs_dim = dataset_fn.transform.reduce_obs_dim if hasattr(dataset_fn.transform, 'reduce_obs_dim') else False
-        self.push_traj = PushTrajectoryDataset(
+        self.raisim_traj = RaisimTrajectoryDataset(
             goal_fn.data_path, onehot_goals=True
         )
         self.goal_conditional = dataset_fn.goal_conditional
@@ -90,6 +93,8 @@ class RaisimManager(BaseWorkspaceManger):
     def test_agent(
         self, 
         agent, 
+        cfg,
+        env_cfg,
         evaluate_multigoal: bool = True, # just for for same input as kitchen environment
         evaluate_sequential: bool = True, # just for for same input as kitchen environment
         log_wandb: bool = True, 
@@ -104,56 +109,31 @@ class RaisimManager(BaseWorkspaceManger):
         """
         Test the agent on the environment with the given goal function
         """
-        if store_video:
-            import imageio
         
-        self.env = BlockPushMultimodal(render=self.render)
+        resource_dir = os.path.dirname(os.path.realpath(__file__)) + "/../envs/raisim/resources"
+        env_cfg = OmegaConf.to_yaml(env_cfg)
+        self.env = RaisimEnv(resource_dir, env_cfg)
         log.info('Starting trained model evaluation on the multimodal blockpush environment')
         rewards = []
-        results = []
-        frames = [] 
         for goal_idx in range(self.eval_n_times):
             total_reward = 0
-            info = None
             done = False
             obs = self.env.reset()
-            obs_res = np.hstack([np.array(v) for v in list(obs.values())])
-            if goal_idx >= 950:
-                goal_idx_2 = goal_idx - 950 
-            else:
-                goal_idx_2 = goal_idx
-            goal = self.goals_fn(obs_res, goal_idx_2, 0)
-            if self.reduce_obs_dim:
-                goal = goal[:, :10]
+            obs = torch.from_numpy(obs).to(cfg.device)
+            goal = torch.zeros_like(obs)
 
             # now run the agent for n steps 
             for n in tqdm(range(self.eval_n_steps)):
-                if self.render:
-                    self.env.render(mode="human")
-                if store_video:
-                    frame = self.env.render(mode="rgb_array")
-                    frames.append(frame)
+                start = time.time()
                 if done or n == self.eval_n_steps-1:
                     rewards.append(total_reward)
                     print('Total reward: {}'.format(total_reward))
-                    result = self._report_result_upon_completion(goal_idx)
-                    log.info(f"Result: {result}")
                     if log_wandb:
-                        wandb.log({'Result': result,
-                                   'Reward': total_reward
-                                })
-                    results.append(result)
+                        wandb.log({ 'Reward': total_reward })
                     break
-                obs = np.hstack([np.array(v) for v in list(obs.values())])
-                obs = torch.from_numpy(obs.reshape(1, len(obs))).to(torch.float32)
-                if self.reduce_obs_dim:
-                    obs = obs[:, :10]
-                if self.mask_obs:
-                    if self.reduce_obs_dim:
-                        pass
-                    else:
-                        obs[:, 10:] = 0
+
                 if isinstance(agent, BesoAgent):
+                    infer_start = time.time()
                     pred_action = agent.predict(
                         {'observation': obs,
                          'goal_observation': goal}, 
@@ -163,6 +143,8 @@ class RaisimManager(BaseWorkspaceManger):
                         extra_args={}, 
                         noise_scheduler=noise_scheduler,
                     )
+                    infer_end = time.time()
+                    print(f"Inference time: {infer_end - infer_start}")
                 else:
                     sampler_dict = {}
                     if n_inference_steps is not None:
@@ -171,37 +153,30 @@ class RaisimManager(BaseWorkspaceManger):
                         {'observation': obs,
                          'goal_observation': goal}, 
                     )
-                obs, reward, done, _ = self.env.step(pred_action.reshape(-1).detach().cpu().numpy())
+                if len(pred_action.shape) == 3:
+                    pred_action = pred_action.squeeze(0)
+                obs, reward, done = self.env.step(pred_action.detach().cpu().numpy())
+                obs = torch.from_numpy(obs).to(cfg.device)
                 total_reward += reward
                 # get current goal
-                if self.goal_conditional == "onehot":
-                    goal = self.goals_fn(obs, goal_idx, n)
+                # if self.goal_conditional == "onehot":
+                #     goal = self.goals_fn(obs, goal_idx, n)
+                
+                delta = time.time() - start
+                if delta < 0.02:
+                    time.sleep(0.02 - delta)
                 
         log.info(f"Total reward: {total_reward}")
         
         self.env.close()
-        if store_video:
-            video_filename = f"rollout_{goal_idx}.mp4"
-            video_filepath = os.path.join(video_path, video_filename)
-
-            # Save the frames as a video using imageio
-            imageio.mimsave(video_filepath, frames, fps=30)
 
         avrg_reward = sum(rewards)/len(rewards)
         std_reward = np.array(rewards).std()
-        avrg_result = sum(results)/len(results)
-        std_result = np.array(results).std()
         
         print('average reward {}'.format(avrg_reward))
-        print('average result {}'.format(avrg_result))
-        print({"Cond_success_ratio": avrg_result/avrg_reward})
-        log.info(f"Average reward: {avrg_reward} std: {std_reward}")
-        log.info(f"Average result: {avrg_result} std: {std_result}")
         log.info('... finished trained model evaluation of the blockpush environment environment.')
         if log_wandb:
             wandb.log({"Average_reward": avrg_reward})
-            wandb.log({"Average_result": avrg_result})
-            wandb.log({"Cond_success_ratio": avrg_result/avrg_reward})
         if log_wandb:
             log.info(f"---------------------------------------")
         else:
@@ -209,8 +184,6 @@ class RaisimManager(BaseWorkspaceManger):
         return_dict = {
             'avrg_reward': avrg_reward,
             'std_reward': std_reward,
-            'avrg_result': avrg_result,
-            'std_result': std_result
         }
         # return the average reward 
         return return_dict
