@@ -163,3 +163,5 @@ logs/
 wandb/
 .vscode/
 *.pdf
+
+*.npy
