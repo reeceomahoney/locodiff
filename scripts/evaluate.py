@@ -17,16 +17,16 @@ OmegaConf.register_new_resolver(
 )
 torch.cuda.empty_cache()
 
-@hydra.main(config_path="../configs", config_name="evaluate_kitchen.yaml")
+@hydra.main(config_path="../configs", config_name="evaluate_raisim.yaml")
 def main(cfg: DictConfig) -> None:
     
-    wandb.config = cfg
+    wandb.config = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
     if cfg.log_wandb:
         run = wandb.init(
-            project='gc_block_push_sampler_comparison', 
-            entity='add_wandb_acc_name', 
-            group=f'noise_comp_' + cfg.sampler_type,
-            mode="disabled",  
+            project='beso_eval', 
+            # entity='add_wandb_acc_name', 
+            # group=f'noise_comp_' + cfg.sampler_type,
+            # mode="disabled",  
             config=wandb.config
         )
     # get the path to the config yaml file
@@ -65,6 +65,8 @@ def main(cfg: DictConfig) -> None:
         
         workspace_manager.test_agent(
             agent,
+            model_cfg,
+            model_cfg.env,
             log_wandb=cfg['log_wandb'],
             new_sampler_type=cfg['sampler_type'],
             n_inference_steps=cfg['n_inference_steps'],

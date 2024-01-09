@@ -10,7 +10,7 @@ from tqdm import tqdm
 import wandb
 
 from beso.workspaces.base_workspace_manager import BaseWorkspaceManger
-from beso.networks.scaler.scaler_class import MinMaxScaler
+from beso.networks.scaler.scaler_class import MinMaxScaler, Scaler
 from beso.envs.block_pushing.block_pushing_multimodal import BlockPushMultimodal
 from beso.envs.utils import get_split_idx
 from beso.envs.raisim.data.dataloader import RaisimTrajectoryDataset
@@ -117,26 +117,29 @@ class RaisimManager(BaseWorkspaceManger):
         rewards = []
         for goal_idx in range(self.eval_n_times):
             total_reward = 0
+            mean_joint_vel = 0
             done = False
             obs = self.env.reset()
             obs = torch.from_numpy(obs).to(cfg.device)
-            goal = torch.zeros_like(obs)
+            goal = torch.tensor([1]).to(torch.float32).to(cfg.device)
 
             # now run the agent for n steps 
             for n in tqdm(range(self.eval_n_steps)):
                 start = time.time()
                 if done or n == self.eval_n_steps-1:
                     rewards.append(total_reward)
+                    mean_joint_vel = mean_joint_vel / n
                     print('Total reward: {}'.format(total_reward))
                     if log_wandb:
                         wandb.log({ 'Reward': total_reward })
+                        wandb.log({ 'Mean joint velocity': mean_joint_vel })
                     break
 
                 if isinstance(agent, BesoAgent):
                     infer_start = time.time()
                     pred_action = agent.predict(
                         {'observation': obs,
-                         'goal_observation': goal}, 
+                         'goal': goal}, 
                         new_sampler_type=new_sampler_type,
                         new_sampling_steps=n_inference_steps,
                         get_mean=get_mean,
@@ -144,7 +147,7 @@ class RaisimManager(BaseWorkspaceManger):
                         noise_scheduler=noise_scheduler,
                     )
                     infer_end = time.time()
-                    print(f"Inference time: {infer_end - infer_start}")
+                    # print(f"Inference time: {infer_end - infer_start}")
                 else:
                     sampler_dict = {}
                     if n_inference_steps is not None:
@@ -158,9 +161,9 @@ class RaisimManager(BaseWorkspaceManger):
                 obs, reward, done = self.env.step(pred_action.detach().cpu().numpy())
                 obs = torch.from_numpy(obs).to(cfg.device)
                 total_reward += reward
-                # get current goal
-                # if self.goal_conditional == "onehot":
-                #     goal = self.goals_fn(obs, goal_idx, n)
+            
+                joint_vel = obs[..., 18:30]
+                mean_joint_vel += joint_vel.norm()
                 
                 delta = time.time() - start
                 if delta < 0.02:

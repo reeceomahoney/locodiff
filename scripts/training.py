@@ -28,13 +28,15 @@ def main(cfg: DictConfig) -> None:
     torch.backends.cudnn.deterministic = True
     # init wandb logger and config from hydra path 
     wandb.config = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
+    output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
 
     run = wandb.init(
         project=cfg.wandb.project, 
         # entity=cfg.wandb.entity,
         # group=cfg.group,
         # mode="disabled",
-        config=wandb.config
+        config=wandb.config,
+        dir=output_dir
     )
 
     # load the required classes to train and test the agent
@@ -43,6 +45,7 @@ def main(cfg: DictConfig) -> None:
     # get the scaler instance and set teh bounds for the sampler if required
     agent.get_scaler(workspace_manager.scaler)
     agent.set_bounds(workspace_manager.scaler)
+    agent.working_dir = output_dir
 
     agent.train_agent(
         workspace_manager.data_loader['train'],
