@@ -15,12 +15,13 @@ dataset_fn:
   only_sample_tail: false # true change again 
   only_sample_seq_end: False 
   obs_dim: ${obs_dim}
-  transform:
-    # NOTE: blockpush_mask_targets: for future conditional
-    # mask out targets in obs; only keep block positions in future obs conditionals
-    _target_: beso.envs.utils.blockpush_mask_targets
-    mask_targets: ${mask_targets}
-    reduce_obs_dim: ${reduce_obs_dim}
+  transform: null
+  # transform:
+  #   # NOTE: blockpush_mask_targets: for future conditional
+  #   # mask out targets in obs; only keep block positions in future obs conditionals
+  #   _target_: beso.envs.utils.blockpush_mask_targets
+  #   mask_targets: ${mask_targets}
+  #   reduce_obs_dim: ${reduce_obs_dim}
 
 goal_fn:
   _target_: beso.envs.block_pushing.data.goals.get_goal_fn

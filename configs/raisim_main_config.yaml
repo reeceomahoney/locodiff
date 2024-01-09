@@ -30,19 +30,19 @@ window_size: 3
 mask_targets: False
 reduce_obs_dim: false
 
-goal_conditioning: False
-goal_conditional: 'future'
+goal_conditioning: True
+goal_conditional: 'onehot'
 action_dim: 12
 # input_dim: 18
 obs_dim: 33
-goal_dim: 0
+goal_dim: 1
 
 # policy model params
 hidden_dim: 240 # for transformer, must be a multiple of n_heads (6 in diffusion_gpt)
 use_spectral_norm: false
 num_hidden_layers: 4
 train_method: 'steps'
-max_train_steps: 10
+max_train_steps: 1000
 max_epochs: 100
 eval_every_n_steps: 4000
 
@@ -51,7 +51,7 @@ evaluate_multigoal: True
 evaluate_sequential: True
 
 obs_modalities: ['observation']
-goal_modalities: ['goal_observation']
+goal_modalities: ['goal']
 target_modality: 'action'
 
 # BESO hyperparameters

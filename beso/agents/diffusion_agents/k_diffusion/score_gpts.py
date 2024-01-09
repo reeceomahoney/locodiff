@@ -140,8 +140,9 @@ class DiffusionGPT(nn.Module):
         super().__init__()
         self.device = device
         self.goal_conditioned = goal_conditioned
-        if not goal_conditioned:
-            goal_seq_len = 0
+        # if not goal_conditioned:
+        #     goal_seq_len = 0
+        goal_seq_len = 1
         # input embedding stem
         # first we need to define the maximum block size
         # it consists of the goal sequence length plus 1 for the sigma embedding and 2 the obs seq len
@@ -149,6 +150,7 @@ class DiffusionGPT(nn.Module):
         # the seq_size is a little different since we have state action pairs for every timestep
         seq_size = goal_seq_len + obs_seq_len + 1
         self.tok_emb = nn.Linear(state_dim, embed_dim)
+        self.goal_emb = nn.Linear(1, embed_dim)
         self.pos_emb = nn.Parameter(torch.zeros(1, seq_size, embed_dim))
         self.drop = nn.Dropout(embed_pdrob)
         
@@ -172,7 +174,7 @@ class DiffusionGPT(nn.Module):
         self.ln_f = nn.LayerNorm(embed_dim)
         
         self.block_size = block_size
-        self.goal_seq_len = goal_seq_len
+        self.goal_seq_len = 1
         self.obs_seq_len = obs_seq_len
         # we need another embedding for the sigma
         # time_embedding_fn.time_embed_dim = embed_dim
@@ -303,7 +305,7 @@ class DiffusionGPT(nn.Module):
         
         # embed them into linear representations for the transformer
         state_embed = self.tok_emb(states)
-        goal_embed = self.tok_emb(goals)
+        goal_embed = self.goal_emb(goals)
         action_embed = self.action_emb(actions)
         
         # if not uncond:
@@ -329,6 +331,7 @@ class DiffusionGPT(nn.Module):
         # first stack actions and states in the way: [s_1, a_1, s_2, a_2, ..,]
         sa_seq = torch.stack([state_x, action_x], dim=1
                             ).permute(0, 2, 1, 3).reshape(b, 2*t, self.embed_dim)
+        goal_x = goal_x.transpose(0, 1)
         
         # next we stack everything together 
         if self.goal_conditioned:
@@ -358,12 +361,12 @@ class DiffusionGPT(nn.Module):
         return pred_actions
     
     def mask_cond(self, cond, force_mask=False):
-        bs, t, d = cond.shape
+        bs, d = cond.shape
         if force_mask:
             return torch.zeros_like(cond)
         elif self.training and self.cond_mask_prob > 0.:
             # TODO Check which one is correct
-            mask = torch.bernoulli(torch.ones((bs, t, d), device=cond.device) * self.cond_mask_prob) # .view(bs, 1)  # 1-> use null_cond, 0-> use real cond
+            mask = torch.bernoulli(torch.ones((bs, d), device=cond.device) * self.cond_mask_prob) # .view(bs, 1)  # 1-> use null_cond, 0-> use real cond
             # mask = torch.bernoulli(torch.ones((bs, t, 1), device=cond.device) * self.cond_mask_prob)
             # mask = einops.repeat(mask, 'b t 1 -> b t (1 d)', d=d)
             return cond * (1. - mask)
