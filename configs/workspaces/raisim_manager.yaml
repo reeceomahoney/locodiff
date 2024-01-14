@@ -7,30 +7,11 @@ dataset_fn:
   train_fraction: 0.95
   random_seed: ${seed}
   device: ${device}
-  # scale_data: ${scale_data}
   window_size: ${window_size}
   goal_conditional: ${goal_conditional}
   future_seq_len: ${future_seq_length}
-  reduce_obs_dim: ${reduce_obs_dim}
   only_sample_tail: false # true change again 
   only_sample_seq_end: False 
-  obs_dim: ${obs_dim}
-  transform: null
-  # transform:
-  #   # NOTE: blockpush_mask_targets: for future conditional
-  #   # mask out targets in obs; only keep block positions in future obs conditionals
-  #   _target_: beso.envs.utils.blockpush_mask_targets
-  #   mask_targets: ${mask_targets}
-  #   reduce_obs_dim: ${reduce_obs_dim}
-
-goal_fn:
-  _target_: beso.envs.block_pushing.data.goals.get_goal_fn
-  data_path: ${data_path}
-  goal_conditional: ${goal_conditional}
-  goal_seq_len: ${future_seq_length}
-  seed: ${seed}
-  train_fraction: 0.95
-  zero_goals: true
 
 seed: ${seed}
 train_batch_size: 1024
