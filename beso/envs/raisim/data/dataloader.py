@@ -37,25 +37,17 @@ def get_raisim_train_val(
     random_seed=42,
     device="cpu",
     window_size=10,
-    obs_dim=33,
     goal_conditional: Optional[str] = None,
     future_seq_len: Optional[int] = None,
     min_future_sep: int = 0,
     only_sample_tail: bool = False,
     only_sample_seq_end: bool = False,
-    reduce_obs_dim: Optional[bool] = False,
-    transform: Optional[Callable[[Any], Any]] = None,
 ):
     if goal_conditional is not None:
         assert goal_conditional in ["future", "onehot"]
 
     return get_train_val_sliced(
-        RaisimTrajectoryDataset(
-            data_directory,
-            onehot_goals=(goal_conditional == "onehot"),
-            reduce_obs_dim=reduce_obs_dim,
-            obs_dim=obs_dim,
-        ),
+        RaisimTrajectoryDataset(data_directory),
         train_fraction,
         random_seed,
         device,
@@ -65,7 +57,6 @@ def get_raisim_train_val(
         future_seq_len=future_seq_len,
         only_sample_tail=only_sample_tail,
         only_sample_seq_end=only_sample_seq_end,
-        transform=transform,
     )
 
 
@@ -74,8 +65,6 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         self,
         data_directory: os.PathLike,
         device="cpu",
-        onehot_goals=False,
-        reduce_obs_dim=False,
         obs_dim=33,
     ):
         self.device = device

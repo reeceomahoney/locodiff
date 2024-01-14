@@ -127,17 +127,18 @@ class TrajectorySlicerDataset(TrajectoryDataset):
         self.transform = transform
         self.slices = []
         min_seq_length = np.inf
+        effective_window = window + future_seq_len
         for i in range(len(self.dataset)):  # type: ignore
             T = self.dataset.get_seq_length(i)  # avoid reading actual seq (slow)
             min_seq_length = min(T, min_seq_length)
-            if T - window < 0:
-                print(f"Ignored short sequence #{i}: len={T}, window={window}")
+            if T - effective_window < 0:
+                print(f"Ignored short sequence #{i}: len={T}, window={effective_window}")
             else:
                 self.slices += [
-                    (i, start, start + window) for start in range(T - window + 1)
+                    (i, start, start + effective_window) for start in range(T - effective_window + 1)
                 ]  # slice indices follow convention [start, end)
 
-        if min_seq_length < window:
+        if min_seq_length < effective_window:
             print(
                 f"Ignored short sequences. To include all, set window <= {min_seq_length}."
             )
@@ -208,7 +209,6 @@ def get_train_val_sliced(
     future_seq_len: Optional[int] = None,
     only_sample_tail: bool = False,
     only_sample_seq_end: bool = False,
-    transform: Optional[Callable[[Any], Any]] = None,
 ):
     train, val = split_traj_datasets(
         traj_dataset,
@@ -222,7 +222,7 @@ def get_train_val_sliced(
         "future_seq_len": future_seq_len,
         "only_sample_tail": only_sample_tail,
         "only_sample_seq_end": only_sample_seq_end,
-        "transform": transform,
+        "transform": None,
     }
     if window_size > 0:
         train_slices = TrajectorySlicerDataset(train, **traj_slicer_kwargs)
