@@ -146,7 +146,7 @@ namespace raisim {
         void reset() final {
             Eigen::VectorXd gc = gc_init_, gv = gv_init_;
 
-            if (enableDynamicsRandomization_) {
+            if (true) {
                 gc[2] += 0.1 * std::abs(uniformRealDistribution_(gen_));
 
                 gc.tail(12) +=

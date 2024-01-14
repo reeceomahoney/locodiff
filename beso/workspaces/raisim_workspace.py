@@ -11,7 +11,6 @@ import wandb
 
 from beso.workspaces.base_workspace_manager import BaseWorkspaceManger
 from beso.networks.scaler.scaler_class import MinMaxScaler, Scaler
-from beso.envs.block_pushing.block_pushing_multimodal import BlockPushMultimodal
 from beso.envs.utils import get_split_idx
 from beso.envs.raisim.data.dataloader import RaisimTrajectoryDataset
 from beso.agents.diffusion_agents.beso_agent import BesoAgent
@@ -26,7 +25,6 @@ class RaisimManager(BaseWorkspaceManger):
             seed: int,
             device: str,
             dataset_fn: DictConfig,
-            goal_fn: DictConfig,
             eval_n_times: int,
             eval_n_steps,
             scale_data: bool,
@@ -52,14 +50,6 @@ class RaisimManager(BaseWorkspaceManger):
         self.scaler = None
         self.data_loader = self.make_dataloaders()
         self.render = render
-        # get goal function for evaluation
-        # self.goals_fn = hydra.utils.call(goal_fn)
-        self.mask_obs = dataset_fn.transform.mask_targets if hasattr(dataset_fn.transform, 'mask_targets') else False
-        self.reduce_obs_dim = dataset_fn.transform.reduce_obs_dim if hasattr(dataset_fn.transform, 'reduce_obs_dim') else False
-        self.raisim_traj = RaisimTrajectoryDataset(
-            goal_fn.data_path, onehot_goals=True
-        )
-        self.goal_conditional = dataset_fn.goal_conditional
 
     def make_dataloaders(self):
         """
@@ -118,6 +108,8 @@ class RaisimManager(BaseWorkspaceManger):
         for goal_idx in range(self.eval_n_times):
             total_reward = 0
             mean_joint_vel = 0
+            mean_orientation_norm = 0
+            mean_ang_vel = 0
             done = False
             obs = self.env.reset()
             obs = torch.from_numpy(obs).to(cfg.device)
@@ -129,10 +121,14 @@ class RaisimManager(BaseWorkspaceManger):
                 if done or n == self.eval_n_steps-1:
                     rewards.append(total_reward)
                     mean_joint_vel = mean_joint_vel / n
+                    mean_orientation_norm = mean_orientation_norm / n
+                    mean_ang_vel = mean_ang_vel / n
                     print('Total reward: {}'.format(total_reward))
                     if log_wandb:
-                        wandb.log({ 'Reward': total_reward })
+                        # wandb.log({ 'Reward': total_reward })
                         wandb.log({ 'Mean joint velocity': mean_joint_vel })
+                        # wandb.log({ 'Mean orientation norm': mean_orientation_norm })
+                        # wandb.log({ 'Mean angular velocity': mean_ang_vel })
                     break
 
                 if isinstance(agent, BesoAgent):
@@ -164,6 +160,8 @@ class RaisimManager(BaseWorkspaceManger):
             
                 joint_vel = obs[..., 18:30]
                 mean_joint_vel += joint_vel.norm()
+                mean_orientation_norm += obs[..., :3].norm()
+                mean_ang_vel += obs[..., 15:18].norm()
                 
                 delta = time.time() - start
                 if delta < 0.02:
