@@ -17,16 +17,16 @@ class BaseAgent(abc.ABC):
 
     def __init__(
         self,
-            model: DictConfig,
-            input_encoder: DictConfig,
-            optimization: DictConfig,
-            obs_modalities: list,
-            goal_modalities: list,
-            target_modality: str,
-            device: str,
-            max_train_steps: int,
-            eval_every_n_steps: int,
-            max_epochs: int,
+        model: DictConfig,
+        input_encoder: DictConfig,
+        optimization: DictConfig,
+        obs_modalities: list,
+        goal_modalities: list,
+        target_modality: str,
+        device: str,
+        max_train_steps: int,
+        eval_every_n_steps: int,
+        max_epochs: int,
     ):
         self.scaler = None
         self.model = hydra.utils.instantiate(model).to(device)
@@ -113,22 +113,28 @@ class BaseAgent(abc.ABC):
         """
         Processes a batch of data and returns the state, action and goal
         """
-        # TODO: rewrite this to randomly mask out constraints
         if predict:
             state, goal = self.input_encoder(batch)
             state = self.scaler.scale_input(state)
-            if 'goal' in batch:
-                return state, batch['goal'], None
+            goal = self.scaler.scale_input(goal)
+            if goal.shape[-1] == 10:
+                goal[..., [2, 5, 6, 7, 8, 9]] = 0
+            if self.target_modality in batch:
+                action = batch[self.target_modality]
+                action = self.scaler.scale_output(action)                
+                return state, action, goal
+            elif 'goal_task_name' in batch:
+                goal_task_name = batch['goal_task_name']
+                return state, goal, goal_task_name
             else:
-                goal = self.calculate_constraints(state)
-                if self.target_modality in batch:
-                    action = batch[self.target_modality]
-                    action = self.scaler.scale_output(action)
-                    return state, action, goal
+                return state, goal, None
+                
         else:
-            state, goal = self.input_encoder(batch)
+            state, goal = self.input_encoder(batch)  
             state = self.scaler.scale_input(state)
-            goal = self.calculate_constraints(state)
+            goal = self.scaler.scale_input(goal)
+            if goal.shape[-1] == 10:
+                    goal[..., [2, 5, 6, 7, 8, 9]] = 0
             if self.target_modality in batch:
                 action = batch[self.target_modality]
                 action = self.scaler.scale_output(action)
@@ -159,20 +165,3 @@ class BaseAgent(abc.ABC):
             torch.save(self.model.state_dict(), os.path.join(store_path, "model_state_dict.pth"))
         else:
             torch.save(self.model.state_dict(), os.path.join(store_path, sv_name))
-
-    def calculate_constraints(self, state: torch.Tensor) -> torch.Tensor:
-        """
-        Method to calculate the constraints for the given state
-        """
-        # orientation = state[..., :3]
-        # constraints = torch.where(orientation.norm(dim=(1, 2)) > 0.99, torch.tensor(1), torch.tensor(-1))
-
-        # ang_vel = state[..., 15:18]
-        # constraints = torch.where(ang_vel.norm(dim=(1, 2)) < 0.05, torch.tensor(1), torch.tensor(-1))
-
-        joint_vel = state[..., 18:30]
-        constraints = torch.where(joint_vel.norm(dim=(1, 2)) < 5.7, torch.tensor(1), torch.tensor(-1))
-        constraints = constraints.to(torch.float32).unsqueeze(1)
-
-        return constraints
-

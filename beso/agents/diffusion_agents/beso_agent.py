@@ -57,6 +57,8 @@ class BesoAgent(BaseAgent):
             update_ema_every_n_steps: int,
             window_size: int,
             goal_window_size: int,
+            obs_dim: int,
+            n_obs_steps: int,
             use_kde: bool=False,
             patience: int=10,
     ):
@@ -102,6 +104,8 @@ class BesoAgent(BaseAgent):
         # use kernel density estimator if true
         self.use_kde = use_kde
         self.noise_scheduler = 'exponential'
+        self.obs_dim = obs_dim
+        self.n_obs_steps = n_obs_steps
 
     def get_scaler(self, scaler: Scaler):
         """
@@ -225,15 +229,16 @@ class BesoAgent(BaseAgent):
         """
         # scale data if necessarry, otherwise the scaler will return unchanged values
         state, action, goal = self.process_batch(batch, predict=False)
+        state_action = torch.cat([state, action], dim=-1)
         
         self.model.train()
         self.model.training = True
         # set up the noise
-        noise = torch.randn_like(action)
+        noise = torch.randn_like(state_action)
         # define the sigma values
         sigma = self.make_sample_density()(shape=(len(action),), device=self.device)
         # calculate the loss
-        loss = self.model.loss(state, action, goal, noise, sigma)
+        loss = self.model.loss(state, state_action, goal, noise, sigma)
         # Before the backward pass, zero all the network gradients
         self.optimizer.zero_grad()
         # Backward pass: compute gradient of the loss with respect to parameters
@@ -271,7 +276,10 @@ class BesoAgent(BaseAgent):
         # get the sigma distribution for sampling based on Karras et al. 2022
         sigmas = get_sigmas_exponential(self.num_sampling_steps, self.sigma_min, self.sigma_max, self.device)
 
-        x = torch.randn_like(action) * self.sigma_max
+        B, T, act_dim = action.shape
+        obs_dim = state.shape[-1]
+        x = torch.randn((B, T, obs_dim + act_dim)) * self.sigma_max
+        x = x.to(self.device)
         # generate the action based on the chosen sampler type 
         x_0 = self.sample_loop(sigmas, x, state, goal, self.sampler_type)
         # x_0 = self.scaler.clip_action(x_0)
@@ -279,7 +287,8 @@ class BesoAgent(BaseAgent):
         if self.pred_last_action_only:
             x_0 = einops.rearrange(x_0, 'b d -> b 1 d')# only train the last timestep 
             
-        mse = nn.functional.mse_loss(x_0, action, reduction="none")
+        state_action = torch.cat([state, action], dim=-1)
+        mse = nn.functional.mse_loss(x_0, state_action, reduction="none")
         total_mse += mse.mean().item()
         #if get_mean is not None:
         #    print(f'Average STD for the action predictions: {torch.stack(pred_list).std()}')
@@ -348,31 +357,13 @@ class BesoAgent(BaseAgent):
         # get the sigma distribution for the desired sampling method
         sigmas = self.get_noise_schedule(n_sampling_steps, noise_scheduler)
         
-        # adept for time sequence if chosen
-        if self.window_size > 1:
-            # depending if we use a single sample or the mean over n samples
-            if get_mean is not None:
-                x = torch.randn((len(input_state)*get_mean, 1, self.scaler.y_bounds.shape[1]), device=self.device) * self.sigma_max
-            else:
-                x = torch.randn((len(input_state), 1, self.scaler.y_bounds.shape[1]), device=self.device) * self.sigma_max
-                # check if we need to get thew hole action context for the DiffusionGPT model variant
-                
-                if len(self.action_context) > 0:  
-                    previous_a = torch.cat(tuple(self.action_context), dim=1)
-                    x = torch.cat([previous_a, x], dim=1)
-        else:
-            if get_mean is not None:
-                x = torch.randn((len(input_state)*get_mean, self.scaler.y_bounds.shape[1]), device=self.device) * self.sigma_max
-        
-            else:
-                x = torch.randn((len(input_state), 1, self.scaler.y_bounds.shape[1]), device=self.device) * self.sigma_max
+        sa_dim = self.scaler.x_bounds.shape[1] + self.scaler.y_bounds.shape[1]
+        x = torch.randn((1, self.model.model.inner_model.horizon, sa_dim), device=self.device) * self.sigma_max
         
         x_0 = self.sample_loop(sigmas, x, input_state, goal, sampler_type, extra_args)
-        
-        # only get the last action if we use a sequence model 
-        if x_0.size()[1] > 1 and len( x_0.size()) ==3:
-            x_0 = x_0[:, -1, :]
-        # if we predict a sequence we only want the last predicted action of our transformer model
+
+        # get the action for the current timestep
+        x_0 = x_0[:, len(input_state), self.obs_dim:]
         
         # scale the final output
         x_0 = self.scaler.clip_action(x_0)
@@ -596,3 +587,53 @@ class BesoAgent(BaseAgent):
         elif noise_schedule_type == 'iddpm':
             return get_iddpm_sigmas(n_sampling_steps, self.sigma_min, self.sigma_max, device=self.device)
         raise ValueError('Unknown noise schedule type')
+    
+    @torch.no_grad()
+    def process_batch(self, batch: dict, predict: bool = True):
+        """
+        Processes a batch of data and returns the state, action and goal
+        """
+        if predict:
+            state, goal = self.input_encoder(batch)
+            state = self.scaler.scale_input(state)
+            if "goal" in batch:
+                return state, batch["goal"], None
+            else:
+                goal = self.calculate_constraints(state)
+                if self.target_modality in batch:
+                    action = batch[self.target_modality]
+                    action = self.scaler.scale_output(action)
+                    return state, action, goal
+        else:
+            state, goal = self.input_encoder(batch)
+            state = self.scaler.scale_input(state)
+            goal = self.calculate_constraints(state)
+            if self.target_modality in batch:
+                action = batch[self.target_modality]
+                action = self.scaler.scale_output(action)
+                return state, action, goal
+            else:
+                return state, goal
+    
+    def calculate_constraints(self, state: torch.Tensor) -> torch.Tensor:
+        """
+        Method to calculate the constraints for the given state
+
+        Returns:
+            constraints: (B, 1, 1)
+        """
+        # orientation = state[:, self.n_obs_steps:, :3]
+        # constraints = torch.where(orientation.norm(dim=(1, 2)) > 0.99, torch.tensor(1), torch.tensor(-1))
+        # constraints = constraints.to(torch.float32).unsqueeze(1)
+
+        # ang_vel = state[:, self.n_obs_steps :, 15:18]
+        # constraints = torch.where(
+        #     ang_vel.norm(dim=-1).mean(-1) < 1, torch.tensor(1), torch.tensor(-1)
+        # )
+
+        # get joint velocities of future states (3.3 - fwd, 5.7 - rand)
+        joint_vel = state[:, self.n_obs_steps:, 18:30]
+        constraints = torch.where(joint_vel.norm(dim=-1).max(-1)[0] < 3, torch.tensor(1), torch.tensor(-1))
+
+        constraints = constraints.to(torch.float32).view(-1, 1, 1)
+        return constraints
