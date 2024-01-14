@@ -896,7 +896,7 @@ def sample_dpm_adaptive(
 def sample_ddim(
     model, 
     state, 
-    action, 
+    state_action, 
     goal, 
     sigmas, 
     scaler=None,
@@ -908,20 +908,25 @@ def sample_ddim(
     """
     DPM-Solver 1( or DDIM sampler"""
     extra_args = {} if extra_args is None else extra_args
-    s_in = action.new_ones([action.shape[0]])
+    s_in = state_action.new_ones([state_action.shape[0]])
     sigma_fn = lambda t: t.neg().exp()
     t_fn = lambda sigma: sigma.log().neg()
-    old_denoised = None
+    B, T, dim = state.shape
 
     for i in trange(len(sigmas) - 1, disable=disable):
-        # predict the next action
-        denoised = model(state, action, goal, sigmas[i] * s_in, **extra_args)
+        # Set the state to the current state
+        state_action[:, :T, :dim] = state
+
+        # predict the next state_action
+        denoised = model(state, state_action, goal, sigmas[i] * s_in, **extra_args)
         if callback is not None:
-            callback({'action': action, 'i': i, 'sigma': sigmas[i], 'sigma_hat': sigmas[i], 'denoised': denoised})
+            callback({'state_action': state_action, 'i': i, 'sigma': sigmas[i], 'sigma_hat': sigmas[i], 'denoised': denoised})
         t, t_next = t_fn(sigmas[i]), t_fn(sigmas[i + 1])
         h = t_next - t
-        action = (sigma_fn(t_next) / sigma_fn(t)) * action - (-h).expm1() * denoised
-    return action
+        state_action = (sigma_fn(t_next) / sigma_fn(t)) * state_action - (-h).expm1() * denoised
+    
+    state_action[:, :T, :dim] = state
+    return state_action
 
 
 

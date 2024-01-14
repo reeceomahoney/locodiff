@@ -42,13 +42,13 @@ class GCDenoiser(nn.Module):
         c_in = 1 / (sigma ** 2 + self.sigma_data ** 2) ** 0.5
         return c_skip, c_out, c_in
 
-    def loss(self, state, action, goal, noise, sigma, **kwargs):
+    def loss(self, state, state_action, goal, noise, sigma, **kwargs):
         """
         Compute the loss for the denoising process.
 
         Args:
             state: The input state.
-            action: The input action.
+            state_action: The input state_action.
             goal: The input goal.
             noise: The input noise.
             sigma: The input sigma.
@@ -61,30 +61,30 @@ class GCDenoiser(nn.Module):
             if kwargs['pred_last_action_only']:
                 pred_last = True
                 noise[:, :-1, :] = 0
-                noised_input = action + noise * append_dims(sigma, action.ndim)
+                noised_input = state_action + noise * append_dims(sigma, state_action.ndim)
             else:
 
-                noised_input = action + noise * append_dims(sigma, action.ndim)
+                noised_input = state_action + noise * append_dims(sigma, state_action.ndim)
             kwargs.pop('pred_last_action_only')
         else:
-            noised_input = action + noise * append_dims(sigma, action.ndim)
+            noised_input = state_action + noise * append_dims(sigma, state_action.ndim)
             
-        c_skip, c_out, c_in = [append_dims(x, action.ndim) for x in self.get_scalings(sigma)]
-        # noised_input = action + noise * append_dims(sigma, action.ndim)
+        c_skip, c_out, c_in = [append_dims(x, state_action.ndim) for x in self.get_scalings(sigma)]
+        # noised_input = state_action + noise * append_dims(sigma, state_action.ndim)
         model_output = self.inner_model(state, noised_input * c_in, goal, sigma, **kwargs)
-        target = (action - c_skip * noised_input) / c_out
+        target = (state_action - c_skip * noised_input) / c_out
         if pred_last:
             return (model_output[:, -1, :] - target[:, -1, :]).pow(2).mean()
         else:
             return (model_output - target).pow(2).flatten(1).mean()
 
-    def forward(self, state, action, goal, sigma, **kwargs):
+    def forward(self, state, state_action, goal, sigma, **kwargs):
         """
         Perform the forward pass of the denoising process.
 
         Args:
             state: The input state.
-            action: The input action.
+            state_action: The input state_action.
             goal: The input goal.
             sigma: The input sigma.
             **kwargs: Additional keyword arguments.
@@ -92,8 +92,8 @@ class GCDenoiser(nn.Module):
         Returns:
             The output of the forward pass.
         """
-        c_skip, c_out, c_in = [append_dims(x, action.ndim) for x in self.get_scalings(sigma)]
-        return self.inner_model(state, action * c_in, goal, sigma, **kwargs) * c_out + action * c_skip
+        c_skip, c_out, c_in = [append_dims(x, state_action.ndim) for x in self.get_scalings(sigma)]
+        return self.inner_model(state, state_action * c_in, goal, sigma, **kwargs) * c_out + state_action * c_skip
 
     def get_params(self):
         return self.inner_model.parameters()
