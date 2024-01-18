@@ -132,7 +132,8 @@ class TrajectorySlicerDataset(TrajectoryDataset):
             T = self.dataset.get_seq_length(i)  # avoid reading actual seq (slow)
             min_seq_length = min(T, min_seq_length)
             if T - effective_window < 0:
-                print(f"Ignored short sequence #{i}: len={T}, window={effective_window}")
+                # print(f"Ignored short sequence #{i}: len={T}, window={effective_window}")
+                pass
             else:
                 self.slices += [
                     (i, start, start + effective_window) for start in range(T - effective_window + 1)

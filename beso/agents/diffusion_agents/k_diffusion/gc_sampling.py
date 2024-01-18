@@ -908,24 +908,37 @@ def sample_ddim(
     """
     DPM-Solver 1( or DDIM sampler"""
     extra_args = {} if extra_args is None else extra_args
+    state_only = extra_args.get('state_only', False)
+    n_obs_steps = extra_args.get('n_obs_steps', 0)
+    obs_dim = extra_args.get('obs_dim', 0)
+
     s_in = state_action.new_ones([state_action.shape[0]])
     sigma_fn = lambda t: t.neg().exp()
     t_fn = lambda sigma: sigma.log().neg()
     B, T, dim = state.shape
 
+    # for state eval, all actions are fixed
+    if state_only:
+        T = n_obs_steps
+        dim = obs_dim
+
     for i in trange(len(sigmas) - 1, disable=disable):
         # Set the state to the current state
-        state_action[:, :T, :dim] = state
+        state_action[:, :T, :dim] = state[:, :T, :dim]
+        if state_only:
+            state_action[:, :, dim:] = state[:, :, dim:]
 
         # predict the next state_action
-        denoised = model(state, state_action, goal, sigmas[i] * s_in, **extra_args)
+        denoised = model(state, state_action, goal, sigmas[i] * s_in, **{})
         if callback is not None:
             callback({'state_action': state_action, 'i': i, 'sigma': sigmas[i], 'sigma_hat': sigmas[i], 'denoised': denoised})
         t, t_next = t_fn(sigmas[i]), t_fn(sigmas[i + 1])
         h = t_next - t
         state_action = (sigma_fn(t_next) / sigma_fn(t)) * state_action - (-h).expm1() * denoised
     
-    state_action[:, :T, :dim] = state
+    state_action[:, :T, :dim] = state[:, :T, :dim]
+    if state_only:
+        state_action[:, :, dim:] = state[:, :, dim:]
     return state_action
 
 

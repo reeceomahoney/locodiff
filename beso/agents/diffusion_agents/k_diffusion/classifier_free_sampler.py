@@ -32,21 +32,36 @@ class ClassifierFreeSampleModel(nn.Module):
         else:
             self.cond = False
 
-    def forward(self, state, action, goal, sigma, **extra_args):
+    def forward(self, state, state_action, goal, sigma, **extra_args):
         if self.cond:
-            return self.model(state, action, goal, sigma)
+            return self.model(state, state_action, goal, sigma)
         elif self.cond_lambda == 0:
             uncond_dict = {'uncond': True}
-            out_uncond = self.model(state, action, goal, sigma, **uncond_dict)
+            out_uncond = self.model(state, state_action, goal, sigma, **uncond_dict)
             return out_uncond
         else:
-            action = deepcopy(action)
-            
-            out = self.model(state, action, goal, sigma, **extra_args)
+            state_action = deepcopy(state_action)
+
+            # unconditional output
             uncond_dict = {'uncond': True}
-            out_uncond = self.model(state, action, goal, sigma, **uncond_dict)
+            out_uncond = self.model(state, state_action, goal, sigma, **uncond_dict)
+
+            # generate a separate one-hot goal for each goal_idx == 1
+            indices = (goal == 1).nonzero(as_tuple=True)[0]
+            if len(indices) > 0:
+                one_hot_vectors = torch.zeros((len(goal), len(goal)), device=goal.device)
+                one_hot_vectors[indices, indices] = 1
+                one_hot_vectors = one_hot_vectors.unsqueeze(1)
+
+                # conditional output for each goal_idx == 1
+                state_repeat = state.repeat(len(indices), 1, 1)
+                action_repeat = state_action.repeat(len(indices), 1, 1)
+                s_in = torch.ones(state_repeat.shape[0])
+                out = self.model(state_repeat, action_repeat, one_hot_vectors, sigma * s_in, **extra_args)
+                out = (out - out_uncond).sum(dim=0).unsqueeze(0)
+                out_uncond += self.cond_lambda * out
             
-            return out_uncond + self.cond_lambda * (out - out_uncond)
+            return out_uncond
     
     def get_params(self):
         return self.model.get_params()

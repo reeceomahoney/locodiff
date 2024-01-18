@@ -13,6 +13,8 @@ import torch.nn as nn
 import numpy as np
 from tqdm import tqdm
 import wandb
+import pinocchio as pin
+from scipy.spatial import Delaunay
 
 from beso.agents.base_agent import BaseAgent
 from beso.networks.ema_helper.ema import ExponentialMovingAverage
@@ -107,6 +109,12 @@ class BesoAgent(BaseAgent):
         self.obs_dim = obs_dim
         self.n_obs_steps = n_obs_steps
 
+        # make pinocchio model for stability polygon
+        urdf_path = os.path.dirname(os.path.realpath(__file__)) + \
+        '/../../envs/raisim/resources/models/anymal_c/urdf/model.urdf'
+        self.pin_model = pin.buildModelFromUrdf(urdf_path)
+        self.pin_data = self.pin_model.createData()
+
     def get_scaler(self, scaler: Scaler):
         """
         Define the scaler from the Workspace class used to scale state and output data if necessary
@@ -187,10 +195,15 @@ class BesoAgent(BaseAgent):
             # run a test batch every n steps
             if not self.steps % self.eval_every_n_steps:
                 test_mse = []
+                test_state_mse, test_action_mse = [], []
                 for batch in test_loader:
-                    mean_mse = self.evaluate(batch)
+                    mean_mse, state_mse, action_mse = self.evaluate(batch)
                     test_mse.append(mean_mse)
+                    test_state_mse.append(state_mse)
+                    test_action_mse.append(action_mse)
                 avrg_test_mse = sum(test_mse) / len(test_mse)
+                avrg_test_state_mse = sum(test_state_mse) / len(test_state_mse)
+                avrg_test_action_mse = sum(test_action_mse) / len(test_action_mse)
                 log.info("Step {}: Mean test mse is {}".format(step, avrg_test_mse))
                 if avrg_test_mse < best_test_mse:
                     best_test_mse = avrg_test_mse
@@ -209,7 +222,9 @@ class BesoAgent(BaseAgent):
             wandb.log(
                 {
                     "loss": batch_loss,
-                    "test_loss": avrg_test_mse
+                    "test_loss": avrg_test_mse,
+                    "test_state_loss": avrg_test_state_mse,
+                    "test_action_loss": avrg_test_action_mse
                 }
             )
             
@@ -265,6 +280,7 @@ class BesoAgent(BaseAgent):
             None
         """
         total_mse = 0
+        state_mse, action_mse = 0, 0
         # scale data if necessary, otherwise the scaler will return unchanged values
         state, action, goal = self.process_batch(batch, predict=True)
         # use the EMA model variant
@@ -280,22 +296,27 @@ class BesoAgent(BaseAgent):
         obs_dim = state.shape[-1]
         x = torch.randn((B, T, obs_dim + act_dim)) * self.sigma_max
         x = x.to(self.device)
+
         # generate the action based on the chosen sampler type 
-        x_0 = self.sample_loop(sigmas, x, state, goal, self.sampler_type)
-        # x_0 = self.scaler.clip_action(x_0)
-        
-        if self.pred_last_action_only:
-            x_0 = einops.rearrange(x_0, 'b d -> b 1 d')# only train the last timestep 
+        x_0 = self.sample_loop(sigmas, x, state[:, :self.window_size], goal, self.sampler_type)
             
         state_action = torch.cat([state, action], dim=-1)
         mse = nn.functional.mse_loss(x_0, state_action, reduction="none")
         total_mse += mse.mean().item()
-        #if get_mean is not None:
-        #    print(f'Average STD for the action predictions: {torch.stack(pred_list).std()}')
+        action_mse += mse[:, :, obs_dim:].mean().item()
+
+        # for state mse, first states and all actions are fixed
+        extra_args={'state_only': True, 'n_obs_steps': self.window_size, 'obs_dim': obs_dim} 
+        x = torch.randn((B, T, obs_dim + act_dim)) * self.sigma_max
+        x = x.to(self.device)
+        x_0 = self.sample_loop(sigmas, x, state_action, goal, self.sampler_type, extra_args=extra_args) 
+        mse = nn.functional.mse_loss(x_0, state_action, reduction="none")
+        state_mse += mse[:, :, :obs_dim].mean().item()
+
         # restore the previous model parameters
         if self.use_ema:
             self.ema_helper.restore(self.model.parameters())
-        return total_mse
+        return total_mse, state_mse, action_mse
     
     def reset(self):
         """ Resets the context of the model."""
@@ -396,7 +417,7 @@ class BesoAgent(BaseAgent):
         use_scaler = extra_args['use_scaler'] if 'use_scaler' in extra_args else False
         # extra_args.pop('s_churn', None)
         # extra_args.pop('use_scaler', None)
-        keys = ['s_churn', 'keep_last_actions']
+        keys = ['state_only', 'n_obs_steps', 'obs_dim']
         if bool(extra_args):
             reduced_args = {x:extra_args[x] for x in keys}
         else:
@@ -425,7 +446,8 @@ class BesoAgent(BaseAgent):
         elif sampler_type == 'dpm':
             x_0 = sample_dpm_2(self.model, state, x_t, goal, sigmas, disable=True)
         elif sampler_type == 'ddim':
-            x_0 = sample_ddim(self.model, state, x_t, goal, sigmas, scaler=scaler, disable=True)
+            x_0 = sample_ddim(self.model, state, x_t, goal, sigmas, scaler=scaler, disable=True,
+            extra_args=reduced_args)
         # ODE deterministic
         elif sampler_type == 'dpm_adaptive':
             x_0 = sample_dpm_adaptive(self.model, state, x_t, goal, sigmas[-2].item(), sigmas[0].item(), disable=True)
@@ -599,7 +621,7 @@ class BesoAgent(BaseAgent):
             if "goal" in batch:
                 return state, batch["goal"], None
             else:
-                goal = self.calculate_constraints(state)
+                goal = self.get_constraints(state)
                 if self.target_modality in batch:
                     action = batch[self.target_modality]
                     action = self.scaler.scale_output(action)
@@ -607,7 +629,7 @@ class BesoAgent(BaseAgent):
         else:
             state, goal = self.input_encoder(batch)
             state = self.scaler.scale_input(state)
-            goal = self.calculate_constraints(state)
+            goal = self.get_constraints(state)
             if self.target_modality in batch:
                 action = batch[self.target_modality]
                 action = self.scaler.scale_output(action)
@@ -615,25 +637,60 @@ class BesoAgent(BaseAgent):
             else:
                 return state, goal
     
-    def calculate_constraints(self, state: torch.Tensor) -> torch.Tensor:
+    def get_constraints(self, state: torch.Tensor) -> torch.Tensor:
         """
         Method to calculate the constraints for the given state
 
         Returns:
             constraints: (B, 1, 1)
         """
-        # orientation = state[:, self.n_obs_steps:, :3]
-        # constraints = torch.where(orientation.norm(dim=(1, 2)) > 0.99, torch.tensor(1), torch.tensor(-1))
-        # constraints = constraints.to(torch.float32).unsqueeze(1)
+        # TOOD: set values to the bottom 10th percentile of the training data
+        unnorm_state = self.scaler.inverse_scale_input(state)
 
-        # ang_vel = state[:, self.n_obs_steps :, 15:18]
-        # constraints = torch.where(
-        #     ang_vel.norm(dim=-1).mean(-1) < 1, torch.tensor(1), torch.tensor(-1)
-        # )
+        # orientation
+        orientation = unnorm_state[:, self.n_obs_steps:, :3]
 
-        # get joint velocities of future states (3.3 - fwd, 5.7 - rand)
+        # get the angle between the orientation and the z-axis
+        dot_product = torch.sum(orientation * torch.tensor([0., 0., 1.]).to(self.device), dim=-1)
+        angle = torch.acos(dot_product)
+        orientation_constraints = self.calculate_constraint_vector(angle.unsqueeze(-1), 0.04)
+
+        # joint velocity
         joint_vel = state[:, self.n_obs_steps:, 18:30]
-        constraints = torch.where(joint_vel.norm(dim=-1).max(-1)[0] < 3, torch.tensor(1), torch.tensor(-1))
+        joint_vel_constraints = self.calculate_constraint_vector(joint_vel, 4.57)
 
+        # # stability polygon
+        # q = state[..., 3:15]
+        # com = pin.centerOfMass(self.model, self.data, q)[:2]
+        # pin.updateFramePlacements(self.pin_model, self.pin_data)
+
+        # foot_pos = []
+        # for foot in ['LF_FOOT', 'RF_FOOT', 'LH_FOOT', 'RH_FOOT']:
+        #     foot_pos.append(self.pin_data.oMf[self.pin_model.getFrameId(foot)].translation[:2])
+        # hull = Delaunay(foot_pos,)
+        # is_com_inside = hull.find_simplex(com.reshape(1, -1)) >= 0
+
+        constraints = torch.cat([orientation_constraints, joint_vel_constraints], dim=-1)
+
+        # random mask out all but one constraint so conditioning is always one-hot
+        mask = torch.zeros_like(constraints).to(self.device)
+        indices = torch.randint(0, constraints.shape[1], (constraints.shape[0],)).to(self.device)
+        mask[torch.arange(constraints.shape[0]), indices] = 1
+        masked_constraints = constraints * mask
+
+        return masked_constraints
+    
+    def calculate_constraint_vector(
+        self, state: torch.Tensor, threshold: float, greater_than: bool = 0
+    ) -> torch.Tensor:
+        if greater_than:
+            constraints = torch.where(state.norm(dim=-1).max(-1)[0] > threshold, 1, 0)
+        else:
+            constraints = torch.where(state.norm(dim=-1).max(-1)[0] < threshold, 1, 0)
         constraints = constraints.to(torch.float32).view(-1, 1, 1)
         return constraints
+
+        # for threshold in torch.linspace(0, 7, steps=20):
+        #     constraints = self.calculate_constraint_vector(joint_vel, threshold.item())
+        #     mean_constraint = constraints.mean().item()
+        #     print(f"Threshold: {threshold.item()}, Mean Constraint: {mean_constraint}")

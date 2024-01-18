@@ -123,6 +123,7 @@ class DiffusionGPT(nn.Module):
         state_dim: int,
         device: str,
         action_dim: int,
+        goal_dim: int,
         embed_dim: int,
         embed_pdrob: float,
         attn_pdrop: float,
@@ -140,7 +141,7 @@ class DiffusionGPT(nn.Module):
         self.horizon = obs_seq_len + future_seq_len
         block_size = 2 + self.horizon
         self.tok_emb = nn.Linear(state_dim + action_dim, embed_dim)
-        self.goal_emb = nn.Linear(1, embed_dim)
+        self.goal_emb = nn.Linear(goal_dim, embed_dim)
         self.pos_emb = nn.Parameter(torch.zeros(1, block_size, embed_dim))
         self.drop = nn.Dropout(embed_pdrob)
         
@@ -294,11 +295,11 @@ class DiffusionGPT(nn.Module):
         return pred_state_action
     
     def mask_cond(self, cond, force_mask=False):
-        bs, t, d = cond.shape
         if force_mask:
             return torch.zeros_like(cond)
         elif self.training and self.cond_mask_prob > 0.:
-            mask = torch.bernoulli(torch.ones((bs, t, d), device=cond.device) * self.cond_mask_prob)
+            mask = torch.bernoulli(torch.ones((cond.shape[0], 1, 1), device=cond.device) * self.cond_mask_prob)
+            mask = mask.expand_as(cond)
             return cond * (1. - mask)
         else:
             return cond

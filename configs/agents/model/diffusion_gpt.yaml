@@ -7,6 +7,7 @@ inner_model:
   _target_: beso.agents.diffusion_agents.k_diffusion.score_gpts.DiffusionGPT
   state_dim: ${obs_dim}
   action_dim: ${action_dim}
+  goal_dim: ${goal_dim}
   embed_dim: ${hidden_dim}
   n_layers: ${num_hidden_layers}
   obs_seq_len: ${window_size}

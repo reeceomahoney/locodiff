@@ -51,6 +51,10 @@ class RaisimManager(BaseWorkspaceManger):
         self.data_loader = self.make_dataloaders()
         self.render = render
 
+    def calculate_constraints(self):
+        # TODO: move constraint calculation to pre-processing
+        pass
+
     def make_dataloaders(self):
         """
         Create a training and test dataloader using the dataset instances of the task
@@ -108,12 +112,11 @@ class RaisimManager(BaseWorkspaceManger):
         for goal_idx in range(self.eval_n_times):
             total_reward = 0
             mean_joint_vel = 0
-            mean_orientation_norm = 0
-            mean_ang_vel = 0
+            mean_angle = 0
             done = False
             obs = self.env.reset()
             obs = torch.from_numpy(obs).to(cfg.device)
-            goal = torch.tensor([1]).to(torch.float32).to(cfg.device)
+            goal = torch.tensor([1, 1]).to(torch.float32).to(cfg.device)
 
             # now run the agent for n steps 
             for n in tqdm(range(self.eval_n_steps)):
@@ -121,14 +124,12 @@ class RaisimManager(BaseWorkspaceManger):
                 if done or n == self.eval_n_steps-1:
                     rewards.append(total_reward)
                     mean_joint_vel = mean_joint_vel / n
-                    mean_orientation_norm = mean_orientation_norm / n
-                    mean_ang_vel = mean_ang_vel / n
+                    mean_angle = mean_angle / n
                     print('Total reward: {}'.format(total_reward))
                     if log_wandb:
                         # wandb.log({ 'Reward': total_reward })
                         wandb.log({ 'Mean joint velocity': mean_joint_vel })
-                        # wandb.log({ 'Mean orientation norm': mean_orientation_norm })
-                        # wandb.log({ 'Mean angular velocity': mean_ang_vel })
+                        wandb.log({ 'Mean angle': mean_angle })
                     break
 
                 if isinstance(agent, BesoAgent):
@@ -160,8 +161,11 @@ class RaisimManager(BaseWorkspaceManger):
             
                 joint_vel = obs[..., 18:30]
                 mean_joint_vel += joint_vel.norm()
-                mean_orientation_norm += obs[..., :3].norm()
-                mean_ang_vel += obs[..., 15:18].norm()
+
+                orientation = obs[..., :3]
+                dot_product = torch.sum(orientation * torch.tensor([0., 0., 1.]).to(self.device), dim=-1)
+                angle = torch.acos(dot_product)
+                mean_angle += angle
                 
                 delta = time.time() - start
                 if delta < 0.02:
