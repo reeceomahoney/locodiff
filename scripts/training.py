@@ -1,5 +1,6 @@
 import os
 import logging
+import sys
 
 import hydra
 import wandb
@@ -30,11 +31,14 @@ def main(cfg: DictConfig) -> None:
     wandb.config = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
     output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
 
+    debugging = sys.gettrace() is not None
+    mode = "disabled" if debugging else "online"
+
     run = wandb.init(
         project=cfg.wandb.project, 
         # entity=cfg.wandb.entity,
         # group=cfg.group,
-        # mode="disabled",
+        mode=mode,
         config=wandb.config,
         dir=output_dir
     )
@@ -55,7 +59,7 @@ def main(cfg: DictConfig) -> None:
     # after training, test the agent
     if isinstance(agent, BesoAgent):
         if cfg.cond_mask_prob > 0:
-            agent.model = ClassifierFreeSampleModel(agent.model, cond_lambda=cfg.cond_lambda)
+            agent.model = ClassifierFreeSampleModel(agent.model, cond_lambda=cfg.cond_lambda, obs_dim=cfg.obs_dim)
             log.info(f'using cond lambda_value of {cfg.cond_lambda}')
             result_dict = workspace_manager.test_agent(
                 agent,

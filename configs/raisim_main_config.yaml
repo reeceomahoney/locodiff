@@ -6,7 +6,7 @@ defaults:
 log_dir: logs/raisim/
 plot_dir: plots/raisim/
 plot_name: ${now:%Y-%m-%d}.png
-data_path: /home/reece/Workspace/Projects/beso/beso/envs/raisim/data/random_acts.npy
+data_path: /home/reece/Workspace/Projects/beso/beso/envs/raisim/data/fwd.npy
 
 hydra:
   run:
@@ -25,17 +25,16 @@ wandb:
 device: 'cuda'
 seed: 6
 scale_data: True
-future_seq_length: 10
-window_size: 5
+future_seq_length: 4
+window_size: 2
 mask_targets: False
 reduce_obs_dim: false
 
 goal_conditioning: True
 goal_conditional: 'future'
 action_dim: 12
-# input_dim: 18
-obs_dim: 33
-goal_dim: 2
+obs_dim: 36
+goal_dim: 1
 
 # policy model params
 hidden_dim: 240 # for transformer, must be a multiple of n_heads (6 in diffusion_gpt)
