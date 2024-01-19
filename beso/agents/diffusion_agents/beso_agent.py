@@ -109,12 +109,6 @@ class BesoAgent(BaseAgent):
         self.obs_dim = obs_dim
         self.n_obs_steps = n_obs_steps
 
-        # make pinocchio model for stability polygon
-        urdf_path = os.path.dirname(os.path.realpath(__file__)) + \
-        '/../../envs/raisim/resources/models/anymal_c/urdf/model.urdf'
-        self.pin_model = pin.buildModelFromUrdf(urdf_path)
-        self.pin_data = self.pin_model.createData()
-
     def get_scaler(self, scaler: Scaler):
         """
         Define the scaler from the Workspace class used to scale state and output data if necessary
@@ -253,7 +247,7 @@ class BesoAgent(BaseAgent):
         # define the sigma values
         sigma = self.make_sample_density()(shape=(len(action),), device=self.device)
         # calculate the loss
-        loss = self.model.loss(state, state_action, goal, noise, sigma)
+        loss = self.model.loss(state_action, goal, noise, sigma)
         # Before the backward pass, zero all the network gradients
         self.optimizer.zero_grad()
         # Backward pass: compute gradient of the loss with respect to parameters
@@ -282,7 +276,7 @@ class BesoAgent(BaseAgent):
         total_mse = 0
         state_mse, action_mse = 0, 0
         # scale data if necessary, otherwise the scaler will return unchanged values
-        state, action, goal = self.process_batch(batch, predict=True)
+        state, action, constraints = self.process_batch(batch, predict=True)
         # use the EMA model variant
         if self.use_ema:
             self.ema_helper.store(self.model.parameters())
@@ -298,18 +292,22 @@ class BesoAgent(BaseAgent):
         x = x.to(self.device)
 
         # generate the action based on the chosen sampler type 
-        x_0 = self.sample_loop(sigmas, x, state[:, :self.window_size], goal, self.sampler_type)
-            
         state_action = torch.cat([state, action], dim=-1)
+        mask = torch.zeros_like(x)
+        mask[:, :self.window_size] = 1
+        x_0 = self.sample_ddim(x, constraints, sigmas, cond=state_action, mask=mask)
+            
         mse = nn.functional.mse_loss(x_0, state_action, reduction="none")
         total_mse += mse.mean().item()
         action_mse += mse[:, :, obs_dim:].mean().item()
 
         # for state mse, first states and all actions are fixed
-        extra_args={'state_only': True, 'n_obs_steps': self.window_size, 'obs_dim': obs_dim} 
         x = torch.randn((B, T, obs_dim + act_dim)) * self.sigma_max
         x = x.to(self.device)
-        x_0 = self.sample_loop(sigmas, x, state_action, goal, self.sampler_type, extra_args=extra_args) 
+        mask = torch.zeros_like(x)
+        mask[:, :self.window_size] = 1
+        mask[:, :, obs_dim:] = 1
+        x_0 = self.sample_ddim(x, constraints, sigmas, cond=state_action, mask=mask)
         mse = nn.functional.mse_loss(x_0, state_action, reduction="none")
         state_mse += mse[:, :, :obs_dim].mean().item()
 
@@ -349,14 +347,14 @@ class BesoAgent(BaseAgent):
             None
         """
         noise_scheduler = self.noise_scheduler if noise_scheduler is None else noise_scheduler
-        state, goal, _ = self.process_batch(batch, predict=True)
+        state, constraints, _ = self.process_batch(batch, predict=True)
         if len(state.shape) == 2  and self.window_size > 1:
             self.obs_context.append(state)
             input_state = torch.stack(tuple(self.obs_context), dim=1)
         else:
             input_state = state
-        if len(goal.shape) == 2 and self.window_size > 1:
-            goal = einops.rearrange(goal, 'b d -> 1 b d')
+        if len(constraints.shape) == 2 and self.window_size > 1:
+            constraints = einops.rearrange(constraints, 'b d -> 1 b d')
             
         # change sampler type and step size if requested otherwise use self. parameters
         if new_sampler_type is not None:
@@ -379,9 +377,13 @@ class BesoAgent(BaseAgent):
         sigmas = self.get_noise_schedule(n_sampling_steps, noise_scheduler)
         
         sa_dim = self.scaler.x_bounds.shape[1] + self.scaler.y_bounds.shape[1]
-        x = torch.randn((1, self.model.model.inner_model.horizon, sa_dim), device=self.device) * self.sigma_max
+        x = torch.randn((1, self.model.model.inner_model.horizon // 2, sa_dim), device=self.device) * self.sigma_max
         
-        x_0 = self.sample_loop(sigmas, x, input_state, goal, sampler_type, extra_args)
+        B, T, D = input_state.shape
+        mask = torch.zeros_like(x)
+        mask[:B, :T, :D] = 1
+        cond = torch.nn.functional.pad(input_state, (0, sa_dim - D, 0, x.shape[1] - T))
+        x_0 = self.sample_ddim(x, constraints, sigmas, cond=cond, mask=mask)
 
         # get the action for the current timestep
         x_0 = x_0[:, len(input_state), self.obs_dim:]
@@ -467,6 +469,42 @@ class BesoAgent(BaseAgent):
         else:
             raise ValueError('desired sampler type not found!')
         return x_0    
+    
+    @torch.no_grad()
+    def sample_ddim(self, x_t, constraints, sigmas, cond=None, mask=None):
+        """
+        Sample from the model using the DDIM sampler
+        
+        Args:
+            x_t (torch.Tensor): The initial state-action noise tensor.
+            constraints (torch.Tensor): One-hot encoding of the constraints.
+            sigmas (torch.Tensor): The sigma distribution for the sampling.
+            cond (torch.Tensor): The conditioning input for the model.
+            mask (torch.Tensor): The mask for the conditioning input.
+        Returns:
+            torch.Tensor: The predicted output of the model.
+        """
+        s_in = x_t.new_ones([x_t.shape[0]])
+        sigma_fn = lambda t: t.neg().exp()
+        t_fn = lambda sigma: sigma.log().neg()
+
+        # apply conditioning
+        x_t = x_t * (1 - mask) + cond * mask
+
+        for i in trange(len(sigmas) - 1, disable=disable):
+
+            # predict the next state_action
+            denoised = self.model(x_t, constraints, sigmas[i] * s_in)
+            t, t_next = t_fn(sigmas[i]), t_fn(sigmas[i + 1])
+            h = t_next - t
+            x_t = (sigma_fn(t_next) / sigma_fn(t)) * x_t - (-h).expm1() * denoised
+
+            # apply conditioning, this is based on https://github.com/yang-song/score_sde/blob/main/controllable_generation.py#L54-L55 which i don't fully understand
+            # cond_t = cond + torch.randn_like(cond) * sigmas[i]
+            cond_t = cond
+            x_t = x_t * (1 - mask) + cond_t * mask
+        
+        return x_t
 
     def load_pretrained_model(self, weights_path: str, **kwargs) -> None:
         """
@@ -644,7 +682,6 @@ class BesoAgent(BaseAgent):
         Returns:
             constraints: (B, 1, 1)
         """
-        # TOOD: set values to the bottom 10th percentile of the training data
         unnorm_state = self.scaler.inverse_scale_input(state)
 
         # orientation
@@ -658,17 +695,6 @@ class BesoAgent(BaseAgent):
         # joint velocity
         joint_vel = state[:, self.n_obs_steps:, 18:30]
         joint_vel_constraints = self.calculate_constraint_vector(joint_vel, 4.57)
-
-        # # stability polygon
-        # q = state[..., 3:15]
-        # com = pin.centerOfMass(self.model, self.data, q)[:2]
-        # pin.updateFramePlacements(self.pin_model, self.pin_data)
-
-        # foot_pos = []
-        # for foot in ['LF_FOOT', 'RF_FOOT', 'LH_FOOT', 'RH_FOOT']:
-        #     foot_pos.append(self.pin_data.oMf[self.pin_model.getFrameId(foot)].translation[:2])
-        # hull = Delaunay(foot_pos,)
-        # is_com_inside = hull.find_simplex(com.reshape(1, -1)) >= 0
 
         constraints = torch.cat([orientation_constraints, joint_vel_constraints], dim=-1)
 
@@ -689,8 +715,3 @@ class BesoAgent(BaseAgent):
             constraints = torch.where(state.norm(dim=-1).max(-1)[0] < threshold, 1, 0)
         constraints = constraints.to(torch.float32).view(-1, 1, 1)
         return constraints
-
-        # for threshold in torch.linspace(0, 7, steps=20):
-        #     constraints = self.calculate_constraint_vector(joint_vel, threshold.item())
-        #     mean_constraint = constraints.mean().item()
-        #     print(f"Threshold: {threshold.item()}, Mean Constraint: {mean_constraint}")

@@ -22,9 +22,10 @@ class ClassifierFreeSampleModel(nn.Module):
         cond_lambda (float): The conditional lambda value.
         cond (bool): Indicates whether conditional sampling is enabled based on the cond_lambda value.
     """
-    def __init__(self, model, cond_lambda: float=2):
+    def __init__(self, model, cond_lambda: float, obs_dim: int):
         super().__init__()
         self.model = model  # model is the actual model to run
+        self.obs_dim = obs_dim
         # pointers to inner model
         self.cond_lambda = cond_lambda
         if self.cond_lambda == 1:
@@ -32,19 +33,19 @@ class ClassifierFreeSampleModel(nn.Module):
         else:
             self.cond = False
 
-    def forward(self, state, state_action, goal, sigma, **extra_args):
+    def forward(self, state_action, goal, sigma, **extra_args):
         if self.cond:
-            return self.model(state, state_action, goal, sigma)
+            return self.model(state_action, goal, sigma)
         elif self.cond_lambda == 0:
             uncond_dict = {'uncond': True}
-            out_uncond = self.model(state, state_action, goal, sigma, **uncond_dict)
+            out_uncond = self.model(state_action, goal, sigma, **uncond_dict)
             return out_uncond
         else:
             state_action = deepcopy(state_action)
 
             # unconditional output
             uncond_dict = {'uncond': True}
-            out_uncond = self.model(state, state_action, goal, sigma, **uncond_dict)
+            out_uncond = self.model(state_action, goal, sigma, **uncond_dict)
 
             # generate a separate one-hot goal for each goal_idx == 1
             indices = (goal == 1).nonzero(as_tuple=True)[0]
@@ -54,6 +55,7 @@ class ClassifierFreeSampleModel(nn.Module):
                 one_hot_vectors = one_hot_vectors.unsqueeze(1)
 
                 # conditional output for each goal_idx == 1
+                state = state_action[:, :self.obs_dim]
                 state_repeat = state.repeat(len(indices), 1, 1)
                 action_repeat = state_action.repeat(len(indices), 1, 1)
                 s_in = torch.ones(state_repeat.shape[0])

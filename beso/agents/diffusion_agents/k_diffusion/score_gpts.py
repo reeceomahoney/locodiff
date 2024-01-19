@@ -246,22 +246,14 @@ class DiffusionGPT(nn.Module):
         )
         return optimizer
 
-    def forward(
-        self, 
-        states,
-        state_actions, 
-        goals,
-        sigma,
-        uncond: Optional[bool] =False,
-        keep_last_actions: Optional[bool] = False
-    ):  
+    def forward( self, state_actions, goals, sigma, uncond: Optional[bool] =False):  
         t = state_actions.shape[1]
         assert t <= self.block_size, "Cannot forward, model block size is exhausted."
         # get the sigma embedding
         sigmas = sigma.log() / 4
         sigmas = einops.rearrange(sigmas, 'b -> b 1')
         emb_t = self.sigma_emb(sigmas.to(torch.float32))
-        if len(states.shape) == 3 and len(emb_t.shape) == 2:
+        if len(state_actions.shape) == 3 and len(emb_t.shape) == 2:
             emb_t = einops.rearrange(emb_t, 'b d -> b 1 d')
               
         # during training randomly mask out the goal for CFG
