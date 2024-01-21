@@ -18,11 +18,7 @@ class BaseAgent(abc.ABC):
     def __init__(
         self,
         model: DictConfig,
-        input_encoder: DictConfig,
         optimization: DictConfig,
-        obs_modalities: list,
-        goal_modalities: list,
-        target_modality: str,
         device: str,
         max_train_steps: int,
         eval_every_n_steps: int,
@@ -33,10 +29,6 @@ class BaseAgent(abc.ABC):
         self.optimizer = hydra.utils.instantiate(
             optimization, params=self.model.get_params()
         )
-        self.obs_modalities = obs_modalities
-        self.goal_modalities = goal_modalities
-        self.target_modality = target_modality
-        self.input_encoder = hydra.utils.instantiate(input_encoder)
         self.device = device
         self.steps = 0
         self.epochs = max_epochs

@@ -13,15 +13,12 @@ import torch.nn as nn
 import numpy as np
 from tqdm import tqdm
 import wandb
-import pinocchio as pin
-from scipy.spatial import Delaunay
 
 from beso.agents.base_agent import BaseAgent
 from beso.networks.ema_helper.ema import ExponentialMovingAverage
 from beso.networks.scaler.scaler_class import Scaler
 from beso.agents.diffusion_agents.k_diffusion.gc_sampling import *
 import beso.agents.diffusion_agents.k_diffusion.utils as utils
-from beso.agents.diffusion_agents.k_diffusion.score_gpts import DiffusionGPT
 
 # A logger for this file
 log = logging.getLogger(__name__)
@@ -32,12 +29,8 @@ class BesoAgent(BaseAgent):
     def __init__(
             self,
             model: DictConfig,
-            input_encoder: DictConfig,
             optimization: DictConfig,
             device: str,
-            obs_modalities: list,
-            goal_modalities: list,
-            target_modality: str,
             max_train_steps: int,
             max_epochs: int,
             train_method: str,
@@ -64,7 +57,7 @@ class BesoAgent(BaseAgent):
             use_kde: bool=False,
             patience: int=10,
     ):
-        super().__init__(model, input_encoder, optimization, obs_modalities, goal_modalities, target_modality, device, max_train_steps, eval_every_n_steps, max_epochs)
+        super().__init__(model, optimization, device, max_train_steps, eval_every_n_steps, max_epochs)
 
         self.ema_helper = ExponentialMovingAverage(self.model.get_params(), decay, self.device)
         self.use_ema = use_ema
@@ -237,7 +230,7 @@ class BesoAgent(BaseAgent):
             None
         """
         # scale data if necessarry, otherwise the scaler will return unchanged values
-        state, action, goal = self.process_batch(batch, predict=False)
+        state, action, goal = self.process_batch(batch)
         state_action = torch.cat([state, action], dim=-1)
         
         self.model.train()
@@ -276,7 +269,7 @@ class BesoAgent(BaseAgent):
         total_mse = 0
         state_mse, action_mse = 0, 0
         # scale data if necessary, otherwise the scaler will return unchanged values
-        state, action, constraints = self.process_batch(batch, predict=True)
+        state, action, constraints = self.process_batch(batch)
         # use the EMA model variant
         if self.use_ema:
             self.ema_helper.store(self.model.parameters())
@@ -294,7 +287,7 @@ class BesoAgent(BaseAgent):
         # generate the action based on the chosen sampler type 
         state_action = torch.cat([state, action], dim=-1)
         mask = torch.zeros_like(x)
-        mask[:, :self.window_size] = 1
+        mask[:, :self.window_size, :obs_dim] = 1
         x_0 = self.sample_ddim(x, constraints, sigmas, cond=state_action, mask=mask)
             
         mse = nn.functional.mse_loss(x_0, state_action, reduction="none")
@@ -305,7 +298,7 @@ class BesoAgent(BaseAgent):
         x = torch.randn((B, T, obs_dim + act_dim)) * self.sigma_max
         x = x.to(self.device)
         mask = torch.zeros_like(x)
-        mask[:, :self.window_size] = 1
+        mask[:, :self.window_size, :obs_dim] = 1
         mask[:, :, obs_dim:] = 1
         x_0 = self.sample_ddim(x, constraints, sigmas, cond=state_action, mask=mask)
         mse = nn.functional.mse_loss(x_0, state_action, reduction="none")
@@ -347,7 +340,7 @@ class BesoAgent(BaseAgent):
             None
         """
         noise_scheduler = self.noise_scheduler if noise_scheduler is None else noise_scheduler
-        state, constraints, _ = self.process_batch(batch, predict=True)
+        state, _, constraints = self.process_batch(batch)
         if len(state.shape) == 2  and self.window_size > 1:
             self.obs_context.append(state)
             input_state = torch.stack(tuple(self.obs_context), dim=1)
@@ -377,7 +370,7 @@ class BesoAgent(BaseAgent):
         sigmas = self.get_noise_schedule(n_sampling_steps, noise_scheduler)
         
         sa_dim = self.scaler.x_bounds.shape[1] + self.scaler.y_bounds.shape[1]
-        x = torch.randn((1, self.model.model.inner_model.horizon // 2, sa_dim), device=self.device) * self.sigma_max
+        x = torch.randn((1, self.model.inner_model.horizon, sa_dim), device=self.device) * self.sigma_max
         
         B, T, D = input_state.shape
         mask = torch.zeros_like(x)
@@ -649,31 +642,26 @@ class BesoAgent(BaseAgent):
         raise ValueError('Unknown noise schedule type')
     
     @torch.no_grad()
-    def process_batch(self, batch: dict, predict: bool = True):
+    def process_batch(self, batch: dict):
         """
         Processes a batch of data and returns the state, action and goal
         """
-        if predict:
-            state, goal = self.input_encoder(batch)
-            state = self.scaler.scale_input(state)
-            if "goal" in batch:
-                return state, batch["goal"], None
-            else:
-                goal = self.get_constraints(state)
-                if self.target_modality in batch:
-                    action = batch[self.target_modality]
-                    action = self.scaler.scale_output(action)
-                    return state, action, goal
-        else:
-            state, goal = self.input_encoder(batch)
-            state = self.scaler.scale_input(state)
+        get_to_device = lambda key: (
+            batch.get(key).to(self.device) if batch.get(key) is not None else None
+        )
+
+        state = get_to_device('observation')
+        state = self.scaler.scale_input(state)
+
+        action = get_to_device('action')
+        if action is not None:
+            action = self.scaler.scale_output(action)
+
+        goal = get_to_device('goal')
+        if not goal:
             goal = self.get_constraints(state)
-            if self.target_modality in batch:
-                action = batch[self.target_modality]
-                action = self.scaler.scale_output(action)
-                return state, action, goal
-            else:
-                return state, goal
+
+        return state, action, goal
     
     def get_constraints(self, state: torch.Tensor) -> torch.Tensor:
         """
@@ -682,29 +670,7 @@ class BesoAgent(BaseAgent):
         Returns:
             constraints: (B, 1, 1)
         """
-        unnorm_state = self.scaler.inverse_scale_input(state)
-
-        # orientation
-        orientation = unnorm_state[:, self.n_obs_steps:, :3]
-
-        # get the angle between the orientation and the z-axis
-        dot_product = torch.sum(orientation * torch.tensor([0., 0., 1.]).to(self.device), dim=-1)
-        angle = torch.acos(dot_product)
-        orientation_constraints = self.calculate_constraint_vector(angle.unsqueeze(-1), 0.04)
-
-        # joint velocity
-        joint_vel = state[:, self.n_obs_steps:, 18:30]
-        joint_vel_constraints = self.calculate_constraint_vector(joint_vel, 4.57)
-
-        constraints = torch.cat([orientation_constraints, joint_vel_constraints], dim=-1)
-
-        # random mask out all but one constraint so conditioning is always one-hot
-        mask = torch.zeros_like(constraints).to(self.device)
-        indices = torch.randint(0, constraints.shape[1], (constraints.shape[0],)).to(self.device)
-        mask[torch.arange(constraints.shape[0]), indices] = 1
-        masked_constraints = constraints * mask
-
-        return masked_constraints
+        return torch.zeros((state.shape[0], 1, 1)).to(self.device)
     
     def calculate_constraint_vector(
         self, state: torch.Tensor, threshold: float, greater_than: bool = 0

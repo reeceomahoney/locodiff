@@ -6,7 +6,7 @@ defaults:
 log_dir: logs/raisim/
 plot_dir: plots/raisim/
 plot_name: ${now:%Y-%m-%d}.png
-data_path: /home/reece/Workspace/Projects/beso/beso/envs/raisim/data/fwd.npy
+data_path: rand
 
 hydra:
   run:
@@ -26,7 +26,7 @@ device: 'cuda'
 seed: 6
 scale_data: True
 future_seq_length: 4
-window_size: 2
+window_size: 4
 mask_targets: False
 reduce_obs_dim: false
 
@@ -44,14 +44,6 @@ train_method: 'steps'
 max_train_steps: 100000
 max_epochs: 100
 eval_every_n_steps: 500
-
-# define evaluation types 
-evaluate_multigoal: True
-evaluate_sequential: True
-
-obs_modalities: ['observation']
-goal_modalities: ['goal']
-target_modality: 'action'
 
 # BESO hyperparameters
 attn_pdrop: 0.05

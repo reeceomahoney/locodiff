@@ -51,10 +51,6 @@ class RaisimManager(BaseWorkspaceManger):
         self.data_loader = self.make_dataloaders()
         self.render = render
 
-    def calculate_constraints(self):
-        # TODO: move constraint calculation to pre-processing
-        pass
-
     def make_dataloaders(self):
         """
         Create a training and test dataloader using the dataset instances of the task
@@ -89,16 +85,12 @@ class RaisimManager(BaseWorkspaceManger):
         agent, 
         cfg,
         env_cfg,
-        evaluate_multigoal: bool = True, # just for for same input as kitchen environment
-        evaluate_sequential: bool = True, # just for for same input as kitchen environment
         log_wandb: bool = True, 
         new_sampler_type=None,
         n_inference_steps=None,
         get_mean=None,
-        extra_args=None, 
         noise_scheduler=None,
-        store_video=False,
-        video_path=None  # Path to store the generated video
+        use_feet_pos=False,
         ):
         """
         Test the agent on the environment with the given goal function
@@ -106,8 +98,8 @@ class RaisimManager(BaseWorkspaceManger):
         
         resource_dir = os.path.dirname(os.path.realpath(__file__)) + "/../envs/raisim/resources"
         env_cfg = OmegaConf.to_yaml(env_cfg)
-        self.env = RaisimEnv(resource_dir, env_cfg)
-        log.info('Starting trained model evaluation on the multimodal blockpush environment')
+        self.env = RaisimEnv(resource_dir, env_cfg, use_feet_pos)
+        log.info('Starting trained model evaluation')
         rewards = []
         for goal_idx in range(self.eval_n_times):
             total_reward = 0
@@ -116,7 +108,7 @@ class RaisimManager(BaseWorkspaceManger):
             done = False
             obs = self.env.reset()
             obs = torch.from_numpy(obs).to(cfg.device)
-            goal = torch.tensor([1, 1]).to(torch.float32).to(cfg.device)
+            goal = torch.tensor([0]).to(torch.float32).to(cfg.device)
 
             # now run the agent for n steps 
             for n in tqdm(range(self.eval_n_steps)):

@@ -4,7 +4,6 @@ _recursive_: false
 defaults:
  # diffusion_gpt augmented_score_model augmented_seq_transformer_score_model diffusion_gpt film_diffusion_gpt film_diffusion_gpt film_seq_transformer_score_model
   - model: diffusion_gpt # film_diffusion_gpt 
-  - input_encoder: no_encoder
 
 optimization:
   _target_: torch.optim.AdamW
@@ -16,9 +15,6 @@ lr_scheduler:
   step_size: 1000
   gamma: 0.99
 
-obs_modalities: ${obs_modalities}
-goal_modalities: ${goal_modalities}
-target_modality: ${target_modality}
 train_method: ${train_method}
 max_epochs: ${max_epochs}
 

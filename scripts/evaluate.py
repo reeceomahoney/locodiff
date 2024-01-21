@@ -56,9 +56,9 @@ def main(cfg: DictConfig) -> None:
 
     if cfg['test_classifier_free_guidance']:
         # load the classifier free wrapper
-        agent.model = ClassifierFreeSampleModel(agent.model, cond_lambda=cfg['cond_lambda'], obs_dim=cfg['obs_dim'])
+        agent.model = ClassifierFreeSampleModel(agent.model, cond_lambda=cfg['cond_lambda'], obs_dim=model_cfg.obs_dim)
     elif cfg['cond_lambda'] > 1:
-        agent.model = ClassifierFreeSampleModel(agent.model, cond_lambda=cfg['cond_lambda'], obs_dim=cfg['obs_dim'])
+        agent.model = ClassifierFreeSampleModel(agent.model, cond_lambda=cfg['cond_lambda'], obs_dim=model_cfg.obs_dim)
 
     if cfg.test_single_variant:
         workspace_manager.eval_n_times = cfg['num_runs']
@@ -70,13 +70,8 @@ def main(cfg: DictConfig) -> None:
             log_wandb=cfg['log_wandb'],
             new_sampler_type=cfg['sampler_type'],
             n_inference_steps=cfg['n_inference_steps'],
-            extra_args={
-                's_churn': cfg['s_churn'],
-                's_min': cfg['s_min']
-                },
             noise_scheduler=cfg['noise_scheduler'],
-            store_video=cfg.store_video,
-            video_path=cfg.model_store_path
+            use_feet_pos=True if model_cfg.data_path == 'rand_feet' else False,
             )
     if cfg.test_all_samplers:
         workspace_manager.compare_sampler_types(

@@ -57,6 +57,7 @@ def main(cfg: DictConfig) -> None:
     )
 
     # after training, test the agent
+    use_feet_pos = True if cfg.data_path == 'rand_feet' else False
     if isinstance(agent, BesoAgent):
         if cfg.cond_mask_prob > 0:
             agent.model = ClassifierFreeSampleModel(agent.model, cond_lambda=cfg.cond_lambda, obs_dim=cfg.obs_dim)
@@ -65,9 +66,8 @@ def main(cfg: DictConfig) -> None:
                 agent,
                 cfg,
                 cfg.env,
-                cfg.evaluate_multigoal,
-                cfg.evaluate_sequential,
                 log_wandb=True,
+                use_feet_pos=use_feet_pos,
                 )
         else:
             result_dict = workspace_manager.test_agent(
