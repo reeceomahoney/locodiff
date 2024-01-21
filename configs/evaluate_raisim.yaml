@@ -2,7 +2,7 @@
 # This is the config file for the evaluation of the model
 # you can analyze the performance of the model in different ways
 # first chose the path to the model you want to evaluate
-model_store_path: ../../../logs/raisim/runs/2024-01-18/17-28-51
+model_store_path: ../../../logs/raisim/runs/2024-01-21/16-25-46
 # next define some general stuff for evaluation
 log_wandb: True
 
@@ -20,14 +20,13 @@ s_churn: 0
 s_min: 0
 get_mean: None
 # this value is only relevant for ClassifierFreeGuidance trained models
-cond_lambda: 2
+cond_lambda: 1
 # the time steps method
 noise_scheduler: linear
 device: cpu
 # not really used
 use_scaler: False
 # this is to record videos of the evaluation
-render_workspace:  False
 store_video:  False
 
 ### next chose what kind of evaluation you want to do

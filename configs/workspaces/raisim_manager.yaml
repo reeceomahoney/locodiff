@@ -18,10 +18,9 @@ seed: ${seed}
 train_batch_size: 1024
 test_batch_size: 1024
 num_workers: 4
-eval_n_times: 100
+eval_n_times: 1
 eval_n_steps: 300
 device: ${device}
 scale_data: ${scale_data}
 train_fraction: 0.95
-render: False
 use_minmax_scaler: true

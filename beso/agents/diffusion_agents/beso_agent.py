@@ -53,6 +53,7 @@ class BesoAgent(BaseAgent):
             window_size: int,
             goal_window_size: int,
             obs_dim: int,
+            num_envs: int,
             n_obs_steps: int,
             use_kde: bool=False,
             patience: int=10,
@@ -65,13 +66,10 @@ class BesoAgent(BaseAgent):
             lr_scheduler,
             optimizer=self.optimizer
         )
-        # define the goal conditioned flag for the model 
-        self.gc = goal_conditioned
         # define the training method
         self.train_method = train_method
         self.epochs = max_epochs
         # all diffusion stuff for inference
-        self.sampler_type = sampler_type
         self.num_sampling_steps = num_sampling_steps
         self.sigma_data = sigma_data
         self.sigma_min = sigma_min
@@ -87,20 +85,16 @@ class BesoAgent(BaseAgent):
         self.patience = patience
         # get the window size for prediction
         self.window_size = window_size
-        self.goal_window_size = goal_window_size
-        # bool if the model should only output the last action or all actions in a sequence
-        self.pred_last_action_only = pred_last_action_only
         # set up the rolling window contexts
         self.obs_context = deque(maxlen=self.window_size)
-        self.goal_context = deque(maxlen=self.goal_window_size)
         # if we use DiffusionGPT we need an action context and use deques to store the actions
         self.action_context = deque(maxlen=self.window_size-1)
-        self.que_actions = True
         # use kernel density estimator if true
         self.use_kde = use_kde
         self.noise_scheduler = 'exponential'
         self.obs_dim = obs_dim
         self.n_obs_steps = n_obs_steps
+        self.num_envs = num_envs
 
     def get_scaler(self, scaler: Scaler):
         """
@@ -115,14 +109,14 @@ class BesoAgent(BaseAgent):
         self.model.min_action = torch.from_numpy(scaler.y_bounds[0, :]).to(self.device)
         self.model.max_action = torch.from_numpy(scaler.y_bounds[1, :]).to(self.device)
     
-    def train_agent(self, train_loader, test_loader):
+    def train_agent(self, train_loader, test_loader, eval_fn):
         """
         Train the agent on a given number of epochs or steps
         """
         if self.train_method == 'epochs':
             self.train_agent_on_epochs(train_loader, test_loader, self.epochs)
         elif self.train_method == 'steps':
-            self.train_agent_on_steps(train_loader, test_loader)
+            self.train_agent_on_steps(train_loader, test_loader, eval_fn)
         else:
             raise ValueError('Either epochs or n_steps must be specified!')
     
@@ -173,7 +167,9 @@ class BesoAgent(BaseAgent):
         self.store_model_weights(self.working_dir)
         log.info("Training done!")
 
-    def train_agent_on_steps(self, train_loader: torch.utils.data.DataLoader, test_loader: torch.utils.data.DataLoader):
+    def train_agent_on_steps(
+            self, train_loader: torch.utils.data.DataLoader, test_loader: torch.utils.data.DataLoader, eval_fn
+        ):
         best_test_mse = 1e10
         mean_mse = 1e10
         generator = iter(train_loader)
@@ -214,6 +210,10 @@ class BesoAgent(BaseAgent):
                     "test_action_loss": avrg_test_action_mse
                 }
             )
+
+            if not self.steps % 2000:
+                results = eval_fn(self)
+                wandb.log(results)
             
         self.store_model_weights(self.working_dir)
         log.info("Training done!")
@@ -318,48 +318,29 @@ class BesoAgent(BaseAgent):
     def predict(
         self, 
         batch: dict,
-        new_sampler_type=None, 
-        get_mean=None, 
         new_sampling_steps=None,
-        extra_args=None, 
-        noise_scheduler=None
     ) -> torch.Tensor:
         """
         Predicts the output of the model based on the provided batch of data.
 
         Args:
             batch (dict): A dictionary containing the input data.
-            new_sampler_type (str): Optional. The new sampler type to use for sampling actions. Defaults to None.
-            get_mean (int): Optional. The number of samples to use for calculating the mean prediction. Defaults to None.
             new_sampling_steps (int): Optional. The new number of sampling steps to use. Defaults to None.
-            extra_args: Optional. Additional arguments for the sampling loop. Defaults to None.
-            noise_scheduler: Optional. The noise scheduler for the sigma distribution. Defaults to None.
         Returns:
             torch.Tensor: The predicted output of the model.
-        Raises:
-            None
         """
-        noise_scheduler = self.noise_scheduler if noise_scheduler is None else noise_scheduler
-        state, _, constraints = self.process_batch(batch)
-        if len(state.shape) == 2  and self.window_size > 1:
+        state, _, goals = self.process_batch(batch)
+
+        if self.window_size > 1:
             self.obs_context.append(state)
             input_state = torch.stack(tuple(self.obs_context), dim=1)
         else:
             input_state = state
-        if len(constraints.shape) == 2 and self.window_size > 1:
-            constraints = einops.rearrange(constraints, 'b d -> 1 b d')
             
-        # change sampler type and step size if requested otherwise use self. parameters
-        if new_sampler_type is not None:
-            sampler_type = new_sampler_type
-        else:
-            sampler_type = self.sampler_type
-        # same with the number of sampling steps 
         if new_sampling_steps is not None:
             n_sampling_steps = new_sampling_steps
         else:
             n_sampling_steps = self.num_sampling_steps
-
             
         if self.use_ema:
             self.ema_helper.store(self.model.parameters())
@@ -367,19 +348,20 @@ class BesoAgent(BaseAgent):
         self.model.eval()
 
         # get the sigma distribution for the desired sampling method
-        sigmas = self.get_noise_schedule(n_sampling_steps, noise_scheduler)
-        
-        sa_dim = self.scaler.x_bounds.shape[1] + self.scaler.y_bounds.shape[1]
-        x = torch.randn((1, self.model.inner_model.horizon, sa_dim), device=self.device) * self.sigma_max
+        sigmas = self.get_noise_schedule(n_sampling_steps, self.noise_scheduler)
         
         B, T, D = input_state.shape
+        sa_dim = self.scaler.x_bounds.shape[1] + self.scaler.y_bounds.shape[1]
+        horizon = self.model.inner_model.future_seq_len + T
+        x = torch.randn((self.num_envs, horizon, sa_dim), device=self.device) * self.sigma_max
+        
         mask = torch.zeros_like(x)
         mask[:B, :T, :D] = 1
         cond = torch.nn.functional.pad(input_state, (0, sa_dim - D, 0, x.shape[1] - T))
-        x_0 = self.sample_ddim(x, constraints, sigmas, cond=cond, mask=mask)
+        x_0 = self.sample_ddim(x, goals, sigmas, cond=cond, mask=mask)
 
         # get the action for the current timestep
-        x_0 = x_0[:, len(input_state), self.obs_dim:]
+        x_0 = x_0[:, T-1, self.obs_dim:]
         
         # scale the final output
         x_0 = self.scaler.clip_action(x_0)

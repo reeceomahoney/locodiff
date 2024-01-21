@@ -138,6 +138,7 @@ class DiffusionGPT(nn.Module):
         self.device = device
 
         # input embedding stem (2 for the sigma and the goal)
+        self.future_seq_len = future_seq_len
         self.horizon = obs_seq_len + future_seq_len
         block_size = 2 + self.horizon
         self.tok_emb = nn.Linear(state_dim + action_dim, embed_dim)

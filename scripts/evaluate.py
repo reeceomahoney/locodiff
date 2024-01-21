@@ -1,4 +1,3 @@
-from math import fabs
 import os
 import logging
 
@@ -22,38 +21,40 @@ def main(cfg: DictConfig) -> None:
     
     wandb.config = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
     if cfg.log_wandb:
-        run = wandb.init(
+        wandb.init(
             project='beso_eval', 
-            # entity='add_wandb_acc_name', 
-            # group=f'noise_comp_' + cfg.sampler_type,
-            # mode="disabled",  
+            mode="disabled",  
             config=wandb.config
         )
-    # get the path to the config yaml file
+
+    # config
     cfg_store_path = os.path.join(cfg.model_store_path,'.hydra/config.yaml')
-    # init wandb logger and config from hydra path 
     model_cfg = OmegaConf.load(cfg_store_path) 
-    torch.manual_seed(model_cfg.seed)
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
     model_cfg.device = cfg.device
     model_cfg.workspaces['device'] = cfg['device']
     model_cfg.agents['device'] = cfg['device']
+    model_cfg.env['num_envs'] = 1
+
     workspace_manager = hydra.utils.instantiate(model_cfg.workspaces)
     agent = hydra.utils.instantiate(model_cfg.agents)
-    # get the scaler instance and set teh bounds for the sampler if required
+
+    # get the scaler instance and set the bounds for the sampler if required
     agent.get_scaler(workspace_manager.scaler)
     agent.set_bounds(workspace_manager.scaler)
     agent.load_pretrained_model(cfg.model_store_path)
+
     # set new noise limits
     agent.sigma_max = cfg.sigma_max
     agent.sigma_min = cfg.sigma_min
-    
-    if cfg.render_workspace:
-        workspace_manager.render = True
-    else:
-        workspace_manager.render = False
 
+    # initialize the environment
+    workspace_manager.init_env(model_cfg, use_feet_pos=model_cfg.data_path == 'rand_feet')
+
+    # set seeds
+    torch.manual_seed(model_cfg.seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+    
     if cfg['test_classifier_free_guidance']:
         # load the classifier free wrapper
         agent.model = ClassifierFreeSampleModel(agent.model, cond_lambda=cfg['cond_lambda'], obs_dim=model_cfg.obs_dim)
@@ -62,17 +63,7 @@ def main(cfg: DictConfig) -> None:
 
     if cfg.test_single_variant:
         workspace_manager.eval_n_times = cfg['num_runs']
-        
-        workspace_manager.test_agent(
-            agent,
-            model_cfg,
-            model_cfg.env,
-            log_wandb=cfg['log_wandb'],
-            new_sampler_type=cfg['sampler_type'],
-            n_inference_steps=cfg['n_inference_steps'],
-            noise_scheduler=cfg['noise_scheduler'],
-            use_feet_pos=True if model_cfg.data_path == 'rand_feet' else False,
-            )
+        workspace_manager.test_agent(agent, n_inference_steps=cfg['n_inference_steps'])
     if cfg.test_all_samplers:
         workspace_manager.compare_sampler_types(
             agent, 

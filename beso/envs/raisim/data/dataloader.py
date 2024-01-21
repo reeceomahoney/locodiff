@@ -1,4 +1,4 @@
-from typing import Optional, Callable, Any
+from typing import Optional
 import logging
 
 import os
@@ -7,7 +7,6 @@ from torch.utils.data import TensorDataset
 from pathlib import Path
 import numpy as np
 
-from beso.networks.scaler.scaler_class import Scaler
 from beso.envs.dataloaders.trajectory_loader import (
     TrajectoryDataset,
     get_train_val_sliced,
@@ -33,6 +32,7 @@ ACTION_MEAN = np.array(
 
 def get_raisim_train_val(
     data_directory,
+    obs_dim,
     train_fraction=0.9,
     random_seed=42,
     device="cpu",
@@ -47,7 +47,7 @@ def get_raisim_train_val(
         assert goal_conditional in ["future", "onehot"]
 
     return get_train_val_sliced(
-        RaisimTrajectoryDataset(data_directory),
+        RaisimTrajectoryDataset(data_directory, future_seq_len, obs_dim),
         train_fraction,
         random_seed,
         device,
@@ -64,14 +64,18 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
     def __init__(
         self,
         data_directory: os.PathLike,
+        future_seq_len: int,
+        obs_dim: int,
         device="cpu",
-        obs_dim=33,
     ):
         self.device = device
-        self.data_directory = Path(data_directory)
+        dataset_path = os.path.dirname(os.path.realpath(__file__)) + '/' + data_directory + '.npy'
+        self.dataset_path = Path(dataset_path)
+        self.data_directory = data_directory
         self.obs_dim = obs_dim
+        self.future_seq_len = future_seq_len
         logging.info("Data loading: started")
-        data = np.load(self.data_directory, allow_pickle=True).item()
+        data = np.load(self.dataset_path, allow_pickle=True).item()
         self.observations = data["observations"]
         self.actions = data["actions"]
         self.terminals = data["terminals"]
@@ -107,7 +111,12 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         return torch.cat(result, dim=0)
 
     def preprocess(self):
-        self.observations = self.observations[:, :, : self.obs_dim]
+        if self.data_directory == 'rand_feet':
+            self.observations = np.concatenate(
+                [self.observations[:, :, :36], self.observations[:, :, 48:]], axis=-1
+            )
+        else:
+            self.observations = self.observations[:, :, : self.obs_dim]
         self.actions -= ACTION_MEAN
 
         # To split episodes correctly
@@ -158,49 +167,6 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
                 for split in splits
             ]
         )
-
-    def __getitem__(self, idx):
-        T = self.masks[idx].sum().int().item()
-        return tuple(x[idx, :T] for x in self.tensors)
-
-
-class PushTrajectorySequenceDataset(TensorDataset):
-    def __init__(
-        self,
-        data_directory: os.PathLike,
-        device="cpu",
-        scale_data: bool = False,
-        onehot_goals=False,
-    ):
-        self.device = device
-        self.data_directory = Path(data_directory)
-        logging.info("Multimodal loading: started")
-        self.observations = np.load(
-            self.data_directory / "multimodal_push_observations.npy"
-        )
-        self.actions = np.load(self.data_directory / "multimodal_push_actions.npy")
-        self.masks = np.load(self.data_directory / "multimodal_push_masks.npy")
-        self.observations = torch.from_numpy(self.observations).to(device).float()
-        self.actions = torch.from_numpy(self.actions).to(device).float()
-        self.masks = torch.from_numpy(self.masks).to(device).float()
-        self.scaler = Scaler(self.observations, self.actions, scale_data, device)
-        tensors = [self.observations, self.actions, self.masks]
-        logging.info("Multimodal loading: done")
-        # The current values are in shape N x T x Dim, so all is good in the world.
-        if onehot_goals:
-            tensors.append(self.goals)
-        super.__init__(self, *tensors)
-
-    def get_seq_length(self, idx):
-        return int(self.masks[idx].sum().item())
-
-    def get_all_actions(self):
-        result = []
-        # mask out invalid actions
-        for i in range(len(self.masks)):
-            T = int(self.masks[i].sum().item())
-            result.append(self.actions[i, :T, :])
-        return torch.cat(result, dim=0)
 
     def __getitem__(self, idx):
         T = self.masks[idx].sum().int().item()
