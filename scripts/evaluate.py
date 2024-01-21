@@ -28,7 +28,7 @@ def main(cfg: DictConfig) -> None:
         )
 
     # config
-    cfg_store_path = os.path.join(cfg.model_store_path,'.hydra/config.yaml')
+    cfg_store_path = os.path.join(os.getcwd(), cfg.model_store_path,'.hydra/config.yaml')
     model_cfg = OmegaConf.load(cfg_store_path) 
     model_cfg.device = cfg.device
     model_cfg.workspaces['device'] = cfg['device']

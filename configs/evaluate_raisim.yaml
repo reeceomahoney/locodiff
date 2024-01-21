@@ -1,8 +1,17 @@
+defaults:
+  - _self_
+  - override hydra/hydra_logging: disabled
+  - override hydra/job_logging: disabled
+
+hydra:
+  output_subdir: null
+  run:
+    dir: .
 
 # This is the config file for the evaluation of the model
 # you can analyze the performance of the model in different ways
 # first chose the path to the model you want to evaluate
-model_store_path: ../../../logs/raisim/runs/2024-01-21/16-25-46
+model_store_path: logs/raisim/runs/2024-01-21/16-25-46
 # next define some general stuff for evaluation
 log_wandb: True
 
