@@ -132,6 +132,14 @@ namespace raisim {
             /// Dynamics Randomization
             enableDynamicsRandomization_ = cfg["enable_dynamics_randomization"].template As<bool>();
 
+            /// Frame Indices
+            frameIdxs_.setZero(5);
+            frameIdxs_ << robot_->getFrameIdxByName("ROOT"),
+                robot_->getFrameIdxByName("LF_shank_fixed_LF_FOOT"),
+                robot_->getFrameIdxByName("RF_shank_fixed_RF_FOOT"),
+                robot_->getFrameIdxByName("LH_shank_fixed_LH_FOOT"),
+                robot_->getFrameIdxByName("RH_shank_fixed_RH_FOOT");
+
             /// visualize if it is the first environment
             if (visualizable_) {
                 server_ = std::make_unique<raisim::RaisimServer>(world_.get());
@@ -342,6 +350,15 @@ namespace raisim {
             }
         }
 
+        void getFrameCartesianPositions(Eigen::Ref<EigenVec> frameCartesianPositions) {
+            raisim::Vec<3> framePosition;
+            frameCartesianPositions.setZero();
+            for (int i = 0; i < 5; i++) {
+                robot_->getFramePosition(frameIdxs_[i], framePosition);
+                frameCartesianPositions.segment(3*i, 3) = framePosition.e().cast<float>();
+            }
+        }
+
         void killServer() {
             server_->killServer();
         }
@@ -352,7 +369,7 @@ namespace raisim {
         raisim::ArticulatedSystem *robot_;
         Eigen::VectorXd gc_init_, gv_init_, gc_, gv_, pTarget_, pTarget12_, vTarget_, prevPTarget12_;
         float terminalRewardCoeff_ = 0.f;
-        Eigen::VectorXd actionMean_, actionStd_, obDouble_, contacts_;
+        Eigen::VectorXd actionMean_, actionStd_, obDouble_, contacts_, frameIdxs_;
         Eigen::Vector3d bodyLinearVel_, bodyAngularVel_;
 
         // Actuator network

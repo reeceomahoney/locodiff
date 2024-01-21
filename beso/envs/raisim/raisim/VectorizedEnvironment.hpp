@@ -236,6 +236,11 @@ namespace raisim {
             environments_[0]->killServer();
         }
 
+        void getFrameCartesianPositions(Eigen::Ref<EigenRowMajorMat> &cartesianPos) {
+            for (int i = 0; i < num_envs_; i++)
+                environments_[i]->getFrameCartesianPositions(cartesianPos.row(i));
+        }
+
     private:
         void updateObservationStatisticsAndNormalize(Eigen::Ref<EigenRowMajorMat> &ob, bool updateStatistics) {
             if (updateStatistics) {

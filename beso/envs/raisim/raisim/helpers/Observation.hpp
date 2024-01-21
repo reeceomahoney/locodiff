@@ -93,11 +93,11 @@ public:
 
     void updateVelocityCommand(const Eigen::VectorXd &velocityCommand) {
         desiredBaseLinearVelocity_.setZero();
-        // desiredBaseLinearVelocity_.head(2) = velocityCommand.head(2);
-        desiredBaseLinearVelocity_[0] = 0.5;
+        desiredBaseLinearVelocity_.head(2) = velocityCommand.head(2);
+        // desiredBaseLinearVelocity_[0] = 0.5;
 
         desiredBaseAngularVelocity_.setZero();
-        // desiredBaseAngularVelocity_[2] = velocityCommand[2];
+        desiredBaseAngularVelocity_[2] = velocityCommand[2];
 
         observation_.segment(33, 2) = desiredBaseLinearVelocity_.head(2);  // Index 33 - 34: Velocity Command Linear
         observation_.segment(35, 1) = desiredBaseAngularVelocity_.tail(1);  // Index 35: Velocity Command Angular
