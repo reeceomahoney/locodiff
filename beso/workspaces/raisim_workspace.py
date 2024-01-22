@@ -88,11 +88,11 @@ class RaisimManager(BaseWorkspaceManger):
         Test the agent on the environment with the given goal function
         """
         log.info('Starting trained model evaluation')
+        total_rewards = 0
+        total_dones = 0
         obs = self.env.reset()
         goal = torch.tensor([0]).to(torch.float32).to(self.device)
-        rewards = []
         for _ in range(self.eval_n_times):
-            total_reward = 0
             done = np.array([False])
             obs = self.env.observe()
             obs = torch.from_numpy(obs).to(self.device)
@@ -101,9 +101,10 @@ class RaisimManager(BaseWorkspaceManger):
             for n in tqdm(range(self.eval_n_steps)):
                 start = time.time()
 
-                if done.any() or n == self.eval_n_steps-1:
-                    rewards.append(total_reward)
-                    break
+                if done.any():
+                    total_dones += done
+                if n == self.eval_n_steps-1:
+                    total_dones += np.ones(done.shape)
 
                 pred_action = agent.predict(
                     {'observation': obs, 'goal': goal}, 
@@ -111,15 +112,16 @@ class RaisimManager(BaseWorkspaceManger):
                 )
                 obs, reward, done = self.env.step(pred_action.detach().cpu().numpy())
                 obs = torch.from_numpy(obs).to(self.device)
-                total_reward += reward
+                total_rewards += reward
             
                 delta = time.time() - start
                 if delta < 0.02:
                     time.sleep(0.02 - delta)
                 
         self.env.close()
-        avrg_reward = np.array(rewards).mean()
-        std_reward = np.array(rewards).std()
+        total_rewards /= total_dones
+        avrg_reward = total_rewards.mean()
+        std_reward = total_rewards.std()
         
         log.info('... finished trained model evaluation')
         return_dict = {
