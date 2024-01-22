@@ -315,11 +315,7 @@ class BesoAgent(BaseAgent):
         self.action_context.clear()
 
     @torch.no_grad()
-    def predict(
-        self, 
-        batch: dict,
-        new_sampling_steps=None,
-    ) -> torch.Tensor:
+    def predict( self, batch: dict, new_sampling_steps=None) -> torch.Tensor:
         """
         Predicts the output of the model based on the provided batch of data.
 
@@ -331,11 +327,13 @@ class BesoAgent(BaseAgent):
         """
         state, _, goals = self.process_batch(batch)
 
+        input_state = state
+        input_action = None
         if self.window_size > 1:
             self.obs_context.append(state)
             input_state = torch.stack(tuple(self.obs_context), dim=1)
-        else:
-            input_state = state
+            if len(self.action_context) > 0:
+                input_action = torch.stack(tuple(self.action_context), dim=1)
             
         if new_sampling_steps is not None:
             n_sampling_steps = new_sampling_steps
@@ -350,29 +348,28 @@ class BesoAgent(BaseAgent):
         # get the sigma distribution for the desired sampling method
         sigmas = self.get_noise_schedule(n_sampling_steps, self.noise_scheduler)
         
-        B, T, D = input_state.shape
+        _, T, D = input_state.shape
         sa_dim = self.scaler.x_bounds.shape[1] + self.scaler.y_bounds.shape[1]
         horizon = self.model.inner_model.future_seq_len + T
         x = torch.randn((self.num_envs, horizon, sa_dim), device=self.device) * self.sigma_max
         
-        mask = torch.zeros_like(x)
-        mask[:B, :T, :D] = 1
-        cond = torch.nn.functional.pad(input_state, (0, sa_dim - D, 0, x.shape[1] - T))
+        # conditioning
+        cond, mask = torch.zeros_like(x), torch.zeros_like(x)
+        cond[:, :T, :D] = input_state
+        mask[:, :T, :D] = 1
+        if input_action is not None:
+            cond[:, :T-1, D:] = input_action
+            mask[:, :T-1, D:] = 1
+
         x_0 = self.sample_ddim(x, goals, sigmas, cond=cond, mask=mask)
 
         # get the action for the current timestep
         x_0 = x_0[:, T-1, self.obs_dim:]
-        
-        # scale the final output
         x_0 = self.scaler.clip_action(x_0)
 
         if self.use_ema:
             self.ema_helper.restore(self.model.parameters())
-        # if we have an DiffusionGPT we also que the actions
         model_pred = self.scaler.inverse_scale_output(x_0)
-        # if self.que_actions or self.pred_last_action_only:
-        if len(model_pred.shape) == 2:
-            x_0 = einops.rearrange(x_0, 'b d -> b 1 d')
         self.action_context.append(x_0)
         return model_pred
     
