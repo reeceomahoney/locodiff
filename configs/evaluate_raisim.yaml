@@ -11,11 +11,11 @@ hydra:
 # This is the config file for the evaluation of the model
 # you can analyze the performance of the model in different ways
 # first chose the path to the model you want to evaluate
-model_store_path: logs/raisim/runs/2024-01-21/16-25-46
+model_store_path: logs/raisim/runs/2024-01-23/15-25-00/
 # next define some general stuff for evaluation
 log_wandb: True
 
-num_runs: 100
+num_runs: 5
 n_inference_steps: 3
 # chose one of the samplers mentioned in the readme file here
 sampler_type: ddim
@@ -29,7 +29,7 @@ s_churn: 0
 s_min: 0
 get_mean: None
 # this value is only relevant for ClassifierFreeGuidance trained models
-cond_lambda: 1
+cond_lambda: 3
 # the time steps method
 noise_scheduler: linear
 device: cpu

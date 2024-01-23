@@ -355,6 +355,7 @@ namespace raisim {
             frameCartesianPositions.setZero();
             for (int i = 0; i < 5; i++) {
                 robot_->getFramePosition(frameIdxs_[i], framePosition);
+                robot_->getPositionInBodyCoordinate(0, framePosition, framePosition);
                 frameCartesianPositions.segment(3*i, 3) = framePosition.e().cast<float>();
             }
         }

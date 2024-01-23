@@ -24,3 +24,4 @@ device: ${device}
 scale_data: ${scale_data}
 train_fraction: 0.95
 use_minmax_scaler: true
+goal_dim: ${goal_dim}
