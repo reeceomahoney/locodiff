@@ -57,9 +57,9 @@ def main(cfg: DictConfig) -> None:
     
     if cfg['test_classifier_free_guidance']:
         # load the classifier free wrapper
-        agent.model = ClassifierFreeSampleModel(agent.model, cond_lambda=cfg['cond_lambda'], obs_dim=model_cfg.obs_dim)
+        agent.model = ClassifierFreeSampleModel(agent.model, cond_lambda=cfg['cond_lambda'])
     elif cfg['cond_lambda'] > 1:
-        agent.model = ClassifierFreeSampleModel(agent.model, cond_lambda=cfg['cond_lambda'], obs_dim=model_cfg.obs_dim)
+        agent.model = ClassifierFreeSampleModel(agent.model, cond_lambda=cfg['cond_lambda'])
 
     if cfg.test_single_variant:
         workspace_manager.eval_n_times = cfg['num_runs']

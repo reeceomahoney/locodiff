@@ -22,10 +22,9 @@ class ClassifierFreeSampleModel(nn.Module):
         cond_lambda (float): The conditional lambda value.
         cond (bool): Indicates whether conditional sampling is enabled based on the cond_lambda value.
     """
-    def __init__(self, model, cond_lambda: float, obs_dim: int):
+    def __init__(self, model, cond_lambda: float):
         super().__init__()
         self.model = model  # model is the actual model to run
-        self.obs_dim = obs_dim
         # pointers to inner model
         self.cond_lambda = cond_lambda
         if self.cond_lambda == 1:
@@ -48,18 +47,11 @@ class ClassifierFreeSampleModel(nn.Module):
             out_uncond = self.model(state_action, goal, sigma, **uncond_dict)
 
             # generate a separate one-hot goal for each goal_idx == 1
-            indices = (goal == 1).nonzero(as_tuple=True)[0]
-            if len(indices) > 0:
-                one_hot_vectors = torch.zeros((len(goal), len(goal)), device=goal.device)
-                one_hot_vectors[indices, indices] = 1
-                one_hot_vectors = one_hot_vectors.unsqueeze(1)
-
-                # conditional output for each goal_idx == 1
-                state = state_action[:, :self.obs_dim]
-                state_repeat = state.repeat(len(indices), 1, 1)
-                action_repeat = state_action.repeat(len(indices), 1, 1)
-                s_in = torch.ones(state_repeat.shape[0])
-                out = self.model(state_repeat, action_repeat, one_hot_vectors, sigma * s_in, **extra_args)
+            if torch.sum(goal) > 0:
+                one_hots = torch.diag(goal.squeeze()).unsqueeze(1)
+                state_action_repeat = state_action.repeat(one_hots.shape[0], 1, 1)
+                s_in = torch.ones(state_action_repeat.shape[0])
+                out = self.model(state_action_repeat, one_hots, sigma * s_in)
                 out = (out - out_uncond).sum(dim=0).unsqueeze(0)
                 out_uncond += self.cond_lambda * out
             

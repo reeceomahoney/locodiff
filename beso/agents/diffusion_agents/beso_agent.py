@@ -19,6 +19,7 @@ from beso.networks.ema_helper.ema import ExponentialMovingAverage
 from beso.networks.scaler.scaler_class import Scaler
 from beso.agents.diffusion_agents.k_diffusion.gc_sampling import *
 import beso.agents.diffusion_agents.k_diffusion.utils as utils
+from beso.agents.diffusion_agents.k_diffusion.classifier_free_sampler import ClassifierFreeSampleModel
 
 # A logger for this file
 log = logging.getLogger(__name__)
@@ -350,7 +351,10 @@ class BesoAgent(BaseAgent):
         
         _, T, D = input_state.shape
         sa_dim = self.scaler.x_bounds.shape[1] + self.scaler.y_bounds.shape[1]
-        horizon = self.model.inner_model.future_seq_len + T
+        if isinstance(self.model, ClassifierFreeSampleModel):
+            horizon = self.model.model.inner_model.future_seq_len + T
+        else:
+            horizon = self.model.inner_model.future_seq_len + T
         x = torch.randn((self.num_envs, horizon, sa_dim), device=self.device) * self.sigma_max
         
         # conditioning
@@ -637,7 +641,7 @@ class BesoAgent(BaseAgent):
             action = self.scaler.scale_output(action)
 
         goal = get_to_device('goal')
-        if not goal:
+        if goal is None:
             goal = self.get_constraints(state)
 
         return state, action, goal
@@ -649,7 +653,21 @@ class BesoAgent(BaseAgent):
         Returns:
             constraints: (B, 1, 1)
         """
-        return torch.zeros((state.shape[0], 1, 1)).to(self.device)
+        next_state = state[:, self.window_size, :]
+        fl, fr, lh, rh = torch.split(next_state[:, 36:48], 3, dim=1)
+        fl_y_con = torch.where(fl[:, 1] < 0.1, 1, 0)
+        fr_y_con = torch.where(fr[:, 1] > -0.1, 1, 0)
+        lh_y_con = torch.where(lh[:, 1] < 0.1, 1, 0)
+        rh_y_con = torch.where(rh[:, 1] > -0.1, 1, 0)
+        foot_con = [fl_y_con, fr_y_con, lh_y_con, rh_y_con]
+
+        lat_vel_con = torch.where(torch.abs(next_state[:, 31]) < 0.1, 1, 0)
+        ang_vel_con = torch.where(torch.abs(next_state[:, 32]) < 0.1, 1, 0)
+        vel_con = [lat_vel_con, ang_vel_con]
+
+        constraints = torch.stack(foot_con + vel_con, dim=1)
+        constraints = constraints.to(torch.float32).unsqueeze(1)
+        return constraints
     
     def calculate_constraint_vector(
         self, state: torch.Tensor, threshold: float, greater_than: bool = 0

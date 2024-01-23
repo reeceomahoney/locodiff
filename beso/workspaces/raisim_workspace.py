@@ -23,6 +23,7 @@ class RaisimManager(BaseWorkspaceManger):
             dataset_fn: DictConfig,
             eval_n_times: int,
             eval_n_steps,
+            goal_dim: int,
             scale_data: bool,
             train_batch_size: int = 256,
             test_batch_size: int = 256,
@@ -44,6 +45,7 @@ class RaisimManager(BaseWorkspaceManger):
         self.use_minmax_scaler = use_minmax_scaler
         self.scaler = None
         self.data_loader = self.make_dataloaders()
+        self.goal_dim = goal_dim
     
     def init_env(self, cfg, use_feet_pos=False):
         resource_dir = os.path.dirname(os.path.realpath(__file__)) + "/../envs/raisim/resources"
@@ -91,7 +93,7 @@ class RaisimManager(BaseWorkspaceManger):
         total_rewards = 0
         total_dones = 0
         obs = self.env.reset()
-        goal = torch.tensor([0]).to(torch.float32).to(self.device)
+        goal = torch.zeros(obs.shape[0], 1, self.goal_dim).to(self.device)
         for _ in range(self.eval_n_times):
             done = np.array([False])
             obs = self.env.observe()
@@ -104,7 +106,7 @@ class RaisimManager(BaseWorkspaceManger):
                 if done.any():
                     total_dones += done
                 if n == self.eval_n_steps-1:
-                    total_dones += np.ones(done.shape)
+                    total_dones += np.ones(done.shape, dtype='int64')
 
                 pred_action = agent.predict(
                     {'observation': obs, 'goal': goal}, 
