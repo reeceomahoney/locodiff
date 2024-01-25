@@ -241,6 +241,11 @@ namespace raisim {
                 environments_[i]->getFrameCartesianPositions(cartesianPos.row(i));
         }
 
+        void getBaseOrientation(Eigen::Ref<EigenRowMajorMat> &orientation) {
+            for (int i = 0; i < num_envs_; i++)
+                environments_[i]->getBaseOrientation(orientation.row(i));
+        }
+
     private:
         void updateObservationStatisticsAndNormalize(Eigen::Ref<EigenRowMajorMat> &ob, bool updateStatistics) {
             if (updateStatistics) {

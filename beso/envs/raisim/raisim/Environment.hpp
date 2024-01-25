@@ -140,6 +140,11 @@ namespace raisim {
                 robot_->getFrameIdxByName("LH_shank_fixed_LH_FOOT"),
                 robot_->getFrameIdxByName("RH_shank_fixed_RH_FOOT");
 
+            /// terrain
+            world_->addBox(3., 10., 0.5, 1000.0);
+            auto box = world_->addBox(3., 10., 0.5, 1000.0);
+            box->setPosition(3.1, 0., 0.);
+
             /// visualize if it is the first environment
             if (visualizable_) {
                 server_ = std::make_unique<raisim::RaisimServer>(world_.get());
@@ -355,9 +360,14 @@ namespace raisim {
             frameCartesianPositions.setZero();
             for (int i = 0; i < 5; i++) {
                 robot_->getFramePosition(frameIdxs_[i], framePosition);
-                robot_->getPositionInBodyCoordinate(0, framePosition, framePosition);
+                if (i > 0) {robot_->getPositionInBodyCoordinate(0, framePosition, framePosition);}
                 frameCartesianPositions.segment(3*i, 3) = framePosition.e().cast<float>();
             }
+        }
+
+        void getBaseOrientation(Eigen::Ref<EigenVec> baseOrientation) {
+            Eigen::Matrix3f baseRotation = observationHandler_.getBaseRotation().e().cast<float>();
+            baseOrientation = Eigen::Map<Eigen::VectorXf>(baseRotation.data(), baseRotation.size());
         }
 
         void killServer() {

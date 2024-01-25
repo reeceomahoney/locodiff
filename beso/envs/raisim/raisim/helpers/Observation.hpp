@@ -19,7 +19,7 @@ private:
 
     int observationDim_ = 48;
     int historyLength_ = 2, nJoints_ = 12;
-    double nominalBaseHeight_ = 0.522;
+    double nominalBaseHeight_ = 0.522 + 0.5;
 
     Eigen::VectorXd nominalGeneralizedCoordinates_;
 
