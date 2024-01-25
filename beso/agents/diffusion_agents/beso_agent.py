@@ -17,6 +17,7 @@ import wandb
 from beso.agents.base_agent import BaseAgent
 from beso.networks.ema_helper.ema import ExponentialMovingAverage
 from beso.networks.scaler.scaler_class import Scaler
+from beso.agents.diffusion_agents.foot_grid import FootGrid
 from beso.agents.diffusion_agents.k_diffusion.gc_sampling import *
 import beso.agents.diffusion_agents.k_diffusion.utils as utils
 from beso.agents.diffusion_agents.k_diffusion.classifier_free_sampler import ClassifierFreeSampleModel
@@ -56,6 +57,7 @@ class BesoAgent(BaseAgent):
             obs_dim: int,
             num_envs: int,
             n_obs_steps: int,
+            sim_every_n_steps: int,
             use_kde: bool=False,
             patience: int=10,
     ):
@@ -96,6 +98,15 @@ class BesoAgent(BaseAgent):
         self.obs_dim = obs_dim
         self.n_obs_steps = n_obs_steps
         self.num_envs = num_envs
+        self.sim_every_n_steps = sim_every_n_steps
+
+        # grid limits for the feet positions
+        self.foot_grid = FootGrid(
+            np.array([[0.22, 0.48, 0, 0.24], 
+                      [0.22, 0.48, -0.24, 0],
+                      [-0.45, -0.2, 0, 0.24],
+                      [-0.45, -0.2, -0.24, 0]]), 4, self.device)
+
 
     def get_scaler(self, scaler: Scaler):
         """
@@ -212,7 +223,7 @@ class BesoAgent(BaseAgent):
                 }
             )
 
-            if not self.steps % 2000:
+            if not self.steps % self.sim_every_n_steps:
                 results = eval_fn(self)
                 wandb.log(results)
             
@@ -653,19 +664,13 @@ class BesoAgent(BaseAgent):
         Returns:
             constraints: (B, 1, 1)
         """
+        # calculate active foot grids
+        # TODO: test this with a longer horizon
         next_state = state[:, self.window_size, :]
-        fl, fr, lh, rh = torch.split(next_state[:, 36:48], 3, dim=1)
-        fl_y_con = torch.where(fl[:, 1] < 0.1, 1, 0)
-        fr_y_con = torch.where(fr[:, 1] > -0.1, 1, 0)
-        lh_y_con = torch.where(lh[:, 1] < 0.1, 1, 0)
-        rh_y_con = torch.where(rh[:, 1] > -0.1, 1, 0)
-        foot_con = [fl_y_con, fr_y_con, lh_y_con, rh_y_con]
+        next_state = self.scaler.inverse_scale_input(next_state)
+        active_grids = self.foot_grid.get_active_grids(next_state)
 
-        lat_vel_con = torch.where(torch.abs(next_state[:, 31]) < 0.1, 1, 0)
-        ang_vel_con = torch.where(torch.abs(next_state[:, 32]) < 0.1, 1, 0)
-        vel_con = [lat_vel_con, ang_vel_con]
-
-        constraints = torch.stack(foot_con + vel_con, dim=1)
+        constraints = active_grids.reshape(state.shape[0], -1)
         constraints = constraints.to(torch.float32).unsqueeze(1)
         return constraints
     

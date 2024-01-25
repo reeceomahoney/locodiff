@@ -48,3 +48,4 @@ patience: 80 # interval for early stopping during epoch training
 obs_dim: ${obs_dim}
 n_obs_steps: ${window_size}
 num_envs: ${env.num_envs}
+sim_every_n_steps: ${sim_every_n_steps}

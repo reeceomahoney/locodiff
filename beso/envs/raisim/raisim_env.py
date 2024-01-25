@@ -11,7 +11,7 @@ from beso.envs.raisim.lib.raisim_env import RaisimWrapper
 
 class RaisimEnv:
 
-    def __init__(self, resource_dir, cfg, use_feet_pos, seed=0):
+    def __init__(self, resource_dir, cfg, dataset, seed=0):
         if platform.system() == "Darwin":
             os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
         
@@ -29,6 +29,7 @@ class RaisimEnv:
         self._joint_vel_history = np.zeros([self.num_envs, 2*12], dtype=np.float32)
         self._contact_states = np.zeros([self.num_envs, 4], dtype=np.float32)
         self._frame_cartesian_pos = np.zeros([self.num_envs, 3*5], dtype=np.float32)
+        self._base_orientation = np.zeros([self.num_envs, 9], dtype=np.float32)
         self._reward = np.zeros(self.num_envs, dtype=np.float32)
         self._done = np.zeros(self.num_envs, dtype=bool)
         self.rewards = [[] for _ in range(self.num_envs)]
@@ -37,7 +38,7 @@ class RaisimEnv:
         self.var = np.zeros(self.num_obs, dtype=np.float32)
         
         self._max_episode_steps = 1000
-        self.use_feet_pos = use_feet_pos
+        self.dataset = dataset
 
     def seed(self, seed=None):
         self.env.setSeed(seed)
@@ -77,12 +78,15 @@ class RaisimEnv:
         self.env.observe(self._observation, update_statistics)
 
         # add feet position
-        if self.use_feet_pos:
+        if self.dataset == 'rand_feet':
             root_and_feet_pos = self.get_frame_cartesian_pos()
             root, feet_pos = root_and_feet_pos[:, :3], root_and_feet_pos[:, 3:]
-            feet_pos = feet_pos.reshape(-1, 4, 3) - root[:, None, :]
-            feet_pos = feet_pos.reshape(-1, 12)
             obs = np.concatenate([self._observation[:, :36], feet_pos], axis=-1)
+        elif self.dataset == 'rand_feet_com':
+            root_and_feet_pos = self.get_frame_cartesian_pos()
+            root, feet_pos = root_and_feet_pos[:, :3], root_and_feet_pos[:, 3:]
+            orientation = self.get_base_orientation()
+            obs = np.concatenate([self._observation[:, :36], root, orientation, feet_pos], axis=-1)
         else:
             obs = self._observation[:, :36]
 
@@ -138,6 +142,10 @@ class RaisimEnv:
     def get_frame_cartesian_pos(self):
         self.env.getFrameCartesianPositions(self._frame_cartesian_pos)
         return self._frame_cartesian_pos
+    
+    def get_base_orientation(self):
+        self.env.getBaseOrientation(self._base_orientation)
+        return self._base_orientation
     
     def kill_server(self):
         self.env.killServer()

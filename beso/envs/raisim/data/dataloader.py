@@ -111,7 +111,7 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         return torch.cat(result, dim=0)
 
     def preprocess(self):
-        if self.data_directory == 'rand_feet':
+        if self.data_directory == 'rand_feet' or self.data_directory == 'rand_feet_com':
             self.observations = np.concatenate(
                 [self.observations[:, :, :36], self.observations[:, :, 48:]], axis=-1
             )

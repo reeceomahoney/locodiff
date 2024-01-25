@@ -47,10 +47,10 @@ class RaisimManager(BaseWorkspaceManger):
         self.data_loader = self.make_dataloaders()
         self.goal_dim = goal_dim
     
-    def init_env(self, cfg, use_feet_pos=False):
+    def init_env(self, cfg, dataset):
         resource_dir = os.path.dirname(os.path.realpath(__file__)) + "/../envs/raisim/resources"
         env_cfg = OmegaConf.to_yaml(cfg.env)
-        self.env = RaisimEnv(resource_dir, env_cfg, use_feet_pos)
+        self.env = RaisimEnv(resource_dir, env_cfg, dataset)
 
     def make_dataloaders(self):
         """

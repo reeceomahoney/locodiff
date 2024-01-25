@@ -9,9 +9,6 @@ import torch
 import numpy as np
 
 
-from beso.agents.diffusion_agents.k_diffusion.classifier_free_sampler import ClassifierFreeSampleModel
-from beso.agents.diffusion_agents.beso_agent import BesoAgent
-
 log = logging.getLogger(__name__)
 
 
@@ -29,10 +26,22 @@ def main(cfg: DictConfig) -> None:
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
 
+    # debug mode
+    if sys.gettrace() is not None:
+        mode = "disabled"
+        cfg["sim_every_n_steps"] = 10
+    else:
+        mode = "online"
+
+    # set the observation dimension
+    if cfg["data_path"] == "rand_feet":
+        cfg["obs_dim"] = 48
+    elif cfg["data_path"] == "rand_feet_com":
+        cfg["obs_dim"] = 60
+
     # init wandb
     wandb.config = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
     output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
-    mode = "disabled" if sys.gettrace() is not None else "online"
     wandb.init(
         project=cfg.wandb.project, 
         mode=mode,
@@ -49,7 +58,7 @@ def main(cfg: DictConfig) -> None:
     agent.working_dir = output_dir
 
     # initialize the environment
-    workspace_manager.init_env(cfg, use_feet_pos=cfg.data_path == 'rand_feet')
+    workspace_manager.init_env(cfg, cfg.data_path)
 
     # train
     agent.train_agent(

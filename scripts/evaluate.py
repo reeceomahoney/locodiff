@@ -16,10 +16,10 @@ OmegaConf.register_new_resolver(
 )
 torch.cuda.empty_cache()
 
-@hydra.main(config_path="../configs", config_name="evaluate_raisim.yaml")
+@hydra.main(config_path="../configs", config_name="evaluate_raisim.yaml", version_base=None)
 def main(cfg: DictConfig) -> None:
     
-    wandb.config = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
+
     if cfg.log_wandb:
         wandb.init(
             project='beso_eval', 
@@ -35,6 +35,12 @@ def main(cfg: DictConfig) -> None:
     model_cfg.agents['device'] = cfg['device']
     model_cfg.env['num_envs'] = 1
 
+    # set the observation dimension
+    if model_cfg["data_path"] == "rand_feet":
+        model_cfg["obs_dim"] = 48
+    elif model_cfg["data_path"] == "rand_feet_com":
+        model_cfg["obs_dim"] = 60
+
     workspace_manager = hydra.utils.instantiate(model_cfg.workspaces)
     agent = hydra.utils.instantiate(model_cfg.agents)
 
@@ -48,7 +54,7 @@ def main(cfg: DictConfig) -> None:
     agent.sigma_min = cfg.sigma_min
 
     # initialize the environment
-    workspace_manager.init_env(model_cfg, use_feet_pos=model_cfg.data_path == 'rand_feet')
+    workspace_manager.init_env(model_cfg, model_cfg.data_path)
 
     # set seeds
     torch.manual_seed(model_cfg.seed)
