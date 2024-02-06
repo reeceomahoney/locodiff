@@ -141,8 +141,8 @@ namespace raisim {
                 robot_->getFrameIdxByName("RH_shank_fixed_RH_FOOT");
 
             /// terrain
-            world_->addBox(3., 10., 0.5, 1000.0);
-            auto box = world_->addBox(3., 10., 0.5, 1000.0);
+            world_->addBox(3., 10., 0.5, 1000.0, "ground_material");
+            auto box = world_->addBox(3., 10., 0.5, 1000.0, "ground_material");
             box->setPosition(3.1, 0., 0.);
 
             /// visualize if it is the first environment
@@ -160,7 +160,7 @@ namespace raisim {
             Eigen::VectorXd gc = gc_init_, gv = gv_init_;
 
             if (true) {
-                gc[2] += 0.1 * std::abs(uniformRealDistribution_(gen_));
+                gc[2] += 0.0 * std::abs(uniformRealDistribution_(gen_));
 
                 gc.tail(12) +=
                         0.1 * Eigen::VectorXd::NullaryExpr(12, [&]() { return uniformRealDistribution_(gen_); });

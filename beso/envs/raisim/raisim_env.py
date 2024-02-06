@@ -84,7 +84,7 @@ class RaisimEnv:
             obs = np.concatenate([self._observation[:, :36], feet_pos], axis=-1)
         elif self.dataset == 'rand_feet_com':
             root_and_feet_pos = self.get_frame_cartesian_pos()
-            root, feet_pos = root_and_feet_pos[:, :3], root_and_feet_pos[:, 3:]
+            root, feet_pos = root_and_feet_pos[:, :2], root_and_feet_pos[:, 3:]
             orientation = self.get_base_orientation()
             obs = np.concatenate([self._observation[:, :36], root, orientation, feet_pos], axis=-1)
         else:

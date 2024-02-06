@@ -1,5 +1,6 @@
 import os
 import logging
+import numpy as np
 
 import hydra
 import wandb
@@ -19,7 +20,6 @@ torch.cuda.empty_cache()
 @hydra.main(config_path="../configs", config_name="evaluate_raisim.yaml", version_base=None)
 def main(cfg: DictConfig) -> None:
     
-
     if cfg.log_wandb:
         wandb.init(
             project='beso_eval', 
@@ -39,7 +39,13 @@ def main(cfg: DictConfig) -> None:
     if model_cfg["data_path"] == "rand_feet":
         model_cfg["obs_dim"] = 48
     elif model_cfg["data_path"] == "rand_feet_com":
-        model_cfg["obs_dim"] = 60
+        model_cfg["obs_dim"] = 59
+
+    # set seeds
+    np.random.seed(model_cfg.seed)
+    torch.manual_seed(model_cfg.seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
 
     workspace_manager = hydra.utils.instantiate(model_cfg.workspaces)
     agent = hydra.utils.instantiate(model_cfg.agents)
@@ -69,7 +75,8 @@ def main(cfg: DictConfig) -> None:
 
     if cfg.test_single_variant:
         workspace_manager.eval_n_times = cfg['num_runs']
-        workspace_manager.test_agent(agent, n_inference_steps=cfg['n_inference_steps'])
+        results_dict = workspace_manager.test_agent(agent, n_inference_steps=cfg['n_inference_steps'])
+        print(results_dict)
     if cfg.test_all_samplers:
         workspace_manager.compare_sampler_types(
             agent, 

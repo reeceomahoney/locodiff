@@ -37,7 +37,7 @@ def main(cfg: DictConfig) -> None:
     if cfg["data_path"] == "rand_feet":
         cfg["obs_dim"] = 48
     elif cfg["data_path"] == "rand_feet_com":
-        cfg["obs_dim"] = 60
+        cfg["obs_dim"] = 59
 
     # init wandb
     wandb.config = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)

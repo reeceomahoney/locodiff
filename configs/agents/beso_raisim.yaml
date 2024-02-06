@@ -12,7 +12,7 @@ optimization:
 
 lr_scheduler:
   _target_: torch.optim.lr_scheduler.StepLR
-  step_size: 1000
+  step_size: 4000
   gamma: 0.99
 
 train_method: ${train_method}

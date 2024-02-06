@@ -12,6 +12,9 @@ from beso.workspaces.base_workspace_manager import BaseWorkspaceManger
 from beso.networks.scaler.scaler_class import MinMaxScaler, Scaler
 from beso.envs.raisim.raisim_env import RaisimEnv
 
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+
 log = logging.getLogger(__name__)
 
 
@@ -85,6 +88,7 @@ class RaisimManager(BaseWorkspaceManger):
         self, 
         agent, 
         n_inference_steps=None,
+        real_time=False,
         ):
         """
         Test the agent on the environment with the given goal function
@@ -92,8 +96,8 @@ class RaisimManager(BaseWorkspaceManger):
         log.info('Starting trained model evaluation')
         total_rewards = 0
         total_dones = 0
+        plt.figure()
         obs = self.env.reset()
-        goal = torch.zeros(obs.shape[0], 1, self.goal_dim).to(self.device)
         for _ in range(self.eval_n_times):
             done = np.array([False])
             obs = self.env.observe()
@@ -108,6 +112,7 @@ class RaisimManager(BaseWorkspaceManger):
                 if n == self.eval_n_steps-1:
                     total_dones += np.ones(done.shape, dtype='int64')
 
+                goal = agent.foot_grid.get_avoid_grids(obs)
                 pred_action = agent.predict(
                     {'observation': obs, 'goal': goal}, 
                     new_sampling_steps=n_inference_steps,
@@ -115,11 +120,11 @@ class RaisimManager(BaseWorkspaceManger):
                 obs, reward, done = self.env.step(pred_action.detach().cpu().numpy())
                 obs = torch.from_numpy(obs).to(self.device)
                 total_rewards += reward
-            
+
                 delta = time.time() - start
-                if delta < 0.02:
+                if delta < 0.02 and real_time:
                     time.sleep(0.02 - delta)
-                
+            
         self.env.close()
         total_rewards /= total_dones
         avrg_reward = total_rewards.mean()
@@ -129,6 +134,7 @@ class RaisimManager(BaseWorkspaceManger):
         return_dict = {
             'avrg_reward': avrg_reward,
             'std_reward': std_reward,
+            'total_done': total_dones.mean(),
         }
         return return_dict
     

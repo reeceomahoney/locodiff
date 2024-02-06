@@ -25,7 +25,7 @@ wandb:
 device: 'cuda'
 seed: 6
 scale_data: True
-future_seq_length: 4
+future_seq_length: 20
 window_size: 4
 mask_targets: False
 reduce_obs_dim: false
@@ -44,7 +44,7 @@ train_method: 'steps'
 max_train_steps: 1e6
 max_epochs: 100
 eval_every_n_steps: 1000
-sim_every_n_steps: 2000
+sim_every_n_steps: 5000
 
 # BESO hyperparameters
 attn_pdrop: 0.05
