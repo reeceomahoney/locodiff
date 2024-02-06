@@ -101,11 +101,11 @@ class BesoAgent(BaseAgent):
         self.sim_every_n_steps = sim_every_n_steps
 
         # grid limits for the feet positions
-        self.foot_grid = FootGrid(
-            np.array([[0.22, 0.48, 0, 0.24], 
-                      [0.22, 0.48, -0.24, 0],
-                      [-0.45, -0.2, 0, 0.24],
-                      [-0.45, -0.2, -0.24, 0]]), 4, self.device)
+        self.foot_grid = FootGrid(np.array([
+            [0.05, 0.61, 0, 0.36], 
+            [0.05, 0.61, -0.36, 0],
+            [-0.61, -0.05, 0, 0.36],
+            [-0.61, -0.05, -0.36, 0]]), 4, self.device)
 
 
     def get_scaler(self, scaler: Scaler):
@@ -665,10 +665,9 @@ class BesoAgent(BaseAgent):
             constraints: (B, 1, 1)
         """
         # calculate active foot grids
-        # TODO: test this with a longer horizon
-        next_state = state[:, self.window_size, :]
-        next_state = self.scaler.inverse_scale_input(next_state)
-        active_grids = self.foot_grid.get_active_grids(next_state)
+        future_states = state[:, self.window_size:, :]
+        future_states = self.scaler.inverse_scale_input(future_states)
+        active_grids = self.foot_grid.get_active_grids(future_states)
 
         constraints = active_grids.reshape(state.shape[0], -1)
         constraints = constraints.to(torch.float32).unsqueeze(1)

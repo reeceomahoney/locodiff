@@ -26,50 +26,41 @@ class FootGrid():
             data = [anchors[0], anchors[1], l, w]
             for i in range(4):
                 grid[:, :, i] = data[i]
-            grids.append(grid.reshape(-1, 4))
-        self.grid = {key: grid for key, grid in zip(['FL', 'FR', 'HL', 'HR'], grids)}
+            grids.append(grid.reshape(1, -1, 4))
+        self.grid = torch.cat(grids, dim=0)
     
     def get_active_grids(self, state):
-        """sets the grid index to 1 if the foot is in the grid"""
-        # NB: not every foot in the dataset falls within the a grid. May have to change this.
-        foot_pos = state[:, None, 48:].reshape(-1, 4, 3)
-        grids = torch.stack(list(self.grid.values()))
-        grids = grids.unsqueeze(0).repeat(state.shape[0], 1, 1, 1)
+        """sets the grid index to 1 if the foot is in the grid limits for any timestep"""
+        foot_pos = state[:, :, 47:].reshape(*state.shape[:2], 4, 3).unsqueeze(3)
+        grids = self.grid.unsqueeze(0).unsqueeze(0)
 
-        active_grids = []
-        for i in range(4):
-            grid = grids[:, i]
-            foot_pos_i = foot_pos[:, i, :2]
-            foot_pos_i = foot_pos_i.unsqueeze(1).repeat(1, self.num_bins**2, 1)
-            min_xy = grid[:, :, :2]
-            max_xy = min_xy + grid[:, :, 2:]
+        min_xy = grids[..., :2]
+        max_xy = min_xy + grids[..., 2:]
 
-            # Check if the foot position falls within the grid squares
-            active = ((foot_pos_i[:, :, 0] >= min_xy[:, :, 0]) & (foot_pos_i[:, :, 0] <= max_xy[:, :, 0]) &
-                      (foot_pos_i[:, :, 1] >= min_xy[:, :, 1]) & (foot_pos_i[:, :, 1] <= max_xy[:, :, 1]))
-            active = active.int()
-            active_grids.append(active)
+        # Check if the foot position falls within the grid squares and below a z-coordinate of -0.57
+        active = ((foot_pos[..., 0] >= min_xy[..., 0]) & (foot_pos[..., 0] <= max_xy[..., 0]) &
+                  (foot_pos[..., 1] >= min_xy[..., 1]) & (foot_pos[..., 1] <= max_xy[..., 1]) &
+                  (foot_pos[..., 2] < -0.57))
 
-        return torch.stack(active_grids, dim=1)
+        # (B, num_feet, num_bins**2)
+        return active.int().any(dim=1)
             
     
     def get_avoid_grids(self, state):
         """Sets the grid index to 1 if the grid is over the gap"""
-        com = state[:, None, 36:38]
-        orientation = state[:, 39:48].reshape(-1, 3, 3)[:, :2, :2]
-        grids = torch.stack(list(self.grid.values()))
-        grids = grids.unsqueeze(0).repeat(state.shape[0], 1, 1, 1)
+        gap_x, gap_delta = 1.4, 0.2
 
-        active_grids = []
-        for i in range(4):
-            grid = grids[:, i]
-            min_xy = torch.einsum('bij,bjk->bik', (grid[:, :, :2], orientation)) + com
-            max_xy = torch.einsum('bij,bjk->bik', (grid[:, :, :2] + grid[:, :, 2:], orientation)) + com
-            active = ((min_xy[:, :, 0] >= 3) & (min_xy[:, :, 0] <= 3.1)) | \
-                ((max_xy[:, :, 0] >= 3) & (max_xy[:, :, 0] <= 3.1))
-            active = active.int() 
-            active_grids.append(active)
-        return torch.stack(active_grids, dim=1)
+        com = state[:, 36:38].unsqueeze(1).unsqueeze(1)
+        orientation = state[:, 38:47].reshape(-1, 3, 3)[:, :2, :2]
+        orientation = orientation.unsqueeze(1).unsqueeze(1)
+        grid = self.grid.unsqueeze(0)
+
+        min_xy = torch.einsum('abci,abcij->abcj', (grid[..., :2], orientation)) + com
+        max_xy = torch.einsum('abci,abcij->abcj', (grid[..., :2] + grid[..., 2:], orientation)) + com
+        active = (((min_xy[..., 0] >= gap_x) & (min_xy[..., 0] <= gap_x + gap_delta)) | 
+                  ((max_xy[..., 0] >= gap_x) & (max_xy[..., 0] <= gap_x + gap_delta)))
+
+        return active.reshape(state.shape[0], 1, -1).to(torch.float32)
 
 
 def test():
@@ -78,26 +69,26 @@ def test():
                   [0.22, 0.48, -0.24, 0],
                   [-0.45, -0.2, 0, 0.24],
                   [-0.45, -0.2, -0.24, 0]]), 4, 'cpu')
-    state = torch.tensor([[-3.19502503e-02, -3.09347957e-02,  9.99010623e-01,
-        -3.69389892e-01,  5.21401405e-01, -9.46781635e-01,
-         4.33597565e-02,  5.69789529e-01, -6.91575766e-01,
-        -2.26425499e-01, -7.45631337e-01,  7.71101952e-01,
-         4.02590305e-01, -6.14872515e-01,  7.79008329e-01,
-        -1.58601142e-02,  1.47256041e-02,  1.27757758e-01,
-        -1.11884743e-01,  1.30208984e-01, -1.20830648e-01,
-        -7.76994973e-02,  1.05080038e-01,  7.12922066e-02,
-         5.30035868e-02,  2.38051433e-02,  3.62314843e-02,
-         6.68667033e-02,  9.99930501e-02,  7.44123897e-03,
-         5.70536107e-02,  1.14180902e-02, -5.55264391e-03,
+    state = torch.tensor([[-1.68466996e-02, -3.04289125e-02,  9.99394894e-01,
+        -4.93928820e-01,  6.91931367e-01, -1.60921502e+00,
+         2.44295478e-01,  5.03715038e-01, -6.90906048e-01,
+        -2.27615863e-01, -6.44318700e-01,  6.14952326e-01,
+         2.95213401e-01, -7.99368382e-01,  1.66800761e+00,
+        -2.33724713e-02, -1.66417092e-01, -5.33219039e-01,
+        -8.90503265e-03, -1.06666911e+00,  1.92639649e-01,
+         9.23587978e-01, -2.24852376e-02,  7.74194121e-01,
+         4.39699888e-01,  8.02999914e-01, -1.25749528e-01,
+         3.20933312e-02, -3.01745701e+00, -1.44256604e+00,
+         2.25706518e-01, -3.73259664e-01,  1.02087870e-01,
          2.32830644e-10,  5.82076609e-11, -1.16415322e-10,
-        -2.26867461e+00,  1.39827859e+00,  5.78197122e-01,
-        -6.93322599e-01, -7.19908416e-01, -3.21813971e-02,
-         7.20627308e-01, -6.92642152e-01, -3.07100918e-02,
-        -1.81739670e-04, -4.44827937e-02,  9.99010146e-01,
-         4.36683506e-01,  9.92687941e-02, -5.54718673e-01,
-         3.32761109e-01, -2.77594864e-01, -5.72587848e-01,
-        -2.63536185e-01,  1.74099475e-01, -5.75333536e-01,
-        -3.38565856e-01, -6.86925426e-02, -5.84918082e-01]])
+         2.09192491e+00,  2.82399297e+00,  6.06466889e-01,
+         7.11758196e-01,  7.02222466e-01, -1.68467853e-02,
+        -7.02361822e-01,  7.11169422e-01, -3.04289851e-02,
+        -9.38699953e-03,  3.34906206e-02,  9.99394953e-01,
+         5.06297052e-01,  1.12631120e-01, -4.11022872e-01,
+         3.66782844e-01, -1.47123724e-01, -5.99356174e-01,
+        -2.74984330e-01,  1.72528744e-01, -5.98945141e-01,
+        -4.42486733e-01, -1.86357990e-01, -4.11051005e-01]])
     state = state.repeat(2, 1)
     active_grids = foot_grid.get_active_grids(state)
 

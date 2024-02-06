@@ -24,38 +24,37 @@ class ClassifierFreeSampleModel(nn.Module):
     """
     def __init__(self, model, cond_lambda: float):
         super().__init__()
-        self.model = model  # model is the actual model to run
-        # pointers to inner model
+        # TODO: refactor this into beso agent
+        self.model = model
         self.cond_lambda = cond_lambda
-        if self.cond_lambda == 1:
-            self.cond = True
-        else:
-            self.cond = False
 
     def forward(self, state_action, goal, sigma, **extra_args):
-        if self.cond:
-            return self.model(state_action, goal, sigma)
-        elif self.cond_lambda == 0:
-            uncond_dict = {'uncond': True}
-            out_uncond = self.model(state_action, goal, sigma, **uncond_dict)
-            return out_uncond
-        else:
-            state_action = deepcopy(state_action)
+        state_action = deepcopy(state_action)
 
-            # unconditional output
-            uncond_dict = {'uncond': True}
-            out_uncond = self.model(state_action, goal, sigma, **uncond_dict)
+        # unconditional output
+        uncond_dict = {'uncond': True}
+        out_uncond = self.model(state_action, goal, sigma, **uncond_dict)
 
-            # generate a separate one-hot goal for each goal_idx == 1
-            if torch.sum(goal) > 0:
-                one_hots = torch.diag(goal.squeeze()).unsqueeze(1)
-                state_action_repeat = state_action.repeat(one_hots.shape[0], 1, 1)
-                s_in = torch.ones(state_action_repeat.shape[0])
-                out = self.model(state_action_repeat, one_hots, sigma * s_in)
-                out = (out - out_uncond).sum(dim=0).unsqueeze(0)
-                out_uncond += self.cond_lambda * out
+        # (n_envs * n_cond, t, D)
+        if torch.sum(goal) > 0:
+            diag = torch.eye(goal.shape[-1]).to(goal.device)
+            diag = diag.unsqueeze(0).repeat(goal.shape[0], 1, 1)
+            diag = diag.reshape(-1, diag.shape[-1])
+
+            state_action_repeat = state_action.unsqueeze(1).repeat(1, goal.shape[-1], 1, 1)
+            state_action_repeat = state_action_repeat.reshape(-1, *state_action.shape[1:])
+
+            sigma = sigma.repeat(goal.shape[-1])
+            out = self.model(state_action_repeat, diag.unsqueeze(1), sigma)
+            out = out.reshape(goal.shape[0], goal.shape[-1], *out.shape[1:])
+
+            mask = goal.squeeze().bool().unsqueeze(-1).unsqueeze(-1)
+            out_uncond_ = out_uncond.unsqueeze(1).repeat(1, goal.shape[-1], 1, 1)
+            out_neg = ((out - out_uncond_) * mask).sum(dim=1)
+
+            out_uncond -= self.cond_lambda * out_neg
             
-            return out_uncond
+        return out_uncond
     
     def get_params(self):
         return self.model.get_params()
