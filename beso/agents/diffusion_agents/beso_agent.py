@@ -190,20 +190,48 @@ class BesoAgent(BaseAgent):
             # run a test batch every n steps
             if not self.steps % self.eval_every_n_steps:
                 test_mse = []
-                test_state_mse, test_action_mse = [], []
+                test_first_mse, test_last_mse = [], []
                 for batch in test_loader:
-                    mean_mse, state_mse, action_mse = self.evaluate(batch)
-                    test_mse.append(mean_mse)
-                    test_state_mse.append(state_mse)
-                    test_action_mse.append(action_mse)
+                    info = self.evaluate(batch)
+                    test_mse.append(info['total_mse'])
+                    test_first_mse.append(info['first_mse'])
+                    test_last_mse.append(info['last_mse'])
                 avrg_test_mse = sum(test_mse) / len(test_mse)
-                avrg_test_state_mse = sum(test_state_mse) / len(test_state_mse)
-                avrg_test_action_mse = sum(test_action_mse) / len(test_action_mse)
+                avrg_test_first_mse = sum(test_first_mse) / len(test_first_mse)
+                avrg_test_last_mse = sum(test_last_mse) / len(test_last_mse)
                 log.info("Step {}: Mean test mse is {}".format(step, avrg_test_mse))
                 if avrg_test_mse < best_test_mse:
                     best_test_mse = avrg_test_mse
                     self.store_model_weights(self.working_dir)
                     log.info('New best test loss. Stored weights have been updated!')
+                
+                wandb.log(
+                    {
+                    "test_loss": avrg_test_mse,
+                    "test_first_mse": avrg_test_first_mse,
+                    "test_last_mse": avrg_test_last_mse,
+                    }
+                )
+
+                # train set eval
+                i = 0
+                train_mse, train_first_mse, train_last_mse = [], [], []
+                for batch in train_loader:
+                    if i > 10:
+                        break
+                    info = self.evaluate(batch)
+                    train_mse.append(info['total_mse'])
+                    train_first_mse.append(info['first_mse'])
+                    train_last_mse.append(info['last_mse'])
+                    i += 1
+
+                wandb.log(
+                    {
+                        "train_total_mse": sum(train_mse) / len(train_mse),
+                        "train_first_mse": sum(train_first_mse) / len(train_first_mse),
+                        "train_last_mse": sum(train_last_mse) / len(train_last_mse),
+                    }
+                )
             try:
                 batch_loss = self.train_step(next(generator))
             except StopIteration:
@@ -214,14 +242,7 @@ class BesoAgent(BaseAgent):
             # log.info loss every 1000 steps
             if not self.steps % 1000:
                 log.info("Step {}: Mean batch loss mse is {}".format(step, batch_loss))
-            wandb.log(
-                {
-                    "loss": batch_loss,
-                    "test_loss": avrg_test_mse,
-                    "test_state_loss": avrg_test_state_mse,
-                    "test_action_loss": avrg_test_action_mse
-                }
-            )
+            wandb.log({"loss": batch_loss})
 
             if not self.steps % self.sim_every_n_steps:
                 results = eval_fn(self)
@@ -316,10 +337,24 @@ class BesoAgent(BaseAgent):
         mse = nn.functional.mse_loss(x_0, state_action, reduction="none")
         state_mse += mse[:, :, :obs_dim].mean().item()
 
+        # mse of the first and last timestep
+        first_mse = mse[:, self.window_size, :].mean().item()
+        last_mse = mse[:, -1, :].mean().item()
+        timestep_mse = mse.mean(dim=(0, 2))
+
         # restore the previous model parameters
         if self.use_ema:
             self.ema_helper.restore(self.model.parameters())
-        return total_mse, state_mse, action_mse
+        
+        info = {
+            'total_mse': total_mse,
+            'state_mse': state_mse,
+            'action_mse': action_mse,
+            'first_mse': first_mse,
+            'last_mse': last_mse,
+            'timestep_mse': timestep_mse,
+        }
+        return info
     
     def reset(self):
         """ Resets the context of the model."""
@@ -338,11 +373,14 @@ class BesoAgent(BaseAgent):
             torch.Tensor: The predicted output of the model.
         """
         state, _, goals = self.process_batch(batch)
+        goals = goals.repeat(state.shape[0], 1, 1)
 
         input_state = state
         input_action = None
         if self.window_size > 1:
             self.obs_context.append(state)
+            # while len(self.obs_context) < self.window_size:
+            #     self.obs_context.append(state)
             input_state = torch.stack(tuple(self.obs_context), dim=1)
             if len(self.action_context) > 0:
                 input_action = torch.stack(tuple(self.action_context), dim=1)
@@ -665,12 +703,13 @@ class BesoAgent(BaseAgent):
             constraints: (B, 1, 1)
         """
         # calculate active foot grids
-        future_states = state[:, self.window_size:, :]
-        future_states = self.scaler.inverse_scale_input(future_states)
-        active_grids = self.foot_grid.get_active_grids(future_states)
+        # future_states = state[:, self.window_size:, :]
+        # future_states = self.scaler.inverse_scale_input(future_states)
+        # active_grids = self.foot_grid.get_active_grids(future_states)
 
-        constraints = active_grids.reshape(state.shape[0], -1)
-        constraints = constraints.to(torch.float32).unsqueeze(1)
+        # constraints = active_grids.reshape(state.shape[0], -1)
+        # constraints = constraints.to(torch.float32).unsqueeze(1)
+        constraints = torch.zeros(state.shape[0], 1, 1).to(self.device)
         return constraints
     
     def calculate_constraint_vector(

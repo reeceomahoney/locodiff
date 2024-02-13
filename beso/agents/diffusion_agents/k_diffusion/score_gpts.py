@@ -39,6 +39,7 @@ class CausalSelfAttention(nn.Module):
         # output projection
         self.proj = nn.Linear(n_embd, n_embd)
         # causal mask to ensure that attention is only applied to the left in the input sequence
+        block_size += 1
         self.register_buffer(
             "mask",
             torch.tril(torch.ones(block_size, block_size)).view(
@@ -128,7 +129,7 @@ class DiffusionGPT(nn.Module):
         # input embedding stem (2 for the sigma and the goal)
         self.future_seq_len = future_seq_len
         self.horizon = obs_seq_len + future_seq_len
-        block_size = 2 + self.horizon
+        block_size = self.horizon
         self.tok_emb = nn.Linear(state_dim + action_dim, embed_dim)
         self.goal_emb = nn.Linear(goal_dim, embed_dim)
         self.pos_emb = nn.Parameter(torch.zeros(1, block_size, embed_dim))
@@ -223,7 +224,7 @@ class DiffusionGPT(nn.Module):
         optim_groups = [
             {
                 "params": [param_dict[pn] for pn in sorted(list(decay))],
-                "weight_decay": train_config.weight_decay,
+                "weight_decay": 0.01,
             },
             {
                 "params": [param_dict[pn] for pn in sorted(list(no_decay))],
@@ -231,7 +232,7 @@ class DiffusionGPT(nn.Module):
             },
         ]
         optimizer = torch.optim.AdamW(
-            optim_groups, lr=train_config.learning_rate, betas=train_config.betas
+            optim_groups, lr=train_config.lr, betas=train_config.betas
         )
         return optimizer
 
@@ -256,20 +257,20 @@ class DiffusionGPT(nn.Module):
         state_action_embed = self.tok_emb(state_actions)
         goal_embed = self.goal_emb(goals)
         
-        position_embeddings = self.pos_emb[ :, :(t + 1), : ]
+        position_embeddings = self.pos_emb[ :, :t, : ]
 
         # note, that the goal states are at the beginning of the sequence since they are available 
         # for all states s_1, .., s_t otherwise the masking would not make sense
-        goal_x = self.drop(goal_embed + position_embeddings[:, :1, :])
-        sa_x = self.drop(state_action_embed + position_embeddings[:, 1:, :])
-        input_seq = torch.cat([emb_t, goal_x, sa_x], dim=1)
+        # goal_x = self.drop(goal_embed + position_embeddings[:, :1, :])
+        sa_x = self.drop(state_action_embed + position_embeddings[:, :, :])
+        input_seq = torch.cat([emb_t, sa_x], dim=1)
         
         # Note we need to also adept the action masks 
         x = self.blocks(input_seq)
         x = self.ln_f(x)
         
         # remove the sigma and goal embeddings
-        x = x[:, 2:, :]
+        x = x[:, 1:, :]
 
         pred_state_action = self.state_action_pred(x)
 

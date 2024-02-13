@@ -26,9 +26,10 @@ class BaseAgent(abc.ABC):
     ):
         self.scaler = None
         self.model = hydra.utils.instantiate(model).to(device)
-        self.optimizer = hydra.utils.instantiate(
-            optimization, params=self.model.get_params()
-        )
+        # self.optimizer = hydra.utils.instantiate(
+        #     optimization, params=self.model.get_params()
+        # )
+        self.optimizer = self.model.inner_model.configure_optimizers(optimization)
         self.device = device
         self.steps = 0
         self.epochs = max_epochs
