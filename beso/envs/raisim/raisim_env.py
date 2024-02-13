@@ -87,8 +87,8 @@ class RaisimEnv:
             root, feet_pos = root_and_feet_pos[:, :2], root_and_feet_pos[:, 3:]
             orientation = self.get_base_orientation()
             obs = np.concatenate([self._observation[:, :36], root, orientation, feet_pos], axis=-1)
-        else:
-            obs = self._observation[:, :36]
+        elif self.dataset.startswith('fwd'):
+            obs = self._observation[:, :33]
 
         return obs
 

@@ -3,7 +3,7 @@ _recursive_: false
 
 defaults:
  # diffusion_gpt augmented_score_model augmented_seq_transformer_score_model diffusion_gpt film_diffusion_gpt film_diffusion_gpt film_seq_transformer_score_model
-  - model: diffusion_gpt # film_diffusion_gpt 
+  - model: diffusion_gpt
 
 optimization:
   _target_: torch.optim.AdamW
@@ -11,9 +11,8 @@ optimization:
   betas: [0.9, 0.999]
 
 lr_scheduler:
-  _target_: torch.optim.lr_scheduler.StepLR
-  step_size: 4000
-  gamma: 0.99
+  _target_: torch.optim.lr_scheduler.CosineAnnealingLR
+  T_max: ${max_train_steps}
 
 train_method: ${train_method}
 max_epochs: ${max_epochs}

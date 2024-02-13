@@ -98,6 +98,7 @@ class RaisimManager(BaseWorkspaceManger):
         total_dones = 0
         plt.figure()
         obs = self.env.reset()
+        goal = torch.zeros((1, 1, self.goal_dim))
         for _ in range(self.eval_n_times):
             done = np.array([False])
             obs = self.env.observe()
@@ -112,7 +113,7 @@ class RaisimManager(BaseWorkspaceManger):
                 if n == self.eval_n_steps-1:
                     total_dones += np.ones(done.shape, dtype='int64')
 
-                goal = agent.foot_grid.get_avoid_grids(obs)
+                # goal = agent.foot_grid.get_avoid_grids(obs)
                 pred_action = agent.predict(
                     {'observation': obs, 'goal': goal}, 
                     new_sampling_steps=n_inference_steps,

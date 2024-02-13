@@ -115,8 +115,8 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
             self.observations = np.concatenate(
                 [self.observations[:, :, :36], self.observations[:, :, 48:]], axis=-1
             )
-        else:
-            self.observations = self.observations[:, :, : self.obs_dim]
+        elif self.data_directory == 'fwd':
+            self.observations = self.observations[..., :self.obs_dim]
         self.actions -= ACTION_MEAN
 
         # To split episodes correctly
