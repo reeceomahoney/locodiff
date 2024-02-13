@@ -300,7 +300,6 @@ class BesoAgent(BaseAgent):
             None
         """
         total_mse = 0
-        state_mse, action_mse = 0, 0
         # scale data if necessary, otherwise the scaler will return unchanged values
         state, action, constraints = self.process_batch(batch)
         # use the EMA model variant
@@ -320,22 +319,11 @@ class BesoAgent(BaseAgent):
         # generate the action based on the chosen sampler type 
         state_action = torch.cat([state, action], dim=-1)
         mask = torch.zeros_like(x)
-        mask[:, :self.window_size, :obs_dim] = 1
+        mask[:, :self.window_size, :] = 1
         x_0 = self.sample_ddim(x, constraints, sigmas, cond=state_action, mask=mask)
             
         mse = nn.functional.mse_loss(x_0, state_action, reduction="none")
         total_mse += mse.mean().item()
-        action_mse += mse[:, :, obs_dim:].mean().item()
-
-        # for state mse, first states and all actions are fixed
-        x = torch.randn((B, T, obs_dim + act_dim)) * self.sigma_max
-        x = x.to(self.device)
-        mask = torch.zeros_like(x)
-        mask[:, :self.window_size, :obs_dim] = 1
-        mask[:, :, obs_dim:] = 1
-        x_0 = self.sample_ddim(x, constraints, sigmas, cond=state_action, mask=mask)
-        mse = nn.functional.mse_loss(x_0, state_action, reduction="none")
-        state_mse += mse[:, :, :obs_dim].mean().item()
 
         # mse of the first and last timestep
         first_mse = mse[:, self.window_size, :].mean().item()
@@ -348,8 +336,6 @@ class BesoAgent(BaseAgent):
         
         info = {
             'total_mse': total_mse,
-            'state_mse': state_mse,
-            'action_mse': action_mse,
             'first_mse': first_mse,
             'last_mse': last_mse,
             'timestep_mse': timestep_mse,

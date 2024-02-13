@@ -6,7 +6,7 @@ defaults:
 log_dir: logs/raisim/
 plot_dir: plots/raisim/
 plot_name: ${now:%Y-%m-%d}.png
-data_path: rand_feet_com
+data_path: fwd_25
 
 hydra:
   run:
@@ -25,7 +25,7 @@ wandb:
 device: 'cuda'
 seed: 6
 scale_data: True
-future_seq_length: 20
+future_seq_length: 4
 window_size: 4
 mask_targets: False
 reduce_obs_dim: false
@@ -34,10 +34,10 @@ goal_conditioning: True
 goal_conditional: 'future'
 action_dim: 12
 obs_dim: null  # will be set automatically
-goal_dim: 64
+goal_dim: 1
 
 # policy model params
-hidden_dim: 240 # for transformer, must be a multiple of n_heads (6 in diffusion_gpt)
+hidden_dim: 256 # for transformer, must be a multiple of n_heads (6 in diffusion_gpt)
 use_spectral_norm: false
 num_hidden_layers: 4
 train_method: 'steps'
@@ -49,8 +49,7 @@ sim_every_n_steps: 5000
 # BESO hyperparameters
 attn_pdrop: 0.05
 resid_pdrop: 0.05
-n_heads: 12
-t_dim: 16 # onlu used for score mlps only
+n_heads: 8
 use_ema: True
 decay: 0.999 
 update_ema_every_n_steps: 1
@@ -64,7 +63,7 @@ env:
   num_envs: 30
   num_threads: 'auto'
   simulation_dt: 0.005
-  control_dt: 0.02
+  control_dt: 0.04
   max_time: 10000
   enable_dynamics_randomization: False
   action_scaling: 1.0

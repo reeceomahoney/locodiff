@@ -141,9 +141,9 @@ namespace raisim {
                 robot_->getFrameIdxByName("RH_shank_fixed_RH_FOOT");
 
             /// terrain
-            world_->addBox(3., 10., 0.5, 1000.0, "ground_material");
-            auto box = world_->addBox(3., 10., 0.5, 1000.0, "ground_material");
-            box->setPosition(3.1, 0., 0.);
+            // world_->addBox(3., 10., 0.5, 1000.0, "ground_material");
+            // auto box = world_->addBox(3., 10., 0.5, 1000.0, "ground_material");
+            // box->setPosition(3.1, 0., 0.);
 
             /// visualize if it is the first environment
             if (visualizable_) {
