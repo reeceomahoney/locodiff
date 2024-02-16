@@ -29,7 +29,8 @@ class BaseAgent(abc.ABC):
         # self.optimizer = hydra.utils.instantiate(
         #     optimization, params=self.model.get_params()
         # )
-        self.optimizer = self.model.inner_model.configure_optimizers(optimization)
+        optim_groups = self.model.inner_model.get_optim_groups()
+        self.optimizer = torch.optim.AdamW(optim_groups, lr=optimization.lr)
         self.device = device
         self.steps = 0
         self.epochs = max_epochs
@@ -41,13 +42,6 @@ class BaseAgent(abc.ABC):
 
     @abc.abstractmethod
     def train_agent(self, train_loader: torch.utils.data.DataLoader, test_loader: torch.utils.data.DataLoader):
-        """
-        Main method to train the agent on the given train and test data
-        """
-        pass
-
-    @abc.abstractmethod
-    def train_agent_on_epochs(self, train_loader: torch.utils.data.DataLoader, test_loader: torch.utils.data.DataLoader, epochs: int):
         """
         Main method to train the agent on the given train and test data
         """

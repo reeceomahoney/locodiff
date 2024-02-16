@@ -25,8 +25,8 @@ wandb:
 device: 'cuda'
 seed: 6
 scale_data: True
-future_seq_length: 4
-window_size: 4
+T: 20
+T_cond: 4
 mask_targets: False
 reduce_obs_dim: false
 

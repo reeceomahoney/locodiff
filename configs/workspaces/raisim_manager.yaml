@@ -8,9 +8,9 @@ dataset_fn:
   train_fraction: 0.95
   random_seed: ${seed}
   device: ${device}
-  window_size: ${window_size}
+  window_size: ${T_cond}
   goal_conditional: ${goal_conditional}
-  future_seq_len: ${future_seq_length}
+  future_seq_len: ${T}
   only_sample_tail: false # true change again 
   only_sample_seq_end: False 
 

@@ -99,6 +99,7 @@ class RaisimManager(BaseWorkspaceManger):
         plt.figure()
         obs = self.env.reset()
         goal = torch.zeros((1, 1, self.goal_dim))
+        agent.reset()  # this is incorrect
         for _ in range(self.eval_n_times):
             done = np.array([False])
             obs = self.env.observe()
@@ -123,8 +124,8 @@ class RaisimManager(BaseWorkspaceManger):
                 total_rewards += reward
 
                 delta = time.time() - start
-                if delta < 0.02 and real_time:
-                    time.sleep(0.02 - delta)
+                if delta < 0.04 and real_time:
+                    time.sleep(0.04 - delta)
             
         self.env.close()
         total_rewards /= total_dones

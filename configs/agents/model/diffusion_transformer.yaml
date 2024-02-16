@@ -1,0 +1,16 @@
+_target_: beso.agents.diffusion_agents.k_diffusion.score_wrappers.GCDenoiser
+_recursive_: false
+
+sigma_data: ${sigma_data}
+T_cond: ${T_cond}
+
+inner_model:
+  _target_: beso.agents.diffusion_agents.k_diffusion.diffusion_transformer.DiffusionTransformer
+  obs_dim: ${obs_dim}
+  act_dim: ${action_dim}
+  d_model: ${hidden_dim}
+  nhead: ${n_heads}
+  num_layers: ${num_hidden_layers}
+  T: ${T}
+  T_cond: ${T_cond}
+  device: ${device}

@@ -56,7 +56,6 @@ def main(cfg: DictConfig) -> None:
 
     # get the scaler instance and set the bounds for the sampler if required
     agent.get_scaler(workspace_manager.scaler)
-    agent.set_bounds(workspace_manager.scaler)
     agent.working_dir = output_dir
 
     # initialize the environment
