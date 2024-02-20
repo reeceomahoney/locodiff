@@ -25,12 +25,14 @@ class GCDenoiser(nn.Module):
         sigma_data: The data sigma for scalings (default: 1.0).
     """
 
-    def __init__(self, inner_model, sigma_data, T_cond):
+    def __init__(self, inner_model, sigma_data, T, T_cond):
         super().__init__()
         self.inner_model = hydra.utils.instantiate(inner_model)
         self.sigma_data = sigma_data
+        self.T = T
         self.T_cond = T_cond
         self.obs_dim = inner_model.obs_dim
+        self.act_dim = inner_model.act_dim
 
     def get_scalings(self, sigma):
         """
@@ -60,23 +62,19 @@ class GCDenoiser(nn.Module):
             The computed loss.
         """
         # split into past and future states
-        # last action in history and first observation in future are set to 0
         cond = state_action[:, : self.T_cond, :]
-        cond[:, -1, self.obs_dim :] = 0
-        sa_x = state_action[:, self.T_cond :, :]
-        sa_x[:, 0, : self.obs_dim] = 0
+        x_action = state_action[:, self.T_cond - 1 : -1, -self.act_dim :]
+        x_state = state_action[:, self.T_cond :, : self.obs_dim]
+        x = torch.cat((x_action, x_state), dim=-1)
 
-        noised_input = sa_x + noise * append_dims(sigma, state_action.ndim)
+        noised_input = x + noise * sigma.view(-1, 1, 1)
 
-        c_skip, c_out, c_in = [
-            append_dims(x, state_action.ndim) for x in self.get_scalings(sigma)
-        ]
+        c_skip, c_out, c_in = [x.view(-1, 1, 1) for x in self.get_scalings(sigma)]
         model_output = self.inner_model(noised_input * c_in, cond, sigma, **kwargs)
-        target = (sa_x - c_skip * noised_input) / c_out
+        target = (x - c_skip * noised_input) / c_out
 
-        # remove the first obs from the loss
-        loss = (model_output - target).pow(2).flatten(1)
-        return loss[:, self.obs_dim :].mean()
+        loss = (model_output - target).pow(2).mean()
+        return loss
 
     def forward(self, x_t, cond, sigma, **kwargs):
         """

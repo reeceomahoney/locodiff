@@ -47,7 +47,7 @@ def get_raisim_train_val(
         assert goal_conditional in ["future", "onehot"]
 
     return get_train_val_sliced(
-        RaisimTrajectoryDataset(data_directory, future_seq_len, obs_dim),
+        RaisimTrajectoryDataset(data_directory, future_seq_len, obs_dim, window_size),
         train_fraction,
         random_seed,
         device,
@@ -66,13 +66,17 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         data_directory: os.PathLike,
         future_seq_len: int,
         obs_dim: int,
+        T_cond: int,
         device="cpu",
     ):
         self.device = device
-        dataset_path = os.path.dirname(os.path.realpath(__file__)) + '/' + data_directory + '.npy'
+        dataset_path = (
+            os.path.dirname(os.path.realpath(__file__)) + "/" + data_directory + ".npy"
+        )
         self.dataset_path = Path(dataset_path)
         self.data_directory = data_directory
         self.obs_dim = obs_dim
+        self.T_cond = T_cond
         self.future_seq_len = future_seq_len
         logging.info("Data loading: started")
         data = np.load(self.dataset_path, allow_pickle=True).item()
@@ -111,12 +115,12 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         return torch.cat(result, dim=0)
 
     def preprocess(self):
-        if self.data_directory == 'rand_feet' or self.data_directory == 'rand_feet_com':
+        if self.data_directory == "rand_feet" or self.data_directory == "rand_feet_com":
             self.observations = np.concatenate(
                 [self.observations[:, :, :36], self.observations[:, :, 48:]], axis=-1
             )
-        elif self.data_directory == 'fwd':
-            self.observations = self.observations[..., :self.obs_dim]
+        elif self.data_directory == "fwd":
+            self.observations = self.observations[..., : self.obs_dim]
         self.actions -= ACTION_MEAN
 
         # To split episodes correctly
@@ -143,6 +147,16 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         self.observations = self.pad_and_stack(obs_splits, max_len)
         self.actions = self.pad_and_stack(actions_splits, max_len)
         self.masks = self.create_masks(obs_splits, max_len)
+
+        # Add initial padding to handle episode starts
+        obs_initial_pad = np.repeat(self.observations[:, 0:1, :], self.T_cond-1, axis=1)
+        self.observations = np.concatenate([obs_initial_pad, self.observations], axis=1)
+
+        actions_initial_pad = np.zeros((self.actions.shape[0], self.T_cond-1, self.actions.shape[2]))
+        self.actions = np.concatenate([actions_initial_pad, self.actions], axis=1)
+
+        masks_initial_pad = np.ones((self.masks.shape[0], self.T_cond-1))
+        self.masks = np.concatenate([masks_initial_pad, self.masks], axis=1)
 
     def pad_and_stack(self, splits, max_len):
         """Pad the sequences and stack them into a tensor"""

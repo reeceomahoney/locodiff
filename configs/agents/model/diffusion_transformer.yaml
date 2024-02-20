@@ -2,6 +2,7 @@ _target_: beso.agents.diffusion_agents.k_diffusion.score_wrappers.GCDenoiser
 _recursive_: false
 
 sigma_data: ${sigma_data}
+T: ${T}
 T_cond: ${T_cond}
 
 inner_model:
