@@ -2,7 +2,7 @@ _target_: beso.workspaces.raisim_workspace.RaisimManager
 _recursive_: false
 
 dataset_fn:
-  _target_: beso.envs.raisim.data.dataloader.get_raisim_train_val
+  _target_: data.dataloader.get_raisim_train_val
   data_directory: ${data_path}
   obs_dim: ${obs_dim}
   train_fraction: 0.95

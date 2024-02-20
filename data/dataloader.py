@@ -7,7 +7,7 @@ from torch.utils.data import TensorDataset
 from pathlib import Path
 import numpy as np
 
-from beso.envs.dataloaders.trajectory_loader import (
+from data.trajectory_loader import (
     TrajectoryDataset,
     get_train_val_sliced,
 )
@@ -71,7 +71,7 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
     ):
         self.device = device
         dataset_path = (
-            os.path.dirname(os.path.realpath(__file__)) + "/" + data_directory + ".npy"
+            os.path.dirname(os.path.realpath(__file__)) + "/datasets/" + data_directory + ".npy"
         )
         self.dataset_path = Path(dataset_path)
         self.data_directory = data_directory
