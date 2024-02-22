@@ -12,7 +12,9 @@ class DiffusionTransformer(nn.Module):
         num_layers,
         T,
         T_cond,
+        goal_dim,
         device,
+        cond_mask_prob,
     ):
         super().__init__()
         self.obs_dim = obs_dim
@@ -24,12 +26,14 @@ class DiffusionTransformer(nn.Module):
         self.T = T
         self.T_cond = T_cond
         self.device = device
+        self.cond_mask_prob = cond_mask_prob
 
         self.state_emb = nn.Linear(self.obs_dim, self.d_model)
         self.act_emb = nn.Linear(self.act_dim, self.d_model)
         self.sigma_emb = nn.Linear(1, self.d_model)
+        self.goal_emb = nn.Linear(goal_dim, self.d_model)
         self.pos_emb = nn.Parameter(torch.zeros(1, 2 * self.T, d_model))
-        self.cond_pos_emb = nn.Parameter(torch.zeros(1, 2 * self.T_cond, d_model))
+        self.cond_pos_emb = nn.Parameter(torch.zeros(1, 2 * self.T_cond + 1, d_model))
 
         self.encoder = nn.Sequential(
             nn.Linear(d_model, 4 * d_model), nn.Mish(), nn.Linear(4 * d_model, d_model)
@@ -158,7 +162,7 @@ class DiffusionTransformer(nn.Module):
         ]
         return optim_groups
 
-    def forward(self, x, cond, sigma):
+    def forward(self, x, cond, sigma, goal, **kwargs):
         """
         cond and x need to look like the following:
 
@@ -202,7 +206,10 @@ class DiffusionTransformer(nn.Module):
         sigma = sigma.view(-1, 1, 1).log() / 4
         sigma_emb = self.sigma_emb(sigma)
 
-        cond = torch.cat([sigma_emb, cond_emb], dim=1)
+        goal = self.mask_cond(goal, force_mask=kwargs.get("uncond", False))
+        goal_emb = self.goal_emb(goal)
+
+        cond = torch.cat([sigma_emb, goal_emb, cond_emb], dim=1)
         cond += self.cond_pos_emb
         cond = self.encoder(cond)
 
@@ -235,6 +242,15 @@ class DiffusionTransformer(nn.Module):
         )
         return mask
     
+    def mask_cond(self, cond, force_mask=False):
+        if force_mask:
+            return torch.zeros_like(cond)
+        elif self.training and self.cond_mask_prob > 0:
+            mask = torch.rand_like(cond[:, :, 0]) < self.cond_mask_prob
+            return cond * mask.unsqueeze(-1).float()
+        else:
+            return cond
+
     def get_params(self):
         return self.parameters()
 

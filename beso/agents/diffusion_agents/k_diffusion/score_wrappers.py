@@ -70,13 +70,13 @@ class GCDenoiser(nn.Module):
         noised_input = x + noise * sigma.view(-1, 1, 1)
 
         c_skip, c_out, c_in = [x.view(-1, 1, 1) for x in self.get_scalings(sigma)]
-        model_output = self.inner_model(noised_input * c_in, cond, sigma, **kwargs)
+        model_output = self.inner_model(noised_input * c_in, cond, sigma, goal)
         target = (x - c_skip * noised_input) / c_out
 
         loss = (model_output - target).pow(2).mean()
         return loss
 
-    def forward(self, x_t, cond, sigma, **kwargs):
+    def forward(self, x_t, cond, sigma, goal, **kwargs):
         """
         Perform the forward pass of the denoising process.
 
@@ -94,7 +94,7 @@ class GCDenoiser(nn.Module):
             append_dims(x, x_t.ndim) for x in self.get_scalings(sigma)
         ]
         return (
-            self.inner_model(x_t * c_in, cond, sigma, **kwargs) * c_out + x_t * c_skip
+            self.inner_model(x_t * c_in, cond, sigma, goal) * c_out + x_t * c_skip
         )
 
     def get_params(self):

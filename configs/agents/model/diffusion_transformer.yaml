@@ -15,3 +15,5 @@ inner_model:
   T: ${T}
   T_cond: ${T_cond}
   device: ${device}
+  goal_dim: ${goal_dim}
+  cond_mask_prob: ${cond_mask_prob}

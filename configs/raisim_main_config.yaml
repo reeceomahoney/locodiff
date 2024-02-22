@@ -6,7 +6,7 @@ defaults:
 log_dir: logs/raisim/
 plot_dir: plots/raisim/
 plot_name: ${now:%Y-%m-%d}.png
-data_path: fwd_25
+data_path: rand_feet_com
 
 hydra:
   run:
@@ -34,10 +34,10 @@ goal_conditioning: True
 goal_conditional: 'future'
 action_dim: 12
 obs_dim: null  # will be set automatically
-goal_dim: 1
+goal_dim: 64
 
 # policy model params
-hidden_dim: 256 # for transformer, must be a multiple of n_heads (6 in diffusion_gpt)
+hidden_dim: 256
 use_spectral_norm: false
 num_hidden_layers: 4
 train_method: 'steps'

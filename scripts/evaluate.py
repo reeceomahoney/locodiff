@@ -70,11 +70,11 @@ def main(cfg: DictConfig) -> None:
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
     
-    # if cfg['test_classifier_free_guidance']:
-    #     # load the classifier free wrapper
-    #     agent.model = ClassifierFreeSampleModel(agent.model, cond_lambda=cfg['cond_lambda'])
-    # elif cfg['cond_lambda'] > 1:
-    #     agent.model = ClassifierFreeSampleModel(agent.model, cond_lambda=cfg['cond_lambda'])
+    if cfg['test_classifier_free_guidance']:
+        # load the classifier free wrapper
+        agent.model = ClassifierFreeSampleModel(agent.model, cond_lambda=cfg['cond_lambda'])
+    elif cfg['cond_lambda'] > 1:
+        agent.model = ClassifierFreeSampleModel(agent.model, cond_lambda=cfg['cond_lambda'])
 
     # test prediction accuracy of model on ground truth data
     test_timestep_mse = False

@@ -311,7 +311,7 @@ class BesoAgent:
         t_fn = lambda sigma: sigma.log().neg()
 
         for i in trange(len(sigmas) - 1, disable=disable):
-            denoised = self.model(x_t, cond, sigmas[i] * s_in)
+            denoised = self.model(x_t, cond, sigmas[i] * s_in, goals)
             t, t_next = t_fn(sigmas[i]), t_fn(sigmas[i + 1])
             h = t_next - t
             x_t = (sigma_fn(t_next) / sigma_fn(t)) * x_t - (-h).expm1() * denoised
@@ -396,13 +396,12 @@ class BesoAgent:
             constraints: (B, 1, 1)
         """
         # calculate active foot grids
-        # future_states = state[:, self.window_size:, :]
-        # future_states = self.scaler.inverse_scale_input(future_states)
-        # active_grids = self.foot_grid.get_active_grids(future_states)
+        future_states = state[:, self.T_cond:, :]
+        future_states = self.scaler.inverse_scale_input(future_states)
+        active_grids = self.foot_grid.get_active_grids(future_states)
 
-        # constraints = active_grids.reshape(state.shape[0], -1)
-        # constraints = constraints.to(torch.float32).unsqueeze(1)
-        constraints = torch.zeros(state.shape[0], 1, 1).to(self.device)
+        constraints = active_grids.reshape(state.shape[0], -1)
+        constraints = constraints.to(torch.float32).unsqueeze(1)
         return constraints
 
     def calculate_constraint_vector(

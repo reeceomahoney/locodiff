@@ -28,12 +28,12 @@ class ClassifierFreeSampleModel(nn.Module):
         self.model = model
         self.cond_lambda = cond_lambda
 
-    def forward(self, state_action, goal, sigma, **extra_args):
+    def forward(self, x_t, cond, sigma, goal):
         state_action = deepcopy(state_action)
 
         # unconditional output
         uncond_dict = {'uncond': True}
-        out_uncond = self.model(state_action, goal, sigma, **uncond_dict)
+        out_uncond = self.model(x_t, cond, sigma, goal, **uncond_dict)
 
         # (n_envs * n_cond, t, D)
         if torch.sum(goal) > 0:
