@@ -7,7 +7,7 @@ import hydra
 import wandb
 from omegaconf import DictConfig, OmegaConf
 import torch
-from beso.agents.diffusion_agents.k_diffusion.classifier_free_sampler import ClassifierFreeSampleModel
+from beso.agent.diffusion_agents.k_diffusion.classifier_free_sampler import ClassifierFreeSampleModel
 
 
 log = logging.getLogger(__name__)

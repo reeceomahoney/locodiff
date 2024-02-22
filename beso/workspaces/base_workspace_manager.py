@@ -9,8 +9,8 @@ from torch.utils.data import random_split
 import matplotlib.pyplot as plt
 import wandb
 
-from beso.agents.diffusion_agents.beso_agent import BesoAgent
-from beso.agents.diffusion_agents.k_diffusion.classifier_free_sampler import ClassifierFreeSampleModel
+from beso.agent.beso_agent import BesoAgent
+from beso.agent.classifier_free_sampler import ClassifierFreeSampleModel
 
 
 log = logging.getLogger(__name__)

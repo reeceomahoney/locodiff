@@ -11,7 +11,7 @@ hydra:
 # This is the config file for the evaluation of the model
 # you can analyze the performance of the model in different ways
 # first chose the path to the model you want to evaluate
-model_store_path: logs/raisim/runs/2024-02-08/15-13-02
+model_store_path: logs/raisim/runs/2024-02-21/16-18-54
 # next define some general stuff for evaluation
 log_wandb: True
 

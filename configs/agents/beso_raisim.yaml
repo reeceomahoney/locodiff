@@ -1,4 +1,4 @@
-_target_: beso.agents.diffusion_agents.beso_agent.BesoAgent
+_target_: beso.agent.beso_agent.BesoAgent
 _recursive_: false
 
 defaults:

@@ -7,7 +7,7 @@ import numpy as np
 import platform
 import os
 
-from beso.envs.raisim.lib.raisim_env import RaisimWrapper
+from beso.env.lib.raisim_env import RaisimWrapper
 
 class RaisimEnv:
 

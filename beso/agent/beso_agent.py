@@ -13,12 +13,12 @@ import wandb
 from omegaconf import DictConfig
 from tqdm import tqdm, trange
 
-import beso.agents.diffusion_agents.k_diffusion.utils as utils
-from beso.agents.diffusion_agents.foot_grid import FootGrid
-from beso.agents.diffusion_agents.k_diffusion.classifier_free_sampler import (
+import beso.agent.utils as utils
+from beso.agent.foot_grid import FootGrid
+from beso.agent.classifier_free_sampler import (
     ClassifierFreeSampleModel,
 )
-from beso.agents.diffusion_agents.k_diffusion.gc_sampling import get_sigmas_exponential
+from beso.agent.gc_sampling import get_sigmas_exponential
 from beso.networks.ema_helper.ema import ExponentialMovingAverage
 from beso.networks.scaler.scaler_class import Scaler
 

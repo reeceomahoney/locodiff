@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from beso.workspaces.base_workspace_manager import BaseWorkspaceManger
 from beso.networks.scaler.scaler_class import MinMaxScaler, Scaler
-from beso.envs.raisim.raisim_env import RaisimEnv
+from beso.env.raisim_env import RaisimEnv
 
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
@@ -51,7 +51,7 @@ class RaisimManager(BaseWorkspaceManger):
         self.goal_dim = goal_dim
     
     def init_env(self, cfg, dataset):
-        resource_dir = os.path.dirname(os.path.realpath(__file__)) + "/../envs/raisim/resources"
+        resource_dir = os.path.dirname(os.path.realpath(__file__)) + "/../env/resources"
         env_cfg = OmegaConf.to_yaml(cfg.env)
         self.env = RaisimEnv(resource_dir, env_cfg, dataset)
 
