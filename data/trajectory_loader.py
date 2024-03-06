@@ -16,7 +16,6 @@ from torch._utils import _accumulate
 # from beso.envs.toy_task_1.multipath_dataset import MultiPathTrajectoryDataset
 
 
-
 class TrajectoryDataset(Dataset, abc.ABC):
     """
     A dataset containing trajectories.
@@ -121,7 +120,7 @@ class TrajectorySlicerDataset(TrajectoryDataset):
         self.future_seq_len = future_seq_len
         # sample_tail uses the final state of the trajectory as the initial state of the future sequence
         self.only_sample_tail = only_sample_tail
-        # seq end uses the last state of the small training sequence as the goal state 
+        # seq end uses the last state of the small training sequence as the goal state
         # this method is used for the latent plans model
         self.only_sample_seq_end = only_sample_seq_end
         self.transform = transform
@@ -136,7 +135,8 @@ class TrajectorySlicerDataset(TrajectoryDataset):
                 pass
             else:
                 self.slices += [
-                    (i, start, start + effective_window) for start in range(T - effective_window + 1)
+                    (i, start, start + effective_window)
+                    for start in range(T - effective_window + 1)
                 ]  # slice indices follow convention [start, end)
 
         if min_seq_length < effective_window:
@@ -149,7 +149,7 @@ class TrajectorySlicerDataset(TrajectoryDataset):
             return self.future_seq_len + self.window
         else:
             return self.window
-    
+
     def get_completed_goals(self) -> torch.Tensor:
         goals = []
 
@@ -162,41 +162,12 @@ class TrajectorySlicerDataset(TrajectoryDataset):
     def __getitem__(self, idx):
         data_batch = {}
         i, start, end = self.slices[idx]
-        values = [
-            x[start:end] for x in self.dataset[i]
-        ]  # [observations, actions, mask]
-        data_batch['observation'] = self.dataset[i][0][start:end] 
-        data_batch['action'] = self.dataset[i][1][start:end]
-        
-        if self.future_conditional:
-            valid_start_range = (
-                end + self.min_future_sep,
-                self.dataset.get_seq_length(i) - self.future_seq_len,
-            )
-            if valid_start_range[0] < valid_start_range[1]:
-                if self.only_sample_tail:
-                    future_obs = self.dataset[i][0][-self.future_seq_len :]
-                elif self.only_sample_seq_end:
-                    future_obs = self.dataset[i][0][end : (end + self.future_seq_len)]
-                else:
-                    start = np.random.randint(*valid_start_range)
-                    end = start + self.future_seq_len
-                    future_obs = self.dataset[i][0][start:end]
-            else:
-                # zeros placeholder T x obs_dim
-                _, obs_dim = values[0].shape
-                future_obs = torch.zeros((self.future_seq_len, obs_dim))
-            
-            # [observations, actions, mask, future_obs (goal conditional)]
-            values.append(future_obs)
-            data_batch['goal_observation'] = future_obs
-        
-            # [observations, actions, mask, future_obs (goal conditional)]
-            # values.append(future_obs)
-        # optionally apply transform
-        if self.transform is not None:
-            values = self.transform(values)
-        return data_batch # tuple(values)
+        values = [ x[start:end] for x in self.dataset[i] ]
+        data_batch["observation"] = values[0]
+        data_batch["action"] = values[1]
+        data_batch["goal"] = values[3]
+
+        return data_batch
 
 
 def get_train_val_sliced(

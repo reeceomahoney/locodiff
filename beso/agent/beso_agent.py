@@ -123,7 +123,13 @@ class BesoAgent:
         for step in tqdm(range(self.max_train_steps)):
             # evaluate
             if not self.steps % self.eval_every_n_steps:
-                log_info = {"total_mse": [], "first_mse": [], "last_mse": []}
+                log_info = {
+                    "total_mse": [],
+                    "first_mse": [],
+                    "last_mse": [],
+                    "state_mse": [],
+                    "action_mse": [],
+                }
                 for batch in test_loader:
                     info = self.evaluate(batch)
                     for key in log_info:

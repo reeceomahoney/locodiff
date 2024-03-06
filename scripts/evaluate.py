@@ -7,7 +7,7 @@ import hydra
 import wandb
 from omegaconf import DictConfig, OmegaConf
 import torch
-from beso.agent.diffusion_agents.k_diffusion.classifier_free_sampler import ClassifierFreeSampleModel
+from beso.agent.classifier_free_sampler import ClassifierFreeSampleModel
 
 
 log = logging.getLogger(__name__)
@@ -44,6 +44,8 @@ def main(cfg: DictConfig) -> None:
         model_cfg["obs_dim"] = 59
     elif model_cfg["data_path"].startswith("fwd"):
         model_cfg["obs_dim"] = 33
+    else:
+        model_cfg["obs_dim"] = 36
 
     # set seeds
     np.random.seed(model_cfg.seed)
@@ -77,11 +79,12 @@ def main(cfg: DictConfig) -> None:
         agent.model = ClassifierFreeSampleModel(agent.model, cond_lambda=cfg['cond_lambda'])
 
     # test prediction accuracy of model on ground truth data
-    test_timestep_mse = False
+    test_timestep_mse = True
     if test_timestep_mse:
         dataloader = workspace_manager.make_dataloaders()["test"]
         batch = next(iter(dataloader))
-        batch = {k: v.to(cfg.device) for k, v in batch.items()}
+        mask = batch['goal'].mean(dim=1) == 1
+        batch = {k: v[mask].to(cfg.device) for k, v in batch.items()}
 
         inference_steps = [1, 2, 3, 4, 5, 10, 20, 40, 50]
         results = []
@@ -92,13 +95,13 @@ def main(cfg: DictConfig) -> None:
             results.append(info['timestep_mse'].cpu().numpy())
         
         for i, result in enumerate(results):
-            plt.plot(np.arange(1,21), result, label=f'{inference_steps[i]} inference steps')
+            plt.plot(np.arange(1,5), result, label=f'{inference_steps[i]} inference steps')
 
         plt.yscale('log')
         plt.legend()
-        plt.savefig('timestep_mse.png')
+        plt.show()
     
-    test_rollout = True
+    test_rollout = False
     if test_rollout:
         workspace_manager.eval_n_times = cfg['num_runs']
         results_dict = workspace_manager.test_agent(
