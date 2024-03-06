@@ -12,14 +12,14 @@ import numpy as np
 log = logging.getLogger(__name__)
 
 
-OmegaConf.register_new_resolver(
-     "add", lambda *numbers: sum(numbers)
+OmegaConf.register_new_resolver("add", lambda *numbers: sum(numbers))
+
+
+@hydra.main(
+    config_path="../configs", config_name="raisim_main_config.yaml", version_base=None
 )
-
-
-@hydra.main(config_path="../configs", config_name="raisim_main_config.yaml", version_base=None)
 def main(cfg: DictConfig) -> None:
-    
+
     # set seeds
     np.random.seed(cfg.seed)
     torch.manual_seed(cfg.seed)
@@ -40,15 +40,14 @@ def main(cfg: DictConfig) -> None:
         cfg["obs_dim"] = 59
     elif cfg["data_path"].startswith("fwd"):
         cfg["obs_dim"] = 33
+    else:
+        cfg["obs_dim"] = 36
 
     # init wandb
     wandb.config = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
     output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
     wandb.init(
-        project=cfg.wandb.project, 
-        mode=mode,
-        config=wandb.config,
-        dir=output_dir
+        project=cfg.wandb.project, mode=mode, config=wandb.config, dir=output_dir
     )
 
     workspace_manager = hydra.utils.instantiate(cfg.workspaces)
@@ -63,8 +62,8 @@ def main(cfg: DictConfig) -> None:
 
     # train
     agent.train_agent(
-        workspace_manager.data_loader['train'],
-        workspace_manager.data_loader['test'],
+        workspace_manager.data_loader["train"],
+        workspace_manager.data_loader["test"],
         workspace_manager.test_agent,
     )
 

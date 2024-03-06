@@ -29,31 +29,15 @@ class ClassifierFreeSampleModel(nn.Module):
         self.cond_lambda = cond_lambda
 
     def forward(self, x_t, cond, sigma, goal):
-        state_action = deepcopy(state_action)
 
         # unconditional output
         uncond_dict = {'uncond': True}
         out_uncond = self.model(x_t, cond, sigma, goal, **uncond_dict)
 
-        # (n_envs * n_cond, t, D)
-        if torch.sum(goal) > 0:
-            diag = torch.eye(goal.shape[-1]).to(goal.device)
-            diag = diag.unsqueeze(0).repeat(goal.shape[0], 1, 1)
-            diag = diag.reshape(-1, diag.shape[-1])
+        if goal.sum() != 0:
+            out_cond = self.model(x_t, cond, sigma, goal)
+            out_uncond += self.cond_lambda * (out_cond - out_uncond)
 
-            state_action_repeat = state_action.unsqueeze(1).repeat(1, goal.shape[-1], 1, 1)
-            state_action_repeat = state_action_repeat.reshape(-1, *state_action.shape[1:])
-
-            sigma = sigma.repeat(goal.shape[-1])
-            out = self.model(state_action_repeat, diag.unsqueeze(1), sigma)
-            out = out.reshape(goal.shape[0], goal.shape[-1], *out.shape[1:])
-
-            mask = goal.squeeze().bool().unsqueeze(-1).unsqueeze(-1)
-            out_uncond_ = out_uncond.unsqueeze(1).repeat(1, goal.shape[-1], 1, 1)
-            out_neg = ((out - out_uncond_) * mask).sum(dim=1)
-
-            out_uncond -= self.cond_lambda * out_neg
-            
         return out_uncond
     
     def get_params(self):

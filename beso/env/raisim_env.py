@@ -89,6 +89,8 @@ class RaisimEnv:
             obs = np.concatenate([self._observation[:, :36], root, orientation, feet_pos], axis=-1)
         elif self.dataset.startswith('fwd'):
             obs = self._observation[:, :33]
+        else:
+            obs = self._observation[:, :36]
 
         return obs
 

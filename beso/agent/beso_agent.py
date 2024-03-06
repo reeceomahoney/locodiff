@@ -203,13 +203,17 @@ class BesoAgent:
         # generate the action based on the chosen sampler type
         state_action = torch.cat([state, action], dim=-1)
         cond = state_action[:, : self.T_cond, :]
-        x_0 = self.sample_ddim(x, constraints, sigmas, cond)
+        x_0 = self.sample_ddim(x, goal, sigmas, cond)
 
         target_action = action[:, self.T_cond - 1 : -1, :]
         target_state = state[:, self.T_cond :, :]
         target = torch.cat((target_action, target_state), dim=-1)
         mse = nn.functional.mse_loss(x_0, target, reduction="none")
         total_mse = mse.mean().item()
+
+        # state and action mse
+        state_mse = mse[:, :, act_dim:].mean().item()
+        action_mse = mse[:, :, :act_dim].mean().item()
 
         # mse of the first and last timestep
         first_mse = mse[:, 0, :].mean().item()
@@ -222,6 +226,8 @@ class BesoAgent:
 
         info = {
             "total_mse": total_mse,
+            "state_mse": state_mse,
+            "action_mse": action_mse,
             "first_mse": first_mse,
             "last_mse": last_mse,
             "timestep_mse": timestep_mse,
@@ -381,7 +387,9 @@ class BesoAgent:
 
         goal = get_to_device("goal")
         if goal is None:
-            goal = self.get_constraints(state)
+            pass
+        else:
+            goal = goal.mean(dim=1).view(-1, 1, 1)
 
         return state, action, goal
 

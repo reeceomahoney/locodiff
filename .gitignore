@@ -165,3 +165,5 @@ wandb/
 
 *.npy
 outputs/
+*.csv
+*.bag

@@ -12,8 +12,6 @@ from beso.workspaces.base_workspace_manager import BaseWorkspaceManger
 from beso.networks.scaler.scaler_class import MinMaxScaler, Scaler
 from beso.env.raisim_env import RaisimEnv
 
-import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
 
 log = logging.getLogger(__name__)
 
@@ -54,6 +52,7 @@ class RaisimManager(BaseWorkspaceManger):
         resource_dir = os.path.dirname(os.path.realpath(__file__)) + "/../env/resources"
         env_cfg = OmegaConf.to_yaml(cfg.env)
         self.env = RaisimEnv(resource_dir, env_cfg, dataset)
+        self.env.turn_on_visualization()
 
     def make_dataloaders(self):
         """
@@ -75,7 +74,7 @@ class RaisimManager(BaseWorkspaceManger):
         test_dataloader = torch.utils.data.DataLoader(
             self.test_set,
             batch_size=self.test_batch_size,
-            shuffle=False,
+            shuffle=True,
             num_workers=self.num_workers,
             pin_memory=True,
         )
@@ -93,12 +92,12 @@ class RaisimManager(BaseWorkspaceManger):
         """
         Test the agent on the environment with the given goal function
         """
+        # TOOD: refactor this into the env
         log.info('Starting trained model evaluation')
         total_rewards = 0
         total_dones = 0
-        plt.figure()
         obs = self.env.reset()
-        goal = torch.zeros((1, 1, self.goal_dim))
+        goal = torch.ones((1, 1, self.goal_dim))
         agent.reset()  # this is incorrect
         for _ in range(self.eval_n_times):
             done = np.array([False])
@@ -139,4 +138,20 @@ class RaisimManager(BaseWorkspaceManger):
             'total_done': total_dones.mean(),
         }
         return return_dict
+
+
+@hydra.main(config_path="../../configs", config_name="raisim_main_config.yaml", version_base=None)
+def main(cfg: DictConfig) -> None:
+    cfg["obs_dim"] = 36
+
+    workspace_manager = hydra.utils.instantiate(cfg.workspaces)
+    train = workspace_manager.data_loader['train']
+    test = workspace_manager.data_loader['test']
+
+
+    for batch in test:
+        print(batch["goal"].mean())
+
+if __name__ == "__main__":
+    main()
     

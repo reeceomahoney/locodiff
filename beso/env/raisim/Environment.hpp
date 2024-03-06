@@ -223,10 +223,7 @@ namespace raisim {
         }
 
         float step(const Eigen::Ref<EigenVec> &action) final {
-            /// action scaling
             pTarget12_ = action.cast<double>();
-            pTarget12_ = pTarget12_.cwiseProduct(actionStd_);
-            pTarget12_ += actionMean_;
             pTarget_.tail(nJoints_) = pTarget12_;
 
             float jointTorqueSquaredNorm = 0.f;

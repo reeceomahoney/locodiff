@@ -241,7 +241,7 @@ class DiffusionTransformer(nn.Module):
             .masked_fill(mask == 1, float(0.0))
         )
         return mask
-    
+
     def mask_cond(self, cond, force_mask=False):
         if force_mask:
             return torch.zeros_like(cond)
