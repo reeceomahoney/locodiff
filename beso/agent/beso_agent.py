@@ -188,7 +188,7 @@ class BesoAgent:
         """
         Evaluates the model using the provided batch of data and returns the mean squared error (MSE) loss.
         """
-        state, action, constraints = self.process_batch(batch)
+        state, action, goal = self.process_batch(batch)
 
         if self.use_ema:
             self.ema_helper.store(self.model.parameters())
@@ -231,6 +231,7 @@ class BesoAgent:
             self.ema_helper.restore(self.model.parameters())
 
         info = {
+            "mse": mse,
             "total_mse": total_mse,
             "state_mse": state_mse,
             "action_mse": action_mse,
@@ -250,8 +251,8 @@ class BesoAgent:
         """
         Predicts the output of the model based on the provided batch of data.
         """
-        state, _, goals = self.process_batch(batch)
-        goals = goals.repeat(state.shape[0], 1, 1)
+        state, _, goal = self.process_batch(batch)
+        goal = goal.repeat(state.shape[0], 1, 1)
 
         input_state, input_action = self.stack_context(state)
 
@@ -275,7 +276,7 @@ class BesoAgent:
         x *= self.sigma_max
 
         cond = torch.cat([input_state, input_action], dim=-1)
-        x_0 = self.sample_ddim(x, goals, sigmas, cond)
+        x_0 = self.sample_ddim(x, goal, sigmas, cond)
 
         # get the action for the current timestep
         x_0 = x_0[:, 0, : self.action_dim]

@@ -97,7 +97,7 @@ class RaisimManager(BaseWorkspaceManger):
         total_rewards = 0
         total_dones = 0
         obs = self.env.reset()
-        goal = torch.ones((1, 1, self.goal_dim))
+        goal = torch.zeros((1, 1, 1))
         agent.reset()  # this is incorrect
         for _ in range(self.eval_n_times):
             done = np.array([False])
