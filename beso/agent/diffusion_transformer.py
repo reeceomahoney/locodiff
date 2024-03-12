@@ -6,18 +6,19 @@ class DiffusionTransformer(nn.Module):
     def __init__(
         self,
         obs_dim,
+        pred_obs_dim,
         act_dim,
         d_model,
         nhead,
         num_layers,
         T,
         T_cond,
-        goal_dim,
         device,
         cond_mask_prob,
     ):
         super().__init__()
         self.obs_dim = obs_dim
+        self.pred_obs_dim = pred_obs_dim
         self.act_dim = act_dim
         self.input_dim = obs_dim + act_dim
         self.d_model = d_model
@@ -28,12 +29,12 @@ class DiffusionTransformer(nn.Module):
         self.device = device
         self.cond_mask_prob = cond_mask_prob
 
-        self.state_emb = nn.Linear(self.obs_dim, self.d_model)
+        self.state_emb = nn.Linear(self.pred_obs_dim, self.d_model)
+        self.cond_state_emb = nn.Linear(self.obs_dim, self.d_model)
         self.act_emb = nn.Linear(self.act_dim, self.d_model)
         self.sigma_emb = nn.Linear(1, self.d_model)
-        self.goal_emb = nn.Linear(goal_dim, self.d_model)
         self.pos_emb = nn.Parameter(torch.zeros(1, 2 * self.T, d_model))
-        self.cond_pos_emb = nn.Parameter(torch.zeros(1, 2 * self.T_cond + 1, d_model))
+        self.cond_pos_emb = nn.Parameter(torch.zeros(1, 2 * self.T_cond, d_model))
 
         self.encoder = nn.Sequential(
             nn.Linear(d_model, 4 * d_model), nn.Mish(), nn.Linear(4 * d_model, d_model)
@@ -54,7 +55,7 @@ class DiffusionTransformer(nn.Module):
         self.register_buffer("mask", mask)
 
         self.ln_f = nn.LayerNorm(self.d_model)
-        self.state_pred = nn.Linear(d_model, self.obs_dim)
+        self.state_pred = nn.Linear(d_model, self.pred_obs_dim)
         self.action_pred = nn.Linear(d_model, self.act_dim)
 
         self.apply(self._init_weights)
@@ -162,7 +163,7 @@ class DiffusionTransformer(nn.Module):
         ]
         return optim_groups
 
-    def forward(self, x, cond, sigma, goal, **kwargs):
+    def forward(self, x, cond, sigma, **kwargs):
         """
         cond and x need to look like the following:
 
@@ -185,11 +186,11 @@ class DiffusionTransformer(nn.Module):
 
         # split state and action
         cond_state, cond_action = torch.split(cond, [obsd, actd], dim=-1)
-        input_action, input_state = torch.split(x, [actd, obsd], dim=-1)
+        input_action, input_state = torch.split(x, [actd, self.pred_obs_dim], dim=-1)
 
         # embed and interleave conditioning state and action
         # s, a, s, a, ..., s, a, s
-        cond_state_emb = self.state_emb(cond_state).unsqueeze(2)
+        cond_state_emb = self.cond_state_emb(cond_state).unsqueeze(2)
         cond_action_emb = self.act_emb(cond_action).unsqueeze(2)
         cond_emb = torch.cat([cond_state_emb, cond_action_emb], dim=2)
         # remove the last action so we end at the current state
@@ -206,10 +207,7 @@ class DiffusionTransformer(nn.Module):
         sigma = sigma.view(-1, 1, 1).log() / 4
         sigma_emb = self.sigma_emb(sigma)
 
-        goal = self.mask_cond(goal, force_mask=kwargs.get("uncond", False))
-        goal_emb = self.goal_emb(goal)
-
-        cond = torch.cat([sigma_emb, goal_emb, cond_emb], dim=1)
+        cond = torch.cat([sigma_emb, cond_emb], dim=1)
         cond += self.cond_pos_emb
         cond = self.encoder(cond)
 

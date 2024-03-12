@@ -6,7 +6,7 @@ defaults:
 log_dir: logs/raisim/
 plot_dir: plots/raisim/
 plot_name: ${now:%Y-%m-%d}.png
-data_path: rand_feet_com
+data_path: lfmc_walk_crawl
 
 hydra:
   run:
@@ -25,7 +25,7 @@ wandb:
 device: 'cuda'
 seed: 6
 scale_data: True
-T: 20
+T: 4
 T_cond: 4
 mask_targets: False
 reduce_obs_dim: false
@@ -34,7 +34,8 @@ goal_conditioning: True
 goal_conditional: 'future'
 action_dim: 12
 obs_dim: null  # will be set automatically
-goal_dim: 64
+pred_obs_dim: null  # will be set automatically
+goal_dim: 1
 
 # policy model params
 hidden_dim: 256

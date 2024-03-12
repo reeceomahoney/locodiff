@@ -46,6 +46,7 @@ class BesoAgent:
         T: int,
         T_cond: int,
         obs_dim: int,
+        pred_obs_dim: int,
         action_dim: int,
         num_envs: int,
         sim_every_n_steps: int,
@@ -85,6 +86,7 @@ class BesoAgent:
 
         # env
         self.obs_dim = obs_dim
+        self.pred_obs_dim = pred_obs_dim
         self.action_dim = action_dim
         self.num_envs = num_envs
         self.sim_every_n_steps = sim_every_n_steps
@@ -93,20 +95,6 @@ class BesoAgent:
         self.scaler = None
         self.working_dir = os.getcwd()
         self.device = device
-
-        # foot grid
-        self.foot_grid = FootGrid(
-            np.array(
-                [
-                    [0.05, 0.61, 0, 0.36],
-                    [0.05, 0.61, -0.36, 0],
-                    [-0.61, -0.05, 0, 0.36],
-                    [-0.61, -0.05, -0.36, 0],
-                ]
-            ),
-            4,
-            self.device,
-        )
 
     def train_agent(
         self,
@@ -120,7 +108,7 @@ class BesoAgent:
         best_test_mse = 1e10
         generator = iter(train_loader)
 
-        for step in tqdm(range(self.max_train_steps)):
+        for step in tqdm(range(self.max_train_steps), position=0, leave=True):
             # evaluate
             if not self.steps % self.eval_every_n_steps:
                 log_info = {
@@ -161,16 +149,16 @@ class BesoAgent:
         log.info("Training done!")
 
     def train_step(self, batch: dict):
-        state, action, goal = self.process_batch(batch)
+        state, action, _ = self.process_batch(batch)
         state_action = torch.cat([state, action], dim=-1)
-        B, _, D = state_action.shape
 
         self.model.train()
         self.model.training = True
 
-        noise = torch.randn((B, self.T, D)).to(self.device)
+        sa_dim = self.pred_obs_dim + self.action_dim
+        noise = torch.randn((state.shape[0], self.T, sa_dim)).to(self.device)
         sigma = self.make_sample_density()(shape=(len(action),), device=self.device)
-        loss = self.model.loss(state_action, goal, noise, sigma)
+        loss = self.model.loss(state_action, noise, sigma)
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -188,7 +176,7 @@ class BesoAgent:
         """
         Evaluates the model using the provided batch of data and returns the mean squared error (MSE) loss.
         """
-        state, action, goal = self.process_batch(batch)
+        state, action, _ = self.process_batch(batch)
 
         if self.use_ema:
             self.ema_helper.store(self.model.parameters())
@@ -201,25 +189,24 @@ class BesoAgent:
             self.num_sampling_steps, self.sigma_min, self.sigma_max, self.device
         )
 
-        B, T, act_dim = action.shape
-        obs_dim = state.shape[-1]
-        x = torch.randn((B, self.T, obs_dim + act_dim)) * self.sigma_max
+        sa_dim = self.pred_obs_dim + self.action_dim
+        x = torch.randn((state.shape[0], self.T, sa_dim)) * self.sigma_max
         x = x.to(self.device)
 
         # generate the action based on the chosen sampler type
         state_action = torch.cat([state, action], dim=-1)
         cond = state_action[:, : self.T_cond, :]
-        x_0 = self.sample_ddim(x, goal, sigmas, cond)
+        x_0 = self.sample_ddim(x, sigmas, cond)
 
         target_action = action[:, self.T_cond - 1 : -1, :]
-        target_state = state[:, self.T_cond :, :]
+        target_state = state[:, self.T_cond :, : self.pred_obs_dim]
         target = torch.cat((target_action, target_state), dim=-1)
         mse = nn.functional.mse_loss(x_0, target, reduction="none")
         total_mse = mse.mean().item()
 
         # state and action mse
-        state_mse = mse[:, :, act_dim:].mean().item()
-        action_mse = mse[:, :, :act_dim].mean().item()
+        state_mse = mse[:, :, self.action_dim :].mean().item()
+        action_mse = mse[:, :, : self.action_dim].mean().item()
 
         # mse of the first and last timestep
         first_mse = mse[:, 0, :].mean().item()
@@ -251,8 +238,7 @@ class BesoAgent:
         """
         Predicts the output of the model based on the provided batch of data.
         """
-        state, _, goal = self.process_batch(batch)
-        goal = goal.repeat(state.shape[0], 1, 1)
+        state, _, _ = self.process_batch(batch)
 
         input_state, input_action = self.stack_context(state)
 
@@ -271,12 +257,12 @@ class BesoAgent:
             n_sampling_steps, self.sigma_min, self.sigma_max, self.device
         )
 
-        sa_dim = self.obs_dim + self.action_dim
+        sa_dim = self.pred_obs_dim + self.action_dim
         x = torch.randn((self.num_envs, self.T, sa_dim), device=self.device)
         x *= self.sigma_max
 
         cond = torch.cat([input_state, input_action], dim=-1)
-        x_0 = self.sample_ddim(x, goal, sigmas, cond)
+        x_0 = self.sample_ddim(x, sigmas, cond)
 
         # get the action for the current timestep
         x_0 = x_0[:, 0, : self.action_dim]
@@ -307,7 +293,7 @@ class BesoAgent:
         return input_state, input_action
 
     @torch.no_grad()
-    def sample_ddim(self, x_t, goals, sigmas, cond):
+    def sample_ddim(self, x_t, sigmas, cond):
         """
         Sample from the model using the DDIM sampler
 
@@ -324,7 +310,7 @@ class BesoAgent:
         t_fn = lambda sigma: sigma.log().neg()
 
         for i in trange(len(sigmas) - 1, disable=disable):
-            denoised = self.model(x_t, cond, sigmas[i] * s_in, goals)
+            denoised = self.model(x_t, cond, sigmas[i] * s_in)
             t, t_next = t_fn(sigmas[i]), t_fn(sigmas[i + 1])
             h = t_next - t
             x_t = (sigma_fn(t_next) / sigma_fn(t)) * x_t - (-h).expm1() * denoised
@@ -393,10 +379,6 @@ class BesoAgent:
             action = self.scaler.scale_output(action)
 
         goal = get_to_device("goal")
-        if goal is None:
-            pass
-        else:
-            goal = goal.mean(dim=1).view(-1, 1, 1)
 
         return state, action, goal
 
@@ -411,7 +393,7 @@ class BesoAgent:
             constraints: (B, 1, 1)
         """
         # calculate active foot grids
-        future_states = state[:, self.T_cond:, :]
+        future_states = state[:, self.T_cond :, :]
         future_states = self.scaler.inverse_scale_input(future_states)
         active_grids = self.foot_grid.get_active_grids(future_states)
 

@@ -8,6 +8,7 @@ T_cond: ${T_cond}
 inner_model:
   _target_: beso.agent.diffusion_transformer.DiffusionTransformer
   obs_dim: ${obs_dim}
+  pred_obs_dim: ${pred_obs_dim}
   act_dim: ${action_dim}
   d_model: ${hidden_dim}
   nhead: ${n_heads}
@@ -15,5 +16,4 @@ inner_model:
   T: ${T}
   T_cond: ${T_cond}
   device: ${device}
-  goal_dim: ${goal_dim}
   cond_mask_prob: ${cond_mask_prob}

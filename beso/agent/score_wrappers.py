@@ -32,6 +32,7 @@ class GCDenoiser(nn.Module):
         self.T = T
         self.T_cond = T_cond
         self.obs_dim = inner_model.obs_dim
+        self.pred_obs_dim = inner_model.pred_obs_dim
         self.act_dim = inner_model.act_dim
 
     def get_scalings(self, sigma):
@@ -48,7 +49,7 @@ class GCDenoiser(nn.Module):
         c_in = 1 / (sigma**2 + self.sigma_data**2) ** 0.5
         return c_skip, c_out, c_in
 
-    def loss(self, state_action, goal, noise, sigma, **kwargs):
+    def loss(self, state_action, noise, sigma, **kwargs):
         """
         Compute the loss for the denoising process.
 
@@ -64,19 +65,19 @@ class GCDenoiser(nn.Module):
         # split into past and future states
         cond = state_action[:, : self.T_cond, :]
         x_action = state_action[:, self.T_cond - 1 : -1, -self.act_dim :]
-        x_state = state_action[:, self.T_cond :, : self.obs_dim]
+        x_state = state_action[:, self.T_cond :, : self.pred_obs_dim]
         x = torch.cat((x_action, x_state), dim=-1)
 
         noised_input = x + noise * sigma.view(-1, 1, 1)
 
         c_skip, c_out, c_in = [x.view(-1, 1, 1) for x in self.get_scalings(sigma)]
-        model_output = self.inner_model(noised_input * c_in, cond, sigma, goal)
+        model_output = self.inner_model(noised_input * c_in, cond, sigma)
         target = (x - c_skip * noised_input) / c_out
 
         loss = (model_output - target).pow(2).mean()
         return loss
 
-    def forward(self, x_t, cond, sigma, goal, **kwargs):
+    def forward(self, x_t, cond, sigma, **kwargs):
         """
         Perform the forward pass of the denoising process.
 
@@ -93,9 +94,7 @@ class GCDenoiser(nn.Module):
         c_skip, c_out, c_in = [
             append_dims(x, x_t.ndim) for x in self.get_scalings(sigma)
         ]
-        return (
-            self.inner_model(x_t * c_in, cond, sigma, goal) * c_out + x_t * c_skip
-        )
+        return self.inner_model(x_t * c_in, cond, sigma) * c_out + x_t * c_skip
 
     def get_params(self):
         return self.inner_model.parameters()
