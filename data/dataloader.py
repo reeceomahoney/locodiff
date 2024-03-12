@@ -16,30 +16,19 @@ from data.trajectory_loader import (
 def get_raisim_train_val(
     data_directory,
     obs_dim,
-    train_fraction=0.9,
-    random_seed=42,
-    device="cpu",
-    window_size=10,
-    goal_conditional: Optional[str] = None,
-    future_seq_len: Optional[int] = None,
-    min_future_sep: int = 0,
-    only_sample_tail: bool = False,
-    only_sample_seq_end: bool = False,
+    window_size,
+    future_seq_len,
+    train_fraction,
+    random_seed,
+    device,
 ):
-    if goal_conditional is not None:
-        assert goal_conditional in ["future", "onehot"]
-
     return get_train_val_sliced(
         RaisimTrajectoryDataset(data_directory, future_seq_len, obs_dim, window_size),
         train_fraction,
         random_seed,
         device,
         window_size,
-        future_conditional=(goal_conditional == "future"),
-        min_future_sep=min_future_sep,
-        future_seq_len=future_seq_len,
-        only_sample_tail=only_sample_tail,
-        only_sample_seq_end=only_sample_seq_end,
+        future_seq_len,
     )
 
 

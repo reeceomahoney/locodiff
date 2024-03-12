@@ -24,14 +24,9 @@ wandb:
 # general params
 device: 'cuda'
 seed: 6
-scale_data: True
 T: 4
 T_cond: 4
-mask_targets: False
-reduce_obs_dim: false
 
-goal_conditioning: True
-goal_conditional: 'future'
 action_dim: 12
 obs_dim: null  # will be set automatically
 pred_obs_dim: null  # will be set automatically

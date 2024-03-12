@@ -9,10 +9,7 @@ dataset_fn:
   random_seed: ${seed}
   device: ${device}
   window_size: ${T_cond}
-  goal_conditional: ${goal_conditional}
   future_seq_len: ${T}
-  only_sample_tail: false # true change again 
-  only_sample_seq_end: False 
 
 seed: ${seed}
 train_batch_size: 1024
@@ -21,7 +18,7 @@ num_workers: 4
 eval_n_times: 1
 eval_n_steps: 300
 device: ${device}
-scale_data: ${scale_data}
+scale_data: true
 train_fraction: 0.95
 use_minmax_scaler: true
 goal_dim: ${goal_dim}

@@ -80,12 +80,7 @@ class TrajectorySlicerDataset(TrajectoryDataset):
         self,
         dataset: TrajectoryDataset,
         window: int,
-        future_conditional: bool = False,
-        min_future_sep: int = 0,
-        future_seq_len: Optional[int] = None,
-        only_sample_tail: bool = False,
-        only_sample_seq_end: bool = False,
-        transform: Optional[Callable] = None,
+        future_seq_len: int,
     ):
         """
         Slice a trajectory dataset into unique (but overlapping) sequences of length `window`.
@@ -99,34 +94,16 @@ class TrajectorySlicerDataset(TrajectoryDataset):
                 1: valid
         window: int
             number of timesteps to include in each slice
-        future_conditional: bool = False
-            if True, observations will be augmented with future observations sampled from the same trajectory
-        min_future_sep: int = 0
-            minimum number of timesteps between the end of the current sequence and the start of the future sequence
-            for the future conditional
-        future_seq_len: Optional[int] = None
+        future_seq_len: int
             the length of the future conditional sequence;
-            required if future_conditional is True
-        only_sample_tail: bool = False
-            if True, only sample future sequences from the tail of the trajectory
-        transform: function (observations, actions, mask[, goal]) -> (observations, actions, mask[, goal])
         """
-        if future_conditional:
-            assert future_seq_len is not None, "must specify a future_seq_len"
         self.dataset = dataset
         self.window = window
-        self.future_conditional = future_conditional
-        self.min_future_sep = min_future_sep
         self.future_seq_len = future_seq_len
-        # sample_tail uses the final state of the trajectory as the initial state of the future sequence
-        self.only_sample_tail = only_sample_tail
-        # seq end uses the last state of the small training sequence as the goal state
-        # this method is used for the latent plans model
-        self.only_sample_seq_end = only_sample_seq_end
-        self.transform = transform
         self.slices = []
         min_seq_length = np.inf
         effective_window = window + future_seq_len
+
         for i in range(len(self.dataset)):  # type: ignore
             T = self.dataset.get_seq_length(i)  # avoid reading actual seq (slow)
             min_seq_length = min(T, min_seq_length)
@@ -145,10 +122,7 @@ class TrajectorySlicerDataset(TrajectoryDataset):
             )
 
     def get_seq_length(self, idx: int) -> int:
-        if self.future_conditional:
-            return self.future_seq_len + self.window
-        else:
-            return self.window
+        return self.future_seq_len + self.window
 
     def get_completed_goals(self) -> torch.Tensor:
         goals = []
@@ -162,7 +136,7 @@ class TrajectorySlicerDataset(TrajectoryDataset):
     def __getitem__(self, idx):
         data_batch = {}
         i, start, end = self.slices[idx]
-        values = [ x[start:end] for x in self.dataset[i] ]
+        values = [x[start:end] for x in self.dataset[i]]
         data_batch["observation"] = values[0]
         data_batch["action"] = values[1]
 
@@ -175,11 +149,7 @@ def get_train_val_sliced(
     random_seed: int = 42,
     device: Union[str, torch.device] = "cpu",
     window_size: int = 10,
-    future_conditional: bool = False,
-    min_future_sep: int = 0,
-    future_seq_len: Optional[int] = None,
-    only_sample_tail: bool = False,
-    only_sample_seq_end: bool = False,
+    future_seq_len: int = 10,
 ):
     train, val = split_traj_datasets(
         traj_dataset,
@@ -188,12 +158,7 @@ def get_train_val_sliced(
     )
     traj_slicer_kwargs = {
         "window": window_size,
-        "future_conditional": future_conditional,
-        "min_future_sep": min_future_sep,
         "future_seq_len": future_seq_len,
-        "only_sample_tail": only_sample_tail,
-        "only_sample_seq_end": only_sample_seq_end,
-        "transform": None,
     }
     if window_size > 0:
         train_slices = TrajectorySlicerDataset(train, **traj_slicer_kwargs)
