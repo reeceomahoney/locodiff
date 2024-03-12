@@ -7,35 +7,33 @@ import hydra
 import wandb
 from omegaconf import DictConfig, OmegaConf
 import torch
-from beso.agent.classifier_free_sampler import ClassifierFreeSampleModel
 
 
 log = logging.getLogger(__name__)
 
 
-OmegaConf.register_new_resolver(
-     "add", lambda *numbers: sum(numbers)
-)
+OmegaConf.register_new_resolver("add", lambda *numbers: sum(numbers))
 torch.cuda.empty_cache()
 
-@hydra.main(config_path="../configs", config_name="evaluate_raisim.yaml", version_base=None)
+
+@hydra.main(
+    config_path="../configs", config_name="evaluate_raisim.yaml", version_base=None
+)
 def main(cfg: DictConfig) -> None:
-    
+
     if cfg.log_wandb:
-        wandb.init(
-            project='beso_eval', 
-            mode="disabled",  
-            config=wandb.config
-        )
+        wandb.init(project="beso_eval", mode="disabled", config=wandb.config)
 
     # config
-    cfg_store_path = os.path.join(os.getcwd(), cfg.model_store_path,'.hydra/config.yaml')
-    model_cfg = OmegaConf.load(cfg_store_path) 
+    cfg_store_path = os.path.join(
+        os.getcwd(), cfg.model_store_path, ".hydra/config.yaml"
+    )
+    model_cfg = OmegaConf.load(cfg_store_path)
     model_cfg.device = cfg.device
-    model_cfg.workspaces['device'] = cfg['device']
-    model_cfg.agents['device'] = cfg['device']
-    model_cfg.env['num_envs'] = 1
-    model_cfg.env['server_port'] = 8081
+    model_cfg.workspaces["device"] = cfg["device"]
+    model_cfg.agents["device"] = cfg["device"]
+    model_cfg.env["num_envs"] = 1
+    model_cfg.env["server_port"] = 8081
 
     # set the observation dimension
     if model_cfg["data_path"] == "rand_feet":
@@ -45,7 +43,8 @@ def main(cfg: DictConfig) -> None:
     elif model_cfg["data_path"].startswith("fwd"):
         model_cfg["obs_dim"] = 33
     else:
-        model_cfg["obs_dim"] = 36
+        model_cfg["obs_dim"] = 37
+        model_cfg["pred_obs_dim"] = 33
 
     # set seeds
     np.random.seed(model_cfg.seed)
@@ -71,44 +70,41 @@ def main(cfg: DictConfig) -> None:
     torch.manual_seed(model_cfg.seed)
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
-    
-    if cfg['test_classifier_free_guidance']:
-        # load the classifier free wrapper
-        agent.model = ClassifierFreeSampleModel(agent.model, cond_lambda=cfg['cond_lambda'])
-    elif cfg['cond_lambda'] > 1:
-        agent.model = ClassifierFreeSampleModel(agent.model, cond_lambda=cfg['cond_lambda'])
 
-    # test prediction accuracy of model on ground truth data
-    test_timestep_mse = True
-    if test_timestep_mse:
-        dataloader = workspace_manager.make_dataloaders()["test"]
-        batch = next(iter(dataloader))
-        mask = batch['goal'].mean(dim=1) == 1
-        batch = {k: v[mask].to(cfg.device) for k, v in batch.items()}
-
-        inference_steps = [1, 2, 3, 4, 5, 10, 20, 40, 50]
-        results = []
-
-        for step in inference_steps:
-            agent.num_sampling_steps = step
-            info = agent.evaluate(batch)
-            results.append(info['timestep_mse'].cpu().numpy())
-        
-        for i, result in enumerate(results):
-            plt.plot(np.arange(1,5), result, label=f'{inference_steps[i]} inference steps')
-
-        plt.yscale('log')
-        plt.legend()
-        plt.show()
-    
-    test_rollout = False
-    if test_rollout:
-        workspace_manager.eval_n_times = cfg['num_runs']
+    # Evaluate
+    if cfg["test_rollout"]:
+        workspace_manager.eval_n_times = cfg["num_runs"]
         results_dict = workspace_manager.test_agent(
-            agent, n_inference_steps=cfg['n_inference_steps'], real_time=True
+            agent, n_inference_steps=cfg["n_inference_steps"], real_time=True
         )
         print(results_dict)
+    else:
+        dataloader = workspace_manager.make_dataloaders()["test"]
+        batch = next(iter(dataloader))
+        batch = {k: v.to(cfg.device) for k, v in batch.items()}
 
+        if cfg["test_diffusion_steps"]:
+            inference_steps = [1, 2, 3, 4, 5, 10, 20, 40, 50]
+            results = []
+            for step in inference_steps:
+                agent.num_sampling_steps = step
+                info = agent.evaluate(batch)
+                results.append(info["timestep_mse"].cpu().numpy())
+
+            for i, result in enumerate(results):
+                plt.plot(
+                    np.arange(1, 5),
+                    result,
+                    label=f"{inference_steps[i]} inference steps",
+                )
+        elif cfg["test_observation_error"]:
+            info = agent.evaluate(batch)
+            results = info["mse"].cpu().numpy().mean(axis=(0, 1))
+            plt.bar(range(len(results)), results)
+
+        plt.yscale("log")
+        plt.legend()
+        plt.show()
 
 if __name__ == "__main__":
     main()
