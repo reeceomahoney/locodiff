@@ -41,7 +41,7 @@ def main(cfg: DictConfig) -> None:
     elif cfg["data_path"].startswith("fwd"):
         cfg["obs_dim"] = 33
     else:
-        cfg["obs_dim"] = 37
+        cfg["obs_dim"] = 36
         cfg["pred_obs_dim"] = 33
 
     # init wandb

@@ -20,7 +20,6 @@ torch.cuda.empty_cache()
     config_path="../configs", config_name="evaluate_raisim.yaml", version_base=None
 )
 def main(cfg: DictConfig) -> None:
-
     if cfg.log_wandb:
         wandb.init(project="beso_eval", mode="disabled", config=wandb.config)
 
@@ -34,6 +33,7 @@ def main(cfg: DictConfig) -> None:
     model_cfg.agents["device"] = cfg["device"]
     model_cfg.env["num_envs"] = 1
     model_cfg.env["server_port"] = 8081
+    model_cfg.env["max_time"] = 6
 
     # set the observation dimension
     if model_cfg["data_path"] == "rand_feet":
@@ -43,7 +43,7 @@ def main(cfg: DictConfig) -> None:
     elif model_cfg["data_path"].startswith("fwd"):
         model_cfg["obs_dim"] = 33
     else:
-        model_cfg["obs_dim"] = 37
+        model_cfg["obs_dim"] = 36
         model_cfg["pred_obs_dim"] = 33
 
     # set seeds

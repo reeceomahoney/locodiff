@@ -52,7 +52,7 @@ class RaisimManager(BaseWorkspaceManger):
         resource_dir = os.path.dirname(os.path.realpath(__file__)) + "/../env/resources"
         env_cfg = OmegaConf.to_yaml(cfg.env)
         self.env = RaisimEnv(resource_dir, env_cfg, dataset)
-        self.env.turn_on_visualization()
+        self.num_envs = self.env.num_envs
 
     def make_dataloaders(self):
         """
@@ -103,14 +103,14 @@ class RaisimManager(BaseWorkspaceManger):
         log.info("Starting trained model evaluation")
         total_rewards = 0
         total_dones = 0
-        obs = self.env.reset()
-        skill = np.zeros_like(obs[:, :1])
+        self.skill = np.ones((self.num_envs, 1))
+        self.generate_goal()
+
         agent.reset()  # this is incorrect
+        obs = self.env.reset()
         for _ in range(self.eval_n_times):
             done = np.array([False])
-            obs = self.env.observe()
-            obs = np.concatenate((obs, skill), axis=-1)
-            obs = torch.from_numpy(obs).to(self.device)
+            obs = self.process_obs(self.env.observe())
 
             # now run the agent for n steps
             for n in tqdm(range(self.eval_n_steps)):
@@ -126,16 +126,12 @@ class RaisimManager(BaseWorkspaceManger):
                     new_sampling_steps=n_inference_steps,
                 )
                 obs, reward, done = self.env.step(pred_action.detach().cpu().numpy())
-                obs_np = np.concatenate((obs, skill), axis=-1)
-                obs = torch.from_numpy(obs_np).to(self.device)
-                total_rewards += reward
+                obs = self.process_obs(obs)
+                total_rewards += obs[:, :2].norm(-1).sum().item()
 
                 # switch skill
-                if not n % 100:
-                    if skill.sum() == 0:
-                        skill = np.ones_like(obs_np[:, :1])
-                    else:
-                        skill = np.zeros_like(obs_np[:, :1])
+                if not n % 150:
+                    self.generate_goal()
 
                 delta = time.time() - start
                 if delta < 0.04 and real_time:
@@ -153,6 +149,15 @@ class RaisimManager(BaseWorkspaceManger):
             "total_done": total_dones.mean(),
         }
         return return_dict
+
+    def generate_goal(self):
+        self.goal = np.random.uniform(-4, 4, (self.num_envs, 2)).astype(np.float32)
+        self.env.set_goal(self.goal)
+
+    def process_obs(self, obs):
+        obs[:, :2] = self.goal - obs[:, :2]
+        obs = np.concatenate((obs, self.skill), axis=-1)
+        return torch.from_numpy(obs).to(self.device)
 
 
 @hydra.main(
