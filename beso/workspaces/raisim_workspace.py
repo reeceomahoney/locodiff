@@ -103,7 +103,7 @@ class RaisimManager(BaseWorkspaceManger):
         log.info("Starting trained model evaluation")
         total_rewards = 0
         total_dones = 0
-        self.skill = np.ones((self.num_envs, 1))
+        self.skill = np.zeros((self.num_envs, 1))
         self.generate_goal()
 
         agent.reset()  # this is incorrect
@@ -155,7 +155,7 @@ class RaisimManager(BaseWorkspaceManger):
         self.env.set_goal(self.goal)
 
     def process_obs(self, obs):
-        obs[:, :2] = self.goal - obs[:, :2]
+        obs[:, -2:] = self.goal - obs[:, -2:]
         obs = np.concatenate((obs, self.skill), axis=-1)
         return torch.from_numpy(obs).to(self.device)
 

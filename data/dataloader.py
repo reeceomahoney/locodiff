@@ -149,8 +149,10 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         indices_1 = np.arange(self.masks.shape[0])
         indices_2 = (self.masks.sum(1) - 1).astype(int)
         last_states = self.observations[indices_1, indices_2]
-        goal = last_states[:, :2]
-        self.observations[:, :, :2] = goal[:, None, :] - self.observations[:, :, :2]
+        goal = last_states[:, -3:-1]
+        self.observations[:, :, -3:-1] = (
+            goal[:, None, :] - self.observations[:, :, -3:-1]
+        )
 
     def pad_and_stack(self, splits, max_len):
         """Pad the sequences and stack them into a tensor"""

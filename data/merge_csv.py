@@ -21,6 +21,10 @@ obs = cat(walk_obs, crawl_obs)
 act = cat(walk_act, crawl_act)
 terminals = cat(walk_terminals, crawl_terminals)
 
+# move base pos to end
+base_pos = obs[..., :2]
+obs = np.concatenate([obs[..., 2:], base_pos], axis=-1)
+
 # move terminals to after the episode end
 term_x, term_y, _ = np.where(terminals == 1)
 term_y = np.minimum(term_y + 1, 999)
