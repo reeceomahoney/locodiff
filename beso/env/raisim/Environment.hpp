@@ -140,17 +140,13 @@ namespace raisim {
                 robot_->getFrameIdxByName("LH_shank_fixed_LH_FOOT"),
                 robot_->getFrameIdxByName("RH_shank_fixed_RH_FOOT");
 
-            /// terrain
-            // world_->addBox(3., 10., 0.5, 1000.0, "ground_material");
-            // auto box = world_->addBox(3., 10., 0.5, 1000.0, "ground_material");
-            // box->setPosition(3.1, 0., 0.);
-
             /// visualize if it is the first environment
             if (visualizable_) {
                 server_ = std::make_unique<raisim::RaisimServer>(world_.get());
                 server_->launchServer(cfg["server_port"].template As<int>());
                 server_->focusOn(robot_);
                 visualizationHandler_.setServer(server_);
+                server_->addVisualSphere("goal", 0.1, 1, 0, 0, 1);
             }
         }
 
@@ -370,6 +366,11 @@ namespace raisim {
         void killServer() {
             server_->killServer();
         }
+        
+        void setGoal(const Eigen::Ref<EigenVec> &goal) {
+            goalPosition_ << goal[0], goal[1], 0;
+            server_->getVisualObject("goal")->setPosition(goalPosition_);
+        }
 
     private:
         int gcDim_, gvDim_, nJoints_;
@@ -378,7 +379,7 @@ namespace raisim {
         Eigen::VectorXd gc_init_, gv_init_, gc_, gv_, pTarget_, pTarget12_, vTarget_, prevPTarget12_;
         float terminalRewardCoeff_ = 0.f;
         Eigen::VectorXd actionMean_, actionStd_, obDouble_, contacts_, frameIdxs_;
-        Eigen::Vector3d bodyLinearVel_, bodyAngularVel_;
+        Eigen::Vector3d bodyLinearVel_, bodyAngularVel_, goalPosition_;
 
         // Actuator network
         Actuation actuation_;

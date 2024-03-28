@@ -246,6 +246,10 @@ namespace raisim {
                 environments_[i]->getBaseOrientation(orientation.row(i));
         }
 
+        void setGoal(Eigen::Ref<EigenRowMajorMat> &goal) {
+            environments_[0]->setGoal(goal.row(0));
+        }
+
     private:
         void updateObservationStatisticsAndNormalize(Eigen::Ref<EigenRowMajorMat> &ob, bool updateStatistics) {
             if (updateStatistics) {

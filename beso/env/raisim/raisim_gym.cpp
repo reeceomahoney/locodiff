@@ -47,6 +47,7 @@ PYBIND11_MODULE(raisim_env, m) {
             .def("killServer", &VectorizedEnvironment<ENVIRONMENT>::killServer)
             .def("getFrameCartesianPositions", &VectorizedEnvironment<ENVIRONMENT>::getFrameCartesianPositions)
             .def("getBaseOrientation", &VectorizedEnvironment<ENVIRONMENT>::getBaseOrientation)
+            .def("setGoal", &VectorizedEnvironment<ENVIRONMENT>::setGoal)
             .def(py::pickle(
                     [](const VectorizedEnvironment<ENVIRONMENT> &p) { // __getstate__ --> Pickling to Python
                         /* Return a tuple that fully encodes the state of the object */

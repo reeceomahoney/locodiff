@@ -90,7 +90,9 @@ class RaisimEnv:
         elif self.dataset.startswith('fwd'):
             obs = self._observation[:, :33]
         else:
-            obs = self._observation[:, :36]
+            frames = self.get_frame_cartesian_pos()
+            base_pos = frames[:, :2]
+            obs = np.concatenate([base_pos, self._observation[:, :33]], axis=-1)
 
         return obs
 
@@ -151,3 +153,6 @@ class RaisimEnv:
     
     def kill_server(self):
         self.env.killServer()
+    
+    def set_goal(self, goal):
+        self.env.setGoal(goal)
