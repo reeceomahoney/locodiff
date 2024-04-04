@@ -34,15 +34,8 @@ def main(cfg: DictConfig) -> None:
         mode = "online"
 
     # set the observation dimension
-    if cfg["data_path"] == "rand_feet":
-        cfg["obs_dim"] = 48
-    elif cfg["data_path"] == "rand_feet_com":
-        cfg["obs_dim"] = 59
-    elif cfg["data_path"].startswith("fwd"):
-        cfg["obs_dim"] = 33
-    else:
-        cfg["obs_dim"] = 36
-        cfg["pred_obs_dim"] = 33
+    cfg["obs_dim"] = 34
+    cfg["pred_obs_dim"] = 34
 
     # init wandb
     wandb.config = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)

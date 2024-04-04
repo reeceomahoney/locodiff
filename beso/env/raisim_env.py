@@ -92,7 +92,7 @@ class RaisimEnv:
         else:
             frames = self.get_frame_cartesian_pos()
             base_pos = frames[:, :2]
-            obs = np.concatenate([self._observation[:, :33], base_pos], axis=-1)
+            obs = np.concatenate([base_pos, self._observation[:, :36]], axis=-1)
 
         return obs
 

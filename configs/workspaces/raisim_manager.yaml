@@ -12,8 +12,8 @@ dataset_fn:
   future_seq_len: ${T}
 
 seed: ${seed}
-train_batch_size: 1024
-test_batch_size: 1024
+train_batch_size: 32
+test_batch_size: 32
 num_workers: 4
 eval_n_times: 1
 eval_n_steps: 300

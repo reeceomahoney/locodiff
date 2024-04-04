@@ -10,20 +10,19 @@ def load_data(data_path):
 
 current_dir = os.path.dirname(os.path.realpath(__file__))
 walk_obs, walk_act, walk_terminals = load_data(
-    current_dir + "/datasets/pos_cmd_2/walk.npy"
+    current_dir + "/datasets/vel_cmd/fwd_25.npy"
 )
 crawl_obs, crawl_act, crawl_terminals = load_data(
-    current_dir + "/datasets/pos_cmd_2/crawl.npy"
+    current_dir + "/datasets/pos_cmd_3/crawl.npy"
 )
 
 cat = lambda x, y: np.concatenate((x, y), axis=0)
-obs = cat(walk_obs, crawl_obs)
-act = cat(walk_act, crawl_act)
-terminals = cat(walk_terminals, crawl_terminals)
-
-# move base pos to end
-base_pos = obs[..., :2]
-obs = np.concatenate([obs[..., 2:], base_pos], axis=-1)
+# obs = cat(walk_obs, crawl_obs)
+# act = cat(walk_act, crawl_act)
+# terminals = cat(walk_terminals, crawl_terminals)
+obs = walk_obs
+act = walk_act
+terminals = walk_terminals
 
 # move terminals to after the episode end
 term_x, term_y, _ = np.where(terminals == 1)
@@ -38,12 +37,12 @@ terminals[:, -1, 0] = 0
 # diff_idx_y += 1
 # terminals[diff_idx_x, diff_idx_y, 0] = 1
 
-obs = obs[..., :35]
+# obs = obs[..., :35]
 print(obs.shape, act.shape)
 
 # Save the concatenated data to a new file
 np.save(
-    current_dir + "/datasets/pos_walk_crawl.npy",
+    current_dir + "/datasets/fwd.npy",
     {"observations": obs, "actions": act, "terminals": terminals},
 )
 print("done")

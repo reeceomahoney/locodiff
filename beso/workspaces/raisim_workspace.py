@@ -127,7 +127,8 @@ class RaisimManager(BaseWorkspaceManger):
                 )
                 obs, reward, done = self.env.step(pred_action.detach().cpu().numpy())
                 obs = self.process_obs(obs)
-                total_rewards += obs[:, :2].norm(-1).sum().item()
+                # total_rewards += obs[:, -3:-1].norm(dim=-1).mean().item()
+                total_rewards += reward.mean()
 
                 # switch skill
                 if not n % 150:
@@ -155,7 +156,7 @@ class RaisimManager(BaseWorkspaceManger):
         self.env.set_goal(self.goal)
 
     def process_obs(self, obs):
-        obs[:, -2:] = self.goal - obs[:, -2:]
+        # obs[:, -2:] = self.goal - obs[:, -2:]
         obs = np.concatenate((obs, self.skill), axis=-1)
         return torch.from_numpy(obs).to(self.device)
 

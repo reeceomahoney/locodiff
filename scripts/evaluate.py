@@ -36,15 +36,8 @@ def main(cfg: DictConfig) -> None:
     model_cfg.env["max_time"] = 6
 
     # set the observation dimension
-    if model_cfg["data_path"] == "rand_feet":
-        model_cfg["obs_dim"] = 48
-    elif model_cfg["data_path"] == "rand_feet_com":
-        model_cfg["obs_dim"] = 59
-    elif model_cfg["data_path"].startswith("fwd"):
-        model_cfg["obs_dim"] = 33
-    else:
-        model_cfg["obs_dim"] = 36
-        model_cfg["pred_obs_dim"] = 33
+    model_cfg["obs_dim"] = 34
+    model_cfg["pred_obs_dim"] = 34
 
     # set seeds
     np.random.seed(model_cfg.seed)
@@ -93,7 +86,7 @@ def main(cfg: DictConfig) -> None:
 
             for i, result in enumerate(results):
                 plt.plot(
-                    np.arange(1, 5),
+                    np.arange(1, len(result) + 1),
                     result,
                     label=f"{inference_steps[i]} inference steps",
                 )
@@ -104,7 +97,7 @@ def main(cfg: DictConfig) -> None:
 
         plt.yscale("log")
         plt.legend()
-        plt.show()
+        plt.savefig("test.png")
 
 if __name__ == "__main__":
     main()
