@@ -6,12 +6,17 @@ defaults:
 
 optimization:
   _target_: torch.optim.AdamW
-  lr: 1e-4
+  lr: 1e-3
   betas: [0.9, 0.999]
 
+# lr_scheduler:
+#   _target_: torch.optim.lr_scheduler.CosineAnnealingLR
+#   T_max: ${max_train_steps}
+
 lr_scheduler:
-  _target_: torch.optim.lr_scheduler.CosineAnnealingLR
-  T_max: ${max_train_steps}
+  _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+  factor: 0.5
+  patience: 10000
 
 max_train_steps: ${max_train_steps}
 eval_every_n_steps: ${eval_every_n_steps}
@@ -29,5 +34,6 @@ pred_obs_dim: ${pred_obs_dim}
 action_dim: ${action_dim}
 T: ${T}
 T_cond: ${T_cond}
+T_action: ${T_action}
 num_envs: ${env.num_envs}
 sim_every_n_steps: ${sim_every_n_steps}

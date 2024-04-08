@@ -98,6 +98,7 @@ class BesoAgent:
         self.scaler = None
         self.working_dir = os.getcwd()
         self.device = device
+        self.total_mse = None
 
     def train_agent(
         self,
@@ -133,6 +134,7 @@ class BesoAgent:
                     best_test_mse = log_info["total_mse"]
                     self.store_model_weights(self.working_dir)
                     log.info("New best test loss. Stored weights have been updated!")
+                log_info["lr"] = self.optimizer.param_groups[0]["lr"]
 
                 wandb.log({k: v for k, v in log_info.items()})
 
@@ -168,7 +170,7 @@ class BesoAgent:
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
-        self.lr_scheduler.step()
+        self.lr_scheduler.step(self.total_mse)
         self.steps += 1
 
         # update the ema model
@@ -207,6 +209,7 @@ class BesoAgent:
             x_0, state_action[:, self.T_cond - 1 :, :], reduction="none"
         )
         total_mse = mse.mean().item()
+        self.total_mse = total_mse
 
         # state and action mse
         state_mse = mse[:, :, : self.pred_obs_dim].mean().item()
