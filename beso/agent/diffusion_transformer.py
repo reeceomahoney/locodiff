@@ -29,12 +29,13 @@ class DiffusionTransformer(nn.Module):
         self.device = device
         self.cond_mask_prob = cond_mask_prob
 
-        self.state_emb = nn.Linear(self.pred_obs_dim, self.d_model)
+        self.state_action_emb = nn.Linear(
+            self.pred_obs_dim + self.act_dim, self.d_model
+        )
         self.cond_state_emb = nn.Linear(self.obs_dim, self.d_model)
-        self.act_emb = nn.Linear(self.act_dim, self.d_model)
         self.sigma_emb = nn.Linear(1, self.d_model)
-        self.pos_emb = nn.Parameter(torch.zeros(1, 2 * self.T, d_model))
-        self.cond_pos_emb = nn.Parameter(torch.zeros(1, 2 * self.T_cond, d_model))
+        self.pos_emb = nn.Parameter(torch.zeros(1, self.T + 1, d_model))
+        self.cond_pos_emb = nn.Parameter(torch.zeros(1, self.T_cond + 1, d_model))
 
         self.encoder = nn.Sequential(
             nn.Linear(d_model, 4 * d_model), nn.Mish(), nn.Linear(4 * d_model, d_model)
@@ -51,12 +52,11 @@ class DiffusionTransformer(nn.Module):
             ),
             num_layers=self.num_layers,
         )
-        mask = self.generate_mask(2 * T)
+        mask = self.generate_mask(T + 1)
         self.register_buffer("mask", mask)
 
         self.ln_f = nn.LayerNorm(self.d_model)
-        self.state_pred = nn.Linear(d_model, self.pred_obs_dim)
-        self.action_pred = nn.Linear(d_model, self.act_dim)
+        self.state_action_pred = nn.Linear(d_model, self.pred_obs_dim + self.act_dim)
 
         self.apply(self._init_weights)
         self.to(device)
@@ -165,43 +165,12 @@ class DiffusionTransformer(nn.Module):
 
     def forward(self, x, cond, sigma, **kwargs):
         """
-        cond and x need to look like the following:
-
-        cond:
-        - a_n is the current action and gets removed
-        | s_0 s_1 s_2 ... s_n |
-        | a_0 a_1 a_2 ... a_n |
-
-        x:
-        - here the state and action are offset
-        | a_n   a_n+1 a_n+2 ... |
-        | s_n+1 s_n+2 s_n+2 ... |
-
-        x: [batch_size, T, obs_dim + act_dim] noise vector
-        cond: [batch_size, T_cond, obs_dim + act_dim] observation history
+        x: [batch_size, T, pred_obs_dim + act_dim] noise vector
+        cond: [batch_size, T_cond, obs_dim] observation history
         sigma: [batch_size] noise level
         """
-        B = cond.shape[0]
-        obsd, actd = self.obs_dim, self.act_dim
-
-        # split state and action
-        cond_state, cond_action = torch.split(cond, [obsd, actd], dim=-1)
-        input_action, input_state = torch.split(x, [actd, self.pred_obs_dim], dim=-1)
-
-        # embed and interleave conditioning state and action
-        # s, a, s, a, ..., s, a, s
-        cond_state_emb = self.cond_state_emb(cond_state).unsqueeze(2)
-        cond_action_emb = self.act_emb(cond_action).unsqueeze(2)
-        cond_emb = torch.cat([cond_state_emb, cond_action_emb], dim=2)
-        # remove the last action so we end at the current state
-        cond_emb = cond_emb.reshape(B, -1, self.d_model)[:, :-1, :]
-
-        # embed and interleave input state and action noise
-        # a, s, a, s, ..., a, s
-        input_state_emb = self.state_emb(input_state).unsqueeze(2)
-        input_action_emb = self.act_emb(input_action).unsqueeze(2)
-        input_emb = torch.cat([input_action_emb, input_state_emb], dim=2)
-        input_emb = input_emb.reshape(B, -1, self.d_model)
+        cond_emb = self.cond_state_emb(cond)
+        input_emb = self.state_action_emb(x)
 
         # diffusion timestep embedding
         sigma = sigma.view(-1, 1, 1).log() / 4
@@ -218,18 +187,7 @@ class DiffusionTransformer(nn.Module):
             tgt_mask=self.mask,
         )
         x = self.ln_f(x)
-
-        # split state and action
-        x = x.reshape(B, -1, 2, self.d_model)
-        x_action = x[:, :, 0, :]
-        x_state = x[:, :, 1, :]
-
-        # predict state and action
-        state_pred = self.state_pred(x_state)
-        action_pred = self.action_pred(x_action)
-        action_state_pred = torch.cat([action_pred, state_pred], dim=-1)
-
-        return action_state_pred
+        return self.state_action_pred(x)
 
     def generate_mask(self, x):
         mask = (torch.triu(torch.ones(x, x)) == 1).transpose(0, 1)

@@ -45,6 +45,7 @@ class BesoAgent:
         update_ema_every_n_steps: int,
         T: int,
         T_cond: int,
+        T_action: int,
         obs_dim: int,
         pred_obs_dim: int,
         action_dim: int,
@@ -53,8 +54,10 @@ class BesoAgent:
     ):
         # model
         self.model = hydra.utils.instantiate(model).to(device)
+        # set to 0 to just predict the next action
         self.T = T
         self.T_cond = T_cond
+        self.T_action = T_action
         self.obs_context = deque(maxlen=self.T_cond)
         self.action_context = deque(maxlen=self.T_cond - 1)
         total_params = sum(p.numel() for p in self.model.get_params())
@@ -118,7 +121,9 @@ class BesoAgent:
                     "state_mse": [],
                     "action_mse": [],
                 }
-                for batch in test_loader:
+                for batch in tqdm(
+                    test_loader, desc="Evaluating", position=0, leave=True
+                ):
                     info = self.evaluate(batch)
                     for key in log_info:
                         log_info[key].append(info[key])
@@ -156,7 +161,7 @@ class BesoAgent:
         self.model.training = True
 
         sa_dim = self.pred_obs_dim + self.action_dim
-        noise = torch.randn((state.shape[0], self.T, sa_dim)).to(self.device)
+        noise = torch.randn((state.shape[0], self.T + 1, sa_dim)).to(self.device)
         sigma = self.make_sample_density()(shape=(len(action),), device=self.device)
         loss = self.model.loss(state_action, noise, sigma)
 
@@ -190,23 +195,22 @@ class BesoAgent:
         )
 
         sa_dim = self.pred_obs_dim + self.action_dim
-        x = torch.randn((state.shape[0], self.T, sa_dim)) * self.sigma_max
+        x = torch.randn((state.shape[0], self.T + 1, sa_dim)) * self.sigma_max
         x = x.to(self.device)
 
         # generate the action based on the chosen sampler type
         state_action = torch.cat([state, action], dim=-1)
-        cond = state_action[:, : self.T_cond, :]
+        cond = state_action[:, : self.T_cond, : self.obs_dim]
         x_0 = self.sample_ddim(x, sigmas, cond)
 
-        target_action = action[:, self.T_cond - 1 : -1, :]
-        target_state = state[:, self.T_cond :, : self.pred_obs_dim]
-        target = torch.cat((target_action, target_state), dim=-1)
-        mse = nn.functional.mse_loss(x_0, target, reduction="none")
+        mse = nn.functional.mse_loss(
+            x_0, state_action[:, self.T_cond - 1 :, :], reduction="none"
+        )
         total_mse = mse.mean().item()
 
         # state and action mse
-        state_mse = mse[:, :, self.action_dim :].mean().item()
-        action_mse = mse[:, :, : self.action_dim].mean().item()
+        state_mse = mse[:, :, : self.pred_obs_dim].mean().item()
+        action_mse = mse[:, :, self.pred_obs_dim :].mean().item()
 
         # mse of the first and last timestep
         first_mse = mse[:, 0, :].mean().item()
@@ -240,7 +244,7 @@ class BesoAgent:
         """
         state, _, _ = self.process_batch(batch)
 
-        input_state, input_action = self.stack_context(state)
+        input_state = self.stack_context(state)
 
         if new_sampling_steps is not None:
             n_sampling_steps = new_sampling_steps
@@ -258,20 +262,20 @@ class BesoAgent:
         )
 
         sa_dim = self.pred_obs_dim + self.action_dim
-        x = torch.randn((self.num_envs, self.T, sa_dim), device=self.device)
+        x = torch.randn((self.num_envs, self.T + 1, sa_dim), device=self.device)
         x *= self.sigma_max
 
-        cond = torch.cat([input_state, input_action], dim=-1)
+        cond = input_state
         x_0 = self.sample_ddim(x, sigmas, cond)
 
         # get the action for the current timestep
-        x_0 = x_0[:, 0, : self.action_dim]
+        x_0 = x_0[:, : self.T_action, self.pred_obs_dim :]
         x_0 = self.scaler.clip_action(x_0)
 
         if self.use_ema:
             self.ema_helper.restore(self.model.parameters())
         model_pred = self.scaler.inverse_scale_output(x_0)
-        self.action_context.append(x_0)
+        # self.action_context.append(x_0)
         return model_pred
 
     def stack_context(self, state):
@@ -283,14 +287,15 @@ class BesoAgent:
             self.obs_context.append(state)
         input_state = torch.stack(tuple(self.obs_context), dim=1)
 
-        pad = torch.zeros(state.shape[0], self.action_dim).to(self.device)
-        while len(self.action_context) < self.T_cond - 1:
-            self.action_context.append(pad)
-        input_action = torch.stack(
-            [*tuple(self.action_context), pad],
-            dim=1,
-        )
-        return input_state, input_action
+        # pad = torch.zeros(state.shape[0], self.action_dim).to(self.device)
+        # while len(self.action_context) < self.T_cond - 1:
+        #     self.action_context.append(pad)
+        # input_action = torch.stack(
+        #     [*tuple(self.action_context), pad],
+        #     dim=1,
+        # )
+
+        return input_state
 
     @torch.no_grad()
     def sample_ddim(self, x_t, sigmas, cond):

@@ -26,6 +26,7 @@ class RaisimManager(BaseWorkspaceManger):
         eval_n_steps,
         goal_dim: int,
         scale_data: bool,
+        T_action: int,
         train_batch_size: int = 256,
         test_batch_size: int = 256,
         num_workers: int = 4,
@@ -47,6 +48,7 @@ class RaisimManager(BaseWorkspaceManger):
         self.scaler = None
         self.data_loader = self.make_dataloaders()
         self.goal_dim = goal_dim
+        self.T_action = T_action
 
     def init_env(self, cfg, dataset):
         resource_dir = os.path.dirname(os.path.realpath(__file__)) + "/../env/resources"
@@ -125,18 +127,21 @@ class RaisimManager(BaseWorkspaceManger):
                     {"observation": obs},
                     new_sampling_steps=n_inference_steps,
                 )
-                obs, reward, done = self.env.step(pred_action.detach().cpu().numpy())
-                obs = self.process_obs(obs)
-                # total_rewards += obs[:, -3:-1].norm(dim=-1).mean().item()
-                total_rewards += reward.mean()
+                pred_action = pred_action.detach().cpu().numpy()
 
-                # switch skill
-                if not n % 150:
-                    self.generate_goal()
+                for i in range(self.T_action):
+                    obs, reward, done = self.env.step(pred_action[:, i])
+                    obs = self.process_obs(obs)
+                    total_rewards += reward.mean()
 
-                delta = time.time() - start
-                if delta < 0.04 and real_time:
-                    time.sleep(0.04 - delta)
+                    # switch skill
+                    if not n % 150:
+                        self.generate_goal()
+
+                    delta = time.time() - start
+                    if delta < 0.04 and real_time:
+                        time.sleep(0.04 - delta)
+                    start = time.time()
 
         self.env.close()
         total_rewards /= total_dones

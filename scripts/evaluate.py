@@ -38,6 +38,7 @@ def main(cfg: DictConfig) -> None:
     # set the observation dimension
     model_cfg["obs_dim"] = 34
     model_cfg["pred_obs_dim"] = 34
+    model_cfg["T_action"] = 10
 
     # set seeds
     np.random.seed(model_cfg.seed)

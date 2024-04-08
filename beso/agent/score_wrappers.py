@@ -63,10 +63,8 @@ class GCDenoiser(nn.Module):
             The computed loss.
         """
         # split into past and future states
-        cond = state_action[:, : self.T_cond, :]
-        x_action = state_action[:, self.T_cond - 1 : -1, -self.act_dim :]
-        x_state = state_action[:, self.T_cond :, : self.pred_obs_dim]
-        x = torch.cat((x_action, x_state), dim=-1)
+        cond = state_action[:, : self.T_cond, :self.obs_dim]
+        x = state_action[:, self.T_cond - 1:, :]
 
         noised_input = x + noise * sigma.view(-1, 1, 1)
 
