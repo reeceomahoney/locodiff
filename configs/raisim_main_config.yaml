@@ -37,6 +37,7 @@ goal_dim: 1
 hidden_dim: 128
 use_spectral_norm: false
 num_hidden_layers: 4
+weight_decay: 1e-3
 train_method: 'steps'
 max_train_steps: 1e6
 max_epochs: 100
@@ -53,7 +54,7 @@ update_ema_every_n_steps: 1
 sigma_data: 0.5 
 cond_mask_prob: 0.1
 cond_lambda: 2 # only required for inference of CFG-BESO
-n_timesteps: 3 # number of diffusion steps during inference
+n_timesteps: 10
 
 env:
   render: True

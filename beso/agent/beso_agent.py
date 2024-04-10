@@ -51,6 +51,7 @@ class BesoAgent:
         action_dim: int,
         num_envs: int,
         sim_every_n_steps: int,
+        weight_decay: float,
     ):
         # model
         self.model = hydra.utils.instantiate(model).to(device)
@@ -64,7 +65,7 @@ class BesoAgent:
         log.info("The model has a total amount of {:e} parameters".format(total_params))
 
         # training
-        optim_groups = self.model.inner_model.get_optim_groups()
+        optim_groups = self.model.inner_model.get_optim_groups(weight_decay)
         self.optimizer = hydra.utils.instantiate(optimization, optim_groups)
         self.lr_scheduler = hydra.utils.instantiate(
             lr_scheduler, optimizer=self.optimizer

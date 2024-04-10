@@ -9,13 +9,9 @@ optimization:
   lr: 1e-3
   betas: [0.9, 0.999]
 
-# lr_scheduler:
-#   _target_: torch.optim.lr_scheduler.CosineAnnealingLR
-#   T_max: ${max_train_steps}
-
 lr_scheduler:
   _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
-  factor: 0.5
+  factor: 0.1
   patience: 10000
 
 max_train_steps: ${max_train_steps}
@@ -37,3 +33,4 @@ T_cond: ${T_cond}
 T_action: ${T_action}
 num_envs: ${env.num_envs}
 sim_every_n_steps: ${sim_every_n_steps}
+weight_decay: ${weight_decay}

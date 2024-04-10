@@ -1,23 +1,28 @@
 program: scripts/training.py
 project: beso_experiments
-name: beso_raisim
+name: model_sizes_2
 method: bayes
 metric:
   goal: minimize
   name: total_mse
 parameters:
   max_train_steps: 
-    value: 2e4
-  T:
-    values: [1, 2, 3, 4]
-  T_cond:
-    values: [1, 2, 3, 4]
+    value: 4e4
+  agents.optimization.lr:
+    values: [1e-3, 8e-4, 5e-4, 3e-4, 1e-4]
   hidden_dim:
-    values: [128, 256, 512]
+    values: [128, 256, 384, 512, 768]
   num_hidden_layers:
-    values: [2, 4, 6]
+    min: 1
+    max: 8
   n_heads:
     values: [4, 8, 16]
+  attn_pdrop:
+    values: [0.0, 0.01, 0.05, 0.1, 0.3]
+  resid_pdrop:
+    values: [0.0, 0.01, 0.05, 0.1, 0.3]
+  weight_decay:
+    values: [0.0, 0.1, 0.01, 0.001, 0.0001]
     
   
 command:
