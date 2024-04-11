@@ -15,6 +15,7 @@ class DiffusionTransformer(nn.Module):
         T_cond,
         device,
         cond_mask_prob,
+        dropout,
     ):
         super().__init__()
         self.obs_dim = obs_dim
@@ -46,6 +47,7 @@ class DiffusionTransformer(nn.Module):
                 d_model=self.d_model,
                 nhead=self.nhead,
                 dim_feedforward=4 * self.d_model,
+                dropout=dropout,
                 activation="gelu",
                 batch_first=True,
                 norm_first=True,

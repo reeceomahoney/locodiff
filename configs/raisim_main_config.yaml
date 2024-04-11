@@ -34,9 +34,9 @@ pred_obs_dim: null  # will be set automatically
 goal_dim: 1
 
 # policy model params
-hidden_dim: 128
+hidden_dim: 256
 use_spectral_norm: false
-num_hidden_layers: 4
+num_hidden_layers: 8
 weight_decay: 1e-3
 train_method: 'steps'
 max_train_steps: 1e6
@@ -45,9 +45,8 @@ eval_every_n_steps: 1000
 sim_every_n_steps: 5000
 
 # BESO hyperparameters
-attn_pdrop: 0.05
-resid_pdrop: 0.05
-n_heads: 8
+dropout: 0.3
+n_heads: 4
 use_ema: True
 decay: 0.999 
 update_ema_every_n_steps: 1
