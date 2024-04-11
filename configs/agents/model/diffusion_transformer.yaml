@@ -17,3 +17,4 @@ inner_model:
   T_cond: ${T_cond}
   device: ${device}
   cond_mask_prob: ${cond_mask_prob}
+  dropout: ${dropout}

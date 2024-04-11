@@ -34,4 +34,3 @@ T_action: ${T_action}
 num_envs: ${env.num_envs}
 sim_every_n_steps: ${sim_every_n_steps}
 weight_decay: ${weight_decay}
-dropout: ${dropout}
