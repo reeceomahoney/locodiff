@@ -38,7 +38,7 @@ def main(cfg: DictConfig) -> None:
     # set the observation dimension
     model_cfg["obs_dim"] = 34
     model_cfg["pred_obs_dim"] = 34
-    model_cfg["T_action"] = 10
+    model_cfg["T_action"] = 4
 
     # set seeds
     np.random.seed(model_cfg.seed)
@@ -77,7 +77,7 @@ def main(cfg: DictConfig) -> None:
         batch = next(iter(dataloader))
         batch = {k: v.to(cfg.device) for k, v in batch.items()}
 
-        if cfg["test_diffusion_steps"]:
+        if cfg["test_timestep_mse"]:
             inference_steps = [1, 2, 3, 4, 5, 10, 20, 40, 50]
             results = []
             for step in inference_steps:
@@ -91,6 +91,14 @@ def main(cfg: DictConfig) -> None:
                     result,
                     label=f"{inference_steps[i]} inference steps",
                 )
+        if cfg["test_total_mse"]:
+            inference_steps = [1, 2, 3, 4, 5, 10, 20, 40, 50]
+            results = []
+            for step in inference_steps:
+                agent.num_sampling_steps = step
+                info = agent.evaluate(batch)
+                results.append(info["total_mse"])
+            plt.plot(inference_steps, results, "x")
         elif cfg["test_observation_error"]:
             info = agent.evaluate(batch)
             results = info["mse"].cpu().numpy().mean(axis=(0, 1))
@@ -98,7 +106,7 @@ def main(cfg: DictConfig) -> None:
 
         plt.yscale("log")
         plt.legend()
-        plt.savefig("test.png")
+        plt.show()
 
 if __name__ == "__main__":
     main()

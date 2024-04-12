@@ -45,7 +45,7 @@ eval_every_n_steps: 1000
 sim_every_n_steps: 5000
 
 # BESO hyperparameters
-dropout: 0.3
+dropout: 0.0
 n_heads: 4
 use_ema: True
 decay: 0.999 
@@ -53,7 +53,7 @@ update_ema_every_n_steps: 1
 sigma_data: 0.5 
 cond_mask_prob: 0.1
 cond_lambda: 2 # only required for inference of CFG-BESO
-n_timesteps: 10
+n_timesteps: 3
 
 env:
   render: True

@@ -10,9 +10,8 @@ optimization:
   betas: [0.9, 0.999]
 
 lr_scheduler:
-  _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
-  factor: 0.1
-  patience: 10000
+  _target_: torch.optim.lr_scheduler.CosineAnnealingLR
+  T_max: ${max_train_steps}
 
 max_train_steps: ${max_train_steps}
 eval_every_n_steps: ${eval_every_n_steps}

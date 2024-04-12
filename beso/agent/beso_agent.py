@@ -171,7 +171,7 @@ class BesoAgent:
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
-        self.lr_scheduler.step(self.total_mse)
+        self.lr_scheduler.step()
         self.steps += 1
 
         # update the ema model
