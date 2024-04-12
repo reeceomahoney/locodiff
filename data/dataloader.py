@@ -76,7 +76,7 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         self.obs_dim = obs_dim
         self.T_cond = T_cond
         self.future_seq_len = future_seq_len
-        logging.info("Data loading: started")
+
         data = np.load(self.dataset_path, allow_pickle=True).item()
         self.observations = data["observations"]
         self.actions = data["actions"]
@@ -88,7 +88,9 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         self.actions = torch.from_numpy(self.actions).to(device).float()
         self.masks = torch.from_numpy(self.masks).to(device).float()
 
-        logging.info("Data loading: done")
+        logging.info(
+            f"Dataset size - Observations: {list(self.observations.size())} - Actions: {list(self.actions.size())}"
+        )
         tensors = [self.observations, self.actions, self.masks]
 
         # The current values are in shape N x T x Dim, so all is good in the world.

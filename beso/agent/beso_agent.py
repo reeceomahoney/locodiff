@@ -57,7 +57,7 @@ class BesoAgent:
         self.action_context = deque(maxlen=self.T_cond - 1)
 
         total_params = sum(p.numel() for p in self.model.get_params())
-        log.info("The model has a total amount of {:e} parameters".format(total_params))
+        log.info("Parameter count: {:e}".format(total_params))
 
         # training
         optim_groups = self.model.inner_model.get_optim_groups(weight_decay)

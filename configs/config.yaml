@@ -1,21 +1,12 @@
 defaults:
-  - agents: beso_raisim
-  - workspaces: raisim_manager
+  - agents: agent
   - _self_
 
-log_dir: logs/raisim/
-plot_dir: plots/raisim/
-plot_name: ${now:%Y-%m-%d}.png
 data_path: fwd
 
 hydra:
   run:
-    dir: ${log_dir}/runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
-  sweep:
-    dir: ${log_dir}/sweeps/${now:%Y-%m-%d}/${now:%H-%M-%S}
-    subdir: ${hydra.job.override_dirname}
-
-group: first_tests
+    dir: logs/${now:%Y-%m-%d}/${now:%H-%M-%S}
 
 wandb:
   entity: reeceomahoney

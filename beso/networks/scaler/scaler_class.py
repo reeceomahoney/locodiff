@@ -285,8 +285,6 @@ class MinMaxScaler:
         #                                                                                          self.y_bounds[0, :],self.y_bounds[1, :]))
         self.tensor_y_bounds = torch.from_numpy(self.y_bounds).to(device)
 
-        log.info(f"Training dataset size: input {x_data.shape} target {y_data.shape}")
-
     @torch.no_grad()
     def scale_input(self, x):
         """
@@ -299,11 +297,12 @@ class MinMaxScaler:
         """
         x = x.to(self.device)
         if self.scale_data:
-            out = (x - self.x_mean) / (self.x_std + 1e-12 * torch.ones((self.x_std.shape), device=self.device))
+            out = (x - self.x_mean) / (
+                self.x_std + 1e-12 * torch.ones((self.x_std.shape), device=self.device)
+            )
             return out.to(torch.float32)
         else:
             return x.to(self.device)
-
 
     @torch.no_grad()
     def scale_output(self, y):
@@ -334,7 +333,14 @@ class MinMaxScaler:
             torch.Tensor: The inversely scaled input tensor.
         """
         if self.scale_data:
-            out = x * (self.x_std + 1e-12 * torch.ones((self.x_std.shape), device=self.device)) + self.x_mean
+            out = (
+                x
+                * (
+                    self.x_std
+                    + 1e-12 * torch.ones((self.x_std.shape), device=self.device)
+                )
+                + self.x_mean
+            )
             return out.to(torch.float32)
         else:
             return x.to(self.device)

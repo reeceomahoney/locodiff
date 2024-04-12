@@ -13,12 +13,7 @@ from beso.env.raisim_env import RaisimEnv
 log = logging.getLogger(__name__)
 
 
-OmegaConf.register_new_resolver("add", lambda *numbers: sum(numbers))
-
-
-@hydra.main(
-    config_path="../configs", config_name="raisim_main_config.yaml", version_base=None
-)
+@hydra.main(config_path="../configs", config_name="config.yaml", version_base=None)
 def main(cfg: DictConfig) -> None:
 
     # set seeds

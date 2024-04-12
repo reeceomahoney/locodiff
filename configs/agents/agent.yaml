@@ -1,9 +1,6 @@
 _target_: beso.agent.beso_agent.BesoAgent
 _recursive_: false
 
-defaults:
-  - model: diffusion_transformer
-
 optimization:
   _target_: torch.optim.AdamW
   lr: 1e-4
@@ -33,6 +30,28 @@ T_action: ${T_action}
 num_envs: ${env.num_envs}
 sim_every_n_steps: ${sim_every_n_steps}
 weight_decay: ${weight_decay}
+
+model:
+  _target_: beso.agent.score_wrappers.GCDenoiser
+  _recursive_: false
+
+  sigma_data: ${sigma_data}
+  T: ${T}
+  T_cond: ${T_cond}
+
+  inner_model:
+    _target_: beso.agent.diffusion_transformer.DiffusionTransformer
+    obs_dim: ${obs_dim}
+    pred_obs_dim: ${pred_obs_dim}
+    act_dim: ${action_dim}
+    d_model: ${hidden_dim}
+    nhead: ${n_heads}
+    num_layers: ${num_hidden_layers}
+    T: ${T}
+    T_cond: ${T_cond}
+    device: ${device}
+    cond_mask_prob: ${cond_mask_prob}
+    dropout: ${dropout}
 
 dataset_fn:
   _target_: data.dataloader.get_raisim_train_val
