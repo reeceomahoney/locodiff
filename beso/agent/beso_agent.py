@@ -6,21 +6,15 @@ from faulthandler import disable
 from functools import partial
 
 import hydra
-import numpy as np
 import torch
 import torch.nn as nn
-import wandb
 from omegaconf import DictConfig
 from tqdm import tqdm, trange
 
 import beso.agent.utils as utils
-from beso.agent.foot_grid import FootGrid
-from beso.agent.classifier_free_sampler import (
-    ClassifierFreeSampleModel,
-)
+import wandb
 from beso.agent.gc_sampling import get_sigmas_exponential
 from beso.networks.ema_helper.ema import ExponentialMovingAverage
-from beso.networks.scaler.scaler_class import Scaler
 
 # A logger for this file
 log = logging.getLogger(__name__)
@@ -32,6 +26,7 @@ class BesoAgent:
         self,
         model: DictConfig,
         optimization: DictConfig,
+        dataset_fn: DictConfig,
         device: str,
         max_train_steps: int,
         eval_every_n_steps: int,
@@ -55,12 +50,12 @@ class BesoAgent:
     ):
         # model
         self.model = hydra.utils.instantiate(model).to(device)
-        # set to 0 to just predict the next action
-        self.T = T
+        self.T = T  # set to 0 to just predict the next action
         self.T_cond = T_cond
         self.T_action = T_action
         self.obs_context = deque(maxlen=self.T_cond)
         self.action_context = deque(maxlen=self.T_cond - 1)
+
         total_params = sum(p.numel() for p in self.model.get_params())
         log.info("The model has a total amount of {:e} parameters".format(total_params))
 
@@ -95,23 +90,22 @@ class BesoAgent:
         self.num_envs = num_envs
         self.sim_every_n_steps = sim_every_n_steps
 
+        self.train_loader, self.test_loader, self.scaler = hydra.utils.instantiate(
+            dataset_fn
+        )
+
         # misc
-        self.scaler = None
-        self.working_dir = os.getcwd()
         self.device = device
+        self.env = None
+        self.working_dir = None
         self.total_mse = None
 
-    def train_agent(
-        self,
-        train_loader: torch.utils.data.DataLoader,
-        test_loader: torch.utils.data.DataLoader,
-        eval_fn,
-    ):
+    def train_agent(self):
         """
         Main training loop
         """
         best_test_mse = 1e10
-        generator = iter(train_loader)
+        generator = iter(self.train_loader)
 
         for step in tqdm(range(self.max_train_steps), position=0, leave=True):
             # evaluate
@@ -124,7 +118,7 @@ class BesoAgent:
                     "action_mse": [],
                 }
                 for batch in tqdm(
-                    test_loader, desc="Evaluating", position=0, leave=True
+                    self.test_loader, desc="Evaluating", position=0, leave=True
                 ):
                     info = self.evaluate(batch)
                     for key in log_info:
@@ -144,13 +138,13 @@ class BesoAgent:
                 batch_loss = self.train_step(next(generator))
             except StopIteration:
                 # restart the generator if the previous generator is exhausted.
-                generator = iter(train_loader)
+                generator = iter(self.train_loader)
                 batch_loss = self.train_step(next(generator))
             wandb.log({"loss": batch_loss})
 
             # simulate
             if not self.steps % self.sim_every_n_steps:
-                results = eval_fn(self)
+                results = self.env.simulate(self)
                 wandb.log(results)
 
         self.store_model_weights(self.working_dir)
@@ -391,9 +385,6 @@ class BesoAgent:
         goal = get_to_device("goal")
 
         return state, action, goal
-
-    def get_scaler(self, scaler: Scaler):
-        self.scaler = scaler
 
     def get_constraints(self, state: torch.Tensor) -> torch.Tensor:
         """

@@ -68,6 +68,8 @@ env:
   server_port: 8080
   early_termination: True
   normalize_observation: False
+  eval_n_times: 1
+  eval_n_steps: 300
 
   velocity_command:
     limit_heading_velocity: 1.0

@@ -1,13 +1,14 @@
-import os
 import logging
+import os
 import sys
 
 import hydra
-import wandb
-from omegaconf import DictConfig, OmegaConf
-import torch
 import numpy as np
+import torch
+from omegaconf import DictConfig, OmegaConf
 
+import wandb
+from beso.env.raisim_env import RaisimEnv
 
 log = logging.getLogger(__name__)
 
@@ -44,22 +45,11 @@ def main(cfg: DictConfig) -> None:
         project=cfg.wandb.project, mode=mode, config=wandb.config, dir=output_dir
     )
 
-    workspace_manager = hydra.utils.instantiate(cfg.workspaces)
     agent = hydra.utils.instantiate(cfg.agents)
-
-    # get the scaler instance and set the bounds for the sampler if required
-    agent.get_scaler(workspace_manager.scaler)
+    agent.env = RaisimEnv(cfg)
     agent.working_dir = output_dir
 
-    # initialize the environment
-    workspace_manager.init_env(cfg, cfg.data_path)
-
-    # train
-    agent.train_agent(
-        workspace_manager.data_loader["train"],
-        workspace_manager.data_loader["test"],
-        workspace_manager.test_agent,
-    )
+    agent.train_agent()
 
     log.info("done")
     wandb.finish()

@@ -1,16 +1,13 @@
-from typing import Optional
 import logging
-
 import os
+from pathlib import Path
+
+import numpy as np
 import torch
 from torch.utils.data import TensorDataset
-from pathlib import Path
-import numpy as np
 
-from data.trajectory_loader import (
-    TrajectoryDataset,
-    get_train_val_sliced,
-)
+from beso.networks.scaler.scaler_class import MinMaxScaler
+from data.trajectory_loader import TrajectoryDataset, get_train_val_sliced
 
 
 def get_raisim_train_val(
@@ -21,8 +18,11 @@ def get_raisim_train_val(
     train_fraction,
     random_seed,
     device,
+    train_batch_size,
+    test_batch_size,
+    num_workers,
 ):
-    return get_train_val_sliced(
+    train_set, test_set = get_train_val_sliced(
         RaisimTrajectoryDataset(data_directory, future_seq_len, obs_dim, window_size),
         train_fraction,
         random_seed,
@@ -30,6 +30,29 @@ def get_raisim_train_val(
         window_size,
         future_seq_len,
     )
+    scaler = MinMaxScaler(
+        train_set.dataset.dataset.get_all_observations(),
+        train_set.dataset.dataset.get_all_actions(),
+        True,
+        device,
+    )
+
+    train_dataloader = torch.utils.data.DataLoader(
+        train_set,
+        batch_size=train_batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+
+    test_dataloader = torch.utils.data.DataLoader(
+        test_set,
+        batch_size=test_batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+    return train_dataloader, test_dataloader, scaler
 
 
 class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):

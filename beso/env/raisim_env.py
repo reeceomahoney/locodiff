@@ -1,93 +1,55 @@
-# //----------------------------//
-# // This file is part of RaiSim//
-# // Copyright 2020, RaiSim Tech//
-# //----------------------------//
+import logging
+import os
+import platform
+import time
 
 import numpy as np
-import platform
-import os
+import torch
+from omegaconf import OmegaConf
+from tqdm import tqdm
 
 from beso.env.lib.raisim_env import RaisimWrapper
 
+log = logging.getLogger(__name__)
+
+
 class RaisimEnv:
 
-    def __init__(self, resource_dir, cfg, dataset, seed=0):
+    def __init__(self, cfg, seed=0):
         if platform.system() == "Darwin":
-            os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
-        
+            os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
+
+        resource_dir = os.path.dirname(os.path.realpath(__file__)) + "/resources"
+        env_cfg = OmegaConf.to_yaml(cfg.env)
+
         # initialize environment
-        self.env = RaisimWrapper(resource_dir, cfg)
+        self.env = RaisimWrapper(resource_dir, env_cfg)
         self.env.setSeed(seed)
 
         # get environment information
         self.num_obs = self.env.getObDim()
         self.num_acts = self.env.getActionDim()
+        self.T_action = cfg.T_action
+        self.eval_n_times = cfg.env.eval_n_times
+        self.eval_n_steps = cfg.env.eval_n_steps
+        self.device = cfg.device
+        self.dataset = cfg.data_path
 
         # initialize variables
         self._observation = np.zeros([self.num_envs, self.num_obs], dtype=np.float32)
-        self._joint_pos_err_history = np.zeros([self.num_envs, 2*12], dtype=np.float32)
-        self._joint_vel_history = np.zeros([self.num_envs, 2*12], dtype=np.float32)
-        self._contact_states = np.zeros([self.num_envs, 4], dtype=np.float32)
-        self._frame_cartesian_pos = np.zeros([self.num_envs, 3*5], dtype=np.float32)
+        self._frame_cartesian_pos = np.zeros([self.num_envs, 3 * 5], dtype=np.float32)
         self._base_orientation = np.zeros([self.num_envs, 9], dtype=np.float32)
         self._reward = np.zeros(self.num_envs, dtype=np.float32)
         self._done = np.zeros(self.num_envs, dtype=bool)
-        self.rewards = [[] for _ in range(self.num_envs)]
-        self.count = 0.0
-        self.mean = np.zeros(self.num_obs, dtype=np.float32)
-        self.var = np.zeros(self.num_obs, dtype=np.float32)
-        
-        self._max_episode_steps = 1000
-        self.dataset = dataset
-
-    def seed(self, seed=None):
-        self.env.setSeed(seed)
-
-    def turn_on_visualization(self):
-        self.env.turnOnVisualization()
-
-    def turn_off_visualization(self):
-        self.env.turnOffVisualization()
-
-    def start_video_recording(self, file_name):
-        self.env.startRecordingVideo(file_name)
-
-    def stop_video_recording(self):
-        self.env.stopRecordingVideo()
 
     def step(self, action):
         self.env.step(action, self._reward, self._done)
         return self.observe(), self._reward.copy(), self._done.copy()
 
-    def load_scaling(self, dir_name, iteration, count=1e5):
-        mean_file_name = dir_name + "/mean" + str(iteration) + ".csv"
-        var_file_name = dir_name + "/var" + str(iteration) + ".csv"
-        self.count = count
-        self.mean = np.loadtxt(mean_file_name, dtype=np.float32)[:48]
-        self.var = np.loadtxt(var_file_name, dtype=np.float32)[:48]
-        self.env.setObStatistics(self.mean, self.var, self.count)
-
-    def save_scaling(self, dir_name, iteration):
-        mean_file_name = dir_name + "/mean" + iteration + ".csv"
-        var_file_name = dir_name + "/var" + iteration + ".csv"
-        self.env.getObStatistics(self.mean, self.var, self.count)
-        np.savetxt(mean_file_name, self.mean)
-        np.savetxt(var_file_name, self.var)
-
-    def observe(self, update_statistics=True):
+    def observe(self, update_statistics=False):
         self.env.observe(self._observation, update_statistics)
 
-        # add feet position
-        if self.dataset == 'rand_feet':
-            root_and_feet_pos = self.get_frame_cartesian_pos()
-            root, feet_pos = root_and_feet_pos[:, :3], root_and_feet_pos[:, 3:]
-            obs = np.concatenate([self._observation[:, :36], feet_pos], axis=-1)
-        elif self.dataset == 'rand_feet_com':
-            root_and_feet_pos = self.get_frame_cartesian_pos()
-            root, feet_pos = root_and_feet_pos[:, :2], root_and_feet_pos[:, 3:]
-            orientation = self.get_base_orientation()
-            obs = np.concatenate([self._observation[:, :36], root, orientation, feet_pos], axis=-1)
-        elif self.dataset.startswith('fwd'):
+        if self.dataset.startswith("fwd"):
             obs = self._observation[:, :33]
         else:
             frames = self.get_frame_cartesian_pos()
@@ -111,48 +73,107 @@ class RaisimEnv:
     def close(self):
         self.env.close()
 
-    def curriculum_callback(self):
-        self.env.curriculumUpdate()
+    def simulate(
+        self,
+        agent,
+        n_inference_steps=None,
+        real_time=False,
+    ):
+        """
+        Test the agent on the environment with the given goal function
+        """
+        # TOOD: refactor this into the env
+        log.info("Starting trained model evaluation")
+        total_rewards = 0
+        total_dones = 0
+        self.skill = np.zeros((self.num_envs, 1))
+        self.generate_goal()
 
-    def enable_early_termination(self):
-        self.env.enableEarlyTermination()
+        agent.reset()  # this is incorrect
+        obs = self.env.reset()
+        for _ in range(self.eval_n_times):
+            done = np.array([False])
+            obs = self.process_obs(self.observe())
 
-    def disable_early_termination(self):
-        self.env.disableEarlyTermination()
+            # now run the agent for n steps
+            for n in tqdm(range(self.eval_n_steps)):
+                start = time.time()
 
-    def set_max_episode_length(self, time_in_seconds):
-        self.env.setMaxEpisodeLength(time_in_seconds)
+                if done.any():
+                    total_dones += done
+                if n == self.eval_n_steps - 1:
+                    total_dones += np.ones(done.shape, dtype="int64")
+
+                pred_action = agent.predict(
+                    {"observation": obs},
+                    new_sampling_steps=n_inference_steps,
+                )
+                pred_action = pred_action.detach().cpu().numpy()
+
+                for i in range(self.T_action):
+                    obs, reward, done = self.step(pred_action[:, i])
+                    obs = self.process_obs(obs)
+                    total_rewards += reward.mean()
+
+                    # switch skill
+                    if not n % 150:
+                        self.generate_goal()
+
+                    delta = time.time() - start
+                    if delta < 0.04 and real_time:
+                        time.sleep(0.04 - delta)
+                    start = time.time()
+
+        self.close()
+        total_rewards /= total_dones
+        avrg_reward = total_rewards.mean()
+        std_reward = total_rewards.std()
+
+        log.info("... finished trained model evaluation")
+        return_dict = {
+            "avrg_reward": avrg_reward,
+            "std_reward": std_reward,
+            "total_done": total_dones.mean(),
+        }
+        return return_dict
+
+    def generate_goal(self):
+        self.goal = np.random.uniform(-4, 4, (self.num_envs, 2)).astype(np.float32)
+        self.set_goal(self.goal)
+
+    def process_obs(self, obs):
+        obs = np.concatenate((obs, self.skill), axis=-1)
+        return torch.from_numpy(obs).to(self.device)
+
+    def get_frame_cartesian_pos(self):
+        self.env.getFrameCartesianPositions(self._frame_cartesian_pos)
+        return self._frame_cartesian_pos
+
+    def get_base_orientation(self):
+        self.env.getBaseOrientation(self._base_orientation)
+        return self._base_orientation
+
+    def kill_server(self):
+        self.env.killServer()
+
+    def set_goal(self, goal):
+        self.env.setGoal(goal)
+
+    def seed(self, seed=None):
+        self.env.setSeed(seed)
+
+    def turn_on_visualization(self):
+        self.env.turnOnVisualization()
+
+    def turn_off_visualization(self):
+        self.env.turnOffVisualization()
+
+    def start_video_recording(self, file_name):
+        self.env.startRecordingVideo(file_name)
+
+    def stop_video_recording(self):
+        self.env.stopRecordingVideo()
 
     @property
     def num_envs(self):
         return self.env.getNumOfEnvs()
-
-    def get_reward_info(self):
-        return self.env.rewardInfo()
-    
-
-    def get_joint_pos_err_history(self):
-        self.env.getJointPositionErrorHistory(self._joint_pos_err_history)
-        return self._joint_pos_err_history
-    
-    def get_joint_vel_history(self):
-        self.env.getJointVelocityHistory(self._joint_vel_history)
-        return self._joint_vel_history
-
-    def get_contact_states(self):
-        self.env.getContactStates(self._contact_states)
-        return self._contact_states
-    
-    def get_frame_cartesian_pos(self):
-        self.env.getFrameCartesianPositions(self._frame_cartesian_pos)
-        return self._frame_cartesian_pos
-    
-    def get_base_orientation(self):
-        self.env.getBaseOrientation(self._base_orientation)
-        return self._base_orientation
-    
-    def kill_server(self):
-        self.env.killServer()
-    
-    def set_goal(self, goal):
-        self.env.setGoal(goal)
