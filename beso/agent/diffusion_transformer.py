@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from .utils import SinusoidalPosEmb
 
 
 class DiffusionTransformer(nn.Module):
@@ -35,8 +36,12 @@ class DiffusionTransformer(nn.Module):
         )
         self.cond_state_emb = nn.Linear(self.obs_dim, self.d_model)
         self.sigma_emb = nn.Linear(1, self.d_model)
-        self.pos_emb = nn.Parameter(torch.zeros(1, self.T + 1, d_model))
-        self.cond_pos_emb = nn.Parameter(torch.zeros(1, self.T_cond + 1, d_model))
+        self.pos_emb = (
+            SinusoidalPosEmb(d_model)(torch.arange(self.T + 1)).unsqueeze(0).to(device)
+        )
+        self.cond_pos_emb = (
+            SinusoidalPosEmb(d_model)(torch.arange(self.T_cond + 1)).unsqueeze(0).to(device)
+        )
 
         self.encoder = nn.Sequential(
             nn.Linear(d_model, 4 * d_model), nn.Mish(), nn.Linear(4 * d_model, d_model)
@@ -71,6 +76,7 @@ class DiffusionTransformer(nn.Module):
             nn.ModuleList,
             nn.Mish,
             nn.Sequential,
+            DiffusionTransformer,
         )
         if isinstance(module, (nn.Linear, nn.Embedding)):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
@@ -96,11 +102,7 @@ class DiffusionTransformer(nn.Module):
         elif isinstance(module, nn.LayerNorm):
             torch.nn.init.zeros_(module.bias)
             torch.nn.init.ones_(module.weight)
-        elif isinstance(module, DiffusionTransformer):
-            torch.nn.init.normal_(module.pos_emb, mean=0.0, std=0.02)
-            torch.nn.init.normal_(module.cond_pos_emb, mean=0.0, std=0.02)
         elif isinstance(module, ignore_types):
-            # no param
             pass
         else:
             raise RuntimeError("Unaccounted module {}".format(module))
@@ -134,10 +136,6 @@ class DiffusionTransformer(nn.Module):
                 elif pn.endswith("weight") and isinstance(m, blacklist_weight_modules):
                     # weights of blacklist modules will NOT be weight decayed
                     no_decay.add(fpn)
-
-        # special case the position embedding parameter in the root GPT module as not decayed
-        no_decay.add("pos_emb")
-        no_decay.add("cond_pos_emb")
 
         # validate that we considered every parameter
         param_dict = {pn: p for pn, p in self.named_parameters()}

@@ -2,11 +2,14 @@ import os
 import logging
 import numpy as np
 import matplotlib.pyplot as plt
+import socket
 
 import hydra
 import wandb
 from omegaconf import DictConfig, OmegaConf
 import torch
+
+from beso.env.raisim_env import RaisimEnv
 
 
 log = logging.getLogger(__name__)
@@ -17,7 +20,7 @@ torch.cuda.empty_cache()
 
 
 @hydra.main(
-    config_path="../configs", config_name="evaluate_raisim.yaml", version_base=None
+    config_path="../configs", config_name="evaluate.yaml", version_base=None
 )
 def main(cfg: DictConfig) -> None:
     if cfg.log_wandb:
@@ -29,7 +32,6 @@ def main(cfg: DictConfig) -> None:
     )
     model_cfg = OmegaConf.load(cfg_store_path)
     model_cfg.device = cfg.device
-    model_cfg.workspaces["device"] = cfg["device"]
     model_cfg.agents["device"] = cfg["device"]
     model_cfg.env["num_envs"] = 1
     model_cfg.env["server_port"] = 8081
@@ -46,19 +48,13 @@ def main(cfg: DictConfig) -> None:
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
 
-    workspace_manager = hydra.utils.instantiate(model_cfg.workspaces)
     agent = hydra.utils.instantiate(model_cfg.agents)
-
-    # get the scaler instance and set the bounds for the sampler if required
-    agent.get_scaler(workspace_manager.scaler)
     agent.load_pretrained_model(cfg.model_store_path)
+    env = RaisimEnv(model_cfg)
 
     # set new noise limits
     agent.sigma_max = cfg.sigma_max
     agent.sigma_min = cfg.sigma_min
-
-    # initialize the environment
-    workspace_manager.init_env(model_cfg, model_cfg.data_path)
 
     # set seeds
     torch.manual_seed(model_cfg.seed)
@@ -67,13 +63,13 @@ def main(cfg: DictConfig) -> None:
 
     # Evaluate
     if cfg["test_rollout"]:
-        workspace_manager.eval_n_times = cfg["num_runs"]
-        results_dict = workspace_manager.test_agent(
+        env.eval_n_times = cfg["num_runs"]
+        results_dict = env.simulate(
             agent, n_inference_steps=cfg["n_inference_steps"], real_time=True
         )
         print(results_dict)
     else:
-        dataloader = workspace_manager.make_dataloaders()["test"]
+        dataloader = agent.test_loader
         batch = next(iter(dataloader))
         batch = {k: v.to(cfg.device) for k, v in batch.items()}
 
@@ -106,7 +102,10 @@ def main(cfg: DictConfig) -> None:
 
         plt.yscale("log")
         plt.legend()
-        plt.show()
+        if socket.gethostname() == "ori-drs-sid":
+            plt.show()
+        else:
+            plt.savefig("results.png")
 
 if __name__ == "__main__":
     main()
