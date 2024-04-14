@@ -10,16 +10,15 @@ import torch
 import torch.nn as nn
 from omegaconf import DictConfig
 from tqdm import tqdm, trange
-
-import beso.agent.utils as utils
 import wandb
-from beso.agent.utils import ExponentialMovingAverage
+
+import locodiff.utils as utils
 
 # A logger for this file
 log = logging.getLogger(__name__)
 
 
-class BesoAgent:
+class Agent:
 
     def __init__(
         self,
@@ -69,7 +68,7 @@ class BesoAgent:
         self.eval_every_n_steps = eval_every_n_steps
 
         # ema
-        self.ema_helper = ExponentialMovingAverage(
+        self.ema_helper = utils.ExponentialMovingAverage(
             self.model.get_params(), decay, device
         )
         self.use_ema = use_ema
@@ -324,7 +323,7 @@ class BesoAgent:
             torch.load(os.path.join(weights_path, "non_ema_model_state_dict.pth")),
             strict=False,
         )
-        self.ema_helper = ExponentialMovingAverage(
+        self.ema_helper = utils.ExponentialMovingAverage(
             self.model.get_params(), self.decay, self.device
         )
         log.info("Loaded pre-trained model parameters")

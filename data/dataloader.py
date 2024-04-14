@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch.utils.data import TensorDataset
 
-from beso.agent.utils import MinMaxScaler
+from locodiff.utils import MinMaxScaler
 from data.trajectory_loader import TrajectoryDataset, get_train_val_sliced
 
 

@@ -8,7 +8,7 @@ import torch
 from omegaconf import DictConfig, OmegaConf
 
 import wandb
-from beso.env.raisim_env import RaisimEnv
+from env.raisim_env import RaisimEnv
 
 log = logging.getLogger(__name__)
 

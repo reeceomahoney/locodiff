@@ -1,4 +1,4 @@
-_target_: beso.agent.beso_agent.BesoAgent
+_target_: locodiff.agent.Agent
 _recursive_: false
 
 optimization:
@@ -32,7 +32,7 @@ sim_every_n_steps: ${sim_every_n_steps}
 weight_decay: ${weight_decay}
 
 model:
-  _target_: beso.agent.score_wrappers.GCDenoiser
+  _target_: locodiff.wrapper.GCDenoiser
   _recursive_: false
 
   sigma_data: ${sigma_data}
@@ -40,7 +40,7 @@ model:
   T_cond: ${T_cond}
 
   inner_model:
-    _target_: beso.agent.diffusion_transformer.DiffusionTransformer
+    _target_: locodiff.transformer.DiffusionTransformer
     obs_dim: ${obs_dim}
     pred_obs_dim: ${pred_obs_dim}
     act_dim: ${action_dim}
@@ -62,6 +62,6 @@ dataset_fn:
   device: ${device}
   window_size: ${T_cond}
   future_seq_len: ${T}
-  train_batch_size: 1024
-  test_batch_size: 1024
+  train_batch_size: 256
+  test_batch_size: 256
   num_workers: 4

@@ -8,7 +8,7 @@ import torch
 from omegaconf import OmegaConf
 from tqdm import tqdm
 
-from beso.env.lib.raisim_env import RaisimWrapper
+from env.lib.raisim_env import RaisimWrapper
 
 log = logging.getLogger(__name__)
 

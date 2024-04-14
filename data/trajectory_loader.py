@@ -1,19 +1,10 @@
-import logging
-import os
-
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.utils.data import TensorDataset, Dataset, Subset
-from pathlib import Path
+from torch.utils.data import Dataset, Subset
 import numpy as np
-from typing import Union, Callable, Optional, Sequence, List, Any
-from tqdm import tqdm
+from typing import Union, Optional, Sequence, List
 import abc
 from torch import default_generator, randperm
 from torch._utils import _accumulate
-
-# from beso.envs.toy_task_1.multipath_dataset import MultiPathTrajectoryDataset
 
 
 class TrajectoryDataset(Dataset, abc.ABC):

@@ -9,7 +9,7 @@ import wandb
 from omegaconf import DictConfig, OmegaConf
 import torch
 
-from beso.env.raisim_env import RaisimEnv
+from env.raisim_env import RaisimEnv
 
 
 log = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ def main(cfg: DictConfig) -> None:
     # set the observation dimension
     model_cfg["obs_dim"] = 34
     model_cfg["pred_obs_dim"] = 34
-    model_cfg["T_action"] = 4
+    model_cfg["T_action"] = 1
 
     # set seeds
     np.random.seed(model_cfg.seed)
