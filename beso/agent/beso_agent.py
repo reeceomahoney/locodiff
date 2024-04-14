@@ -13,8 +13,7 @@ from tqdm import tqdm, trange
 
 import beso.agent.utils as utils
 import wandb
-from beso.agent.gc_sampling import get_sigmas_exponential
-from beso.networks.ema_helper.ema import ExponentialMovingAverage
+from beso.agent.utils import ExponentialMovingAverage
 
 # A logger for this file
 log = logging.getLogger(__name__)
@@ -187,7 +186,7 @@ class BesoAgent:
         self.model.training = False
 
         # get the sigma distribution for sampling based on Karras et al. 2022
-        sigmas = get_sigmas_exponential(
+        sigmas = utils.get_sigmas_exponential(
             self.num_sampling_steps, self.sigma_min, self.sigma_max, self.device
         )
 
@@ -255,7 +254,7 @@ class BesoAgent:
         self.model.eval()
 
         # get the sigma distribution for the desired sampling method
-        sigmas = get_sigmas_exponential(
+        sigmas = utils.get_sigmas_exponential(
             n_sampling_steps, self.sigma_min, self.sigma_max, self.device
         )
 

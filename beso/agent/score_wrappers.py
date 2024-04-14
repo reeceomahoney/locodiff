@@ -1,9 +1,6 @@
-from multiprocessing.sharedctypes import Value
-
 import hydra
-from torch import DictType, nn
+from torch import nn
 from .utils import append_dims
-import torch
 
 """
 Wrappers for the score-based models based on Karras et al. 2022
@@ -63,8 +60,8 @@ class GCDenoiser(nn.Module):
             The computed loss.
         """
         # split into past and future states
-        cond = state_action[:, : self.T_cond, :self.obs_dim]
-        x = state_action[:, self.T_cond - 1:, :]
+        cond = state_action[:, : self.T_cond, : self.obs_dim]
+        x = state_action[:, self.T_cond - 1 :, :]
 
         noised_input = x + noise * sigma.view(-1, 1, 1)
 

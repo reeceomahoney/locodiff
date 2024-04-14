@@ -1,123 +1,47 @@
-import torch
 import math
-import torch.nn as nn
 import numpy as np
-import einops
+import torch
+import torch.nn as nn
 
 
-def return_time_sigma_embedding_model(embedding_type, time_embed_dim, device):
-    '''
-    Method returns an embedding model given the chosen type
-    '''
-    if embedding_type == 'GaussianFourier':
-        return GaussianFourierEmbedding(time_embed_dim, device)
-    elif embedding_type == 'Sinusoidal':
-        return SinusoidalPosEmbedding(time_embed_dim, device)
-    elif embedding_type == 'FourierFeatures':
-        return FourierFeatures(time_embed_dim, device)
-    elif embedding_type == 'Linear':
-        return nn.Linear(1, time_embed_dim).to(device)
-    elif embedding_type == 'MLP':
-        return MLPTimeEmbedding(time_embed_dim, device)
-    else:
-        raise ValueError('Embedding not avaiable, please chose an existing one!')
+def append_dims(x, target_dims):
+    """Appends dimensions to the end of a tensor until it has target_dims dimensions."""
+    dims_to_append = target_dims - x.ndim
+    if dims_to_append < 0:
+        raise ValueError(
+            f"input has {x.ndim} dims but target_dims is {target_dims}, which is less"
+        )
+    return x[(...,) + (None,) * dims_to_append]
 
 
-class GaussianFourierProjection(nn.Module):
-    """Gaussian random features for encoding time steps."""
-    def __init__(self, embed_dim, scale=30.):
-        super().__init__()
-        # Randomly sample weights during initialization. These weights are fixed
-        # during optimization and are not trainable.
-        self.W = nn.Parameter(torch.randn(embed_dim // 2) * scale, requires_grad=False)
-
-    def forward(self, x):
-        x_proj = x[:, None] * self.W[None, :] * 2 * np.pi
-        return torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)
-    
-
-class FourierFeatures(nn.Module):
-    def __init__(self, time_embed_dim, device, in_features=1,  std=1.):
-        super().__init__()
-        self.device = device
-        assert time_embed_dim % 2 == 0
-        self.register_buffer('weight', torch.randn([time_embed_dim // 2, in_features]) * std
-                             )
-
-    def forward(self, input):
-        if len(input.shape) == 1:
-            input = einops.rearrange(input, 'b -> b 1')
-        f = 2 * math.pi * input @ self.weight.T
-        return torch.cat([f.cos(), f.sin()], dim=-1).to(self.device)
+def get_sigmas_exponential(n, sigma_min, sigma_max, device="cpu"):
+    """Constructs an exponential noise schedule."""
+    sigmas = torch.linspace(
+        math.log(sigma_max), math.log(sigma_min), n, device=device
+    ).exp()
+    return torch.cat([sigmas, sigmas.new_zeros([1])])
 
 
-class MLPTimeEmbedding(nn.Module):
-    
-    def __init__(self, time_embed_dim, device):
-        super().__init__()
-        self.t_dim = time_embed_dim 
-        self.embed = nn.Sequential(
-            nn.Linear(1, 2*time_embed_dim),
-            nn.SiLU(),
-            nn.Linear(2*time_embed_dim, time_embed_dim)
-        ).to(device)
-    
-    def forward(self, t):
-        return self.embed(t)
-    
+def rand_log_logistic(
+    shape,
+    loc=0.0,
+    scale=1.0,
+    min_value=0.0,
+    max_value=float("inf"),
+    device="cpu",
+    dtype=torch.float32,
+):
+    """Draws samples from an optionally truncated log-logistic distribution."""
+    min_value = torch.as_tensor(min_value, device=device, dtype=torch.float64)
+    max_value = torch.as_tensor(max_value, device=device, dtype=torch.float64)
+    min_cdf = min_value.log().sub(loc).div(scale).sigmoid()
+    max_cdf = max_value.log().sub(loc).div(scale).sigmoid()
+    u = (
+        torch.rand(shape, device=device, dtype=torch.float64) * (max_cdf - min_cdf)
+        + min_cdf
+    )
+    return u.logit().mul(scale).add(loc).exp().to(dtype)
 
-class GaussianFourierEmbedding(nn.Module):
-    
-    def __init__(self, time_embed_dim, device):
-        super().__init__()
-        self.t_dim = time_embed_dim 
-        self.embed = nn.Sequential(
-            GaussianFourierProjection(embed_dim=time_embed_dim),
-            nn.Linear(time_embed_dim, 2*time_embed_dim),
-            nn.Mish(),
-            nn.Linear(2*time_embed_dim, time_embed_dim)
-        ).to(device)
-    
-    def forward(self, t):
-        return self.embed(t)
-
-
-class SinusoidalPosEmbedding(nn.Module):
-    
-    def __init__(self, time_embed_dim, device):
-        super().__init__()
-        self.device = device
-        self.embed = nn.Sequential(
-            SinusoidalPosEmb(time_embed_dim),
-            nn.Linear(time_embed_dim, time_embed_dim * 2),
-            nn.Mish(),
-            nn.Linear(time_embed_dim * 2, time_embed_dim),
-        ).to(self.device)
-    
-    def forward(self, t):
-        return self.embed(t)
-    
-    
-
-class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, dropout=0.1, max_len=5000):
-        super(PositionalEncoding, self).__init__()
-        self.dropout = nn.Dropout(p=dropout)
-
-        pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model))
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0).transpose(0, 1)
-
-        self.register_buffer('pe', pe)
-
-    def forward(self, x):
-        # not used in the final model
-        x = x + self.pe[:x.shape[0], :]
-        return self.dropout(x)
-    
 
 class SinusoidalPosEmb(nn.Module):
     def __init__(self, dim):
@@ -134,87 +58,239 @@ class SinusoidalPosEmb(nn.Module):
         return emb
 
 
-class InputEncoder(nn.Module):
-    
-    def __init__(self, input_dim, latent_dim):
+# copied from https://github.com/yang-song/score_sde_pytorch/blob/main/models/ema.py
+class ExponentialMovingAverage:
+    """
+    Maintains (exponential) moving average of a set of parameters.
+    """
+
+    def __init__(self, parameters, decay, device: str = "cuda", use_num_updates=True):
+        """
+        Args:
+          parameters: Iterable of `torch.nn.Parameter`; usually the result of
+            `model.parameters()`.
+          decay: The exponential decay.
+          use_num_updates: Whether to use number of updates when computing
+            averages.
+        """
+        if decay < 0.0 or decay > 1.0:
+            raise ValueError("Decay must be between 0 and 1")
+        self.decay = decay
+        self._device = device
+        self.num_updates = 0 if use_num_updates else None
+        self.shadow_params = [p.clone().detach() for p in parameters if p.requires_grad]
+        self.collected_params = []
+
+        self.steps = 0
+
+    def update(self, parameters):
+        """
+        Update currently maintained parameters.
+        Call this every time the parameters are updated, such as the result of
+        the `optimizer.step()` call.
+        Args:
+          parameters: Iterable of `torch.nn.Parameter`; usually the same set of
+            parameters used to initialize this object.
+        """
+        decay = self.decay
+        if self.num_updates is not None:
+            self.num_updates += 1
+            decay = min(decay, (1 + self.num_updates) / (10 + self.num_updates))
+        one_minus_decay = 1.0 - decay
+        with torch.no_grad():
+            parameters = [p for p in parameters if p.requires_grad]
+            for s_param, param in zip(self.shadow_params, parameters):
+                s_param.sub_(one_minus_decay * (s_param - param))
+
+    def copy_to(self, parameters):
+        """
+        Copy current parameters into given collection of parameters.
+        Args:
+          parameters: Iterable of `torch.nn.Parameter`; the parameters to be
+            updated with the stored moving averages.
+        """
+        parameters = [p for p in parameters if p.requires_grad]
+        for s_param, param in zip(self.shadow_params, parameters):
+            if param.requires_grad:
+                param.data.copy_(s_param.data)
+
+    def store(self, parameters):
+        """
+        Save the current parameters for restoring later.
+        Args:
+          parameters: Iterable of `torch.nn.Parameter`; the parameters to be
+            temporarily stored.
+        """
+        self.collected_params = [param.clone() for param in parameters]
+
+    def restore(self, parameters):
+        """
+        Restore the parameters stored with the `store` method.
+        Useful to validate the model with EMA parameters without affecting the
+        original optimization process. Store the parameters before the
+        `copy_to` method. After validation (or model saving), use this to
+        restore the former parameters.
+        Args:
+          parameters: Iterable of `torch.nn.Parameter`; the parameters to be
+            updated with the stored parameters.
+        """
+        for c_param, param in zip(self.collected_params, parameters):
+            param.data.copy_(c_param.data)
+
+    def state_dict(self):
+        return dict(
+            decay=self.decay,
+            num_updates=self.num_updates,
+            shadow_params=self.shadow_params,
+        )
+
+    def load_shadow_params(self, parameters):
+        parameters = [p for p in parameters if p.requires_grad]
+        for s_param, param in zip(self.shadow_params, parameters):
+            if param.requires_grad:
+                s_param.data.copy_(param.data)
+
+    def load_state_dict(self, state_dict):
+        self.decay = state_dict["decay"]
+        self.num_updates = state_dict["num_updates"]
+        self.shadow_params = state_dict["shadow_params"]
+
+
+class MinMaxScaler:
+    """
+    Min Max scaler, that scales the output data between -1 and 1 and the input data between 0 and 1.
+    """
+
+    def __init__(self, x_data: np.ndarray, y_data: np.ndarray, device: str):
+        self.device = device
+
+        x_data = x_data.detach().cpu().numpy()
+        y_data = y_data.detach().cpu().numpy()
+
+        with torch.no_grad():
+            self.y_min = torch.from_numpy(y_data.min(0)).to(device)
+            self.y_max = torch.from_numpy(y_data.max(0)).to(device)
+
+            self.new_max_y = torch.ones_like(self.y_max)
+            self.new_min_y = -1 * torch.ones_like(self.y_max)
+
+            self.x_mean = torch.from_numpy(x_data.mean(0)).to(device)
+            self.x_std = torch.from_numpy(x_data.std(0)).to(device)
+
+            self.y_bounds = np.zeros((2, y_data.shape[-1]))
+            self.y_bounds[0, :] = -1 * np.ones_like(y_data.min(0))[:]
+            self.y_bounds[1, :] = np.ones_like(y_data.min(0))[:]
+            self.y_bounds_tensor = torch.from_numpy(self.y_bounds).to(device)
+
+    @torch.no_grad()
+    def scale_input(self, x):
+        """
+        Scales the input tensor `x` based on the defined scaling parameters.
+
+        Args:
+            x (torch.Tensor): The input tensor to be scaled.
+        Returns:
+            torch.Tensor: The scaled input tensor.
+        """
+        x = x.to(self.device)
+        out = (x - self.x_mean) / (
+            self.x_std + 1e-12 * torch.ones((self.x_std.shape), device=self.device)
+        )
+        return out.to(torch.float32)
+
+    @torch.no_grad()
+    def scale_output(self, y):
+        """
+        Scales the output tensor `y` based on the defined scaling parameters.
+        Args:
+            y (torch.Tensor): The output tensor to be scaled.
+        Returns:
+            torch.Tensor: The scaled output tensor.
+        """
+        y = y.to(self.device)
+        out = (y - self.y_min) / (self.y_max - self.y_min) * (
+            self.new_max_y - self.new_min_y
+        ) + self.new_min_y
+        return out.to(torch.float32)
+
+    @torch.no_grad()
+    def inverse_scale_input(self, x):
+        """
+        Inversely scales the input tensor `x` based on the defined scaling parameters.
+
+        Args:
+            x (torch.Tensor): The input tensor to be inversely scaled.
+        Returns:
+            torch.Tensor: The inversely scaled input tensor.
+        """
+        out = x * (
+            self.x_std + 1e-12 * torch.ones((self.x_std.shape), device=self.device)
+        )
+        out += self.x_mean
+        return out.to(torch.float32)
+
+    @torch.no_grad()
+    def inverse_scale_output(self, y):
+        """
+        Inversely scales the output tensor `y` based on the defined scaling parameters.
+
+        Args:
+            y (torch.Tensor): The output tensor to be inversely scaled.
+        Returns:
+            torch.Tensor: The inversely scaled output tensor.
+        """
+        y.to(self.device)
+        out = (y - self.new_min_y) / (self.new_max_y - self.new_min_y) * (
+            self.y_max - self.y_min
+        ) + self.y_min
+        return out
+
+    @torch.no_grad()
+    def clip_action(self, y):
+        """
+        Clips the input tensor `y` based on the defined action bounds.
+        """
+        return (
+            torch.clamp(
+                y, self.y_bounds_tensor[0, :] * 1.1, self.y_bounds_tensor[1, :] * 1.1
+            )
+            .to(self.device)
+            .to(torch.float32)
+        )
+
+
+# code adapted from
+# https://github.com/GuyTevet/motion-diffusion-model/blob/55cd84e14ba8e0e765700913023259b244f5e4ed/model/cfg_sampler.py
+class ClassifierFreeSampleModel(nn.Module):
+    """
+    A wrapper model that adds conditional sampling capabilities to an existing model.
+
+    Args:
+        model (nn.Module): The underlying model to run.
+        cond_lambda (float): Optional. The conditional lambda value. Defaults to 2.
+
+    Attributes:
+        model (nn.Module): The underlying model.
+        cond_lambda (float): The conditional lambda value.
+    """
+
+    def __init__(self, model, cond_lambda: float):
         super().__init__()
-        
-        self.input_dim = input_dim
-        self.latent_dim = latent_dim
-        
-        self.emb = nn.Linear(self.input_dim, self.latent_dim)
-        
-    def forward(self, x):
-        return self.emb(x)
+        # TODO: refactor this into beso agent
+        self.model = model
+        self.cond_lambda = cond_lambda
 
+    def forward(self, x_t, cond, sigma, goal):
 
-class TEncoder(nn.Module):
-    
-    def __init__(self, input_dim, latent_dim):
-        super().__init__()
-        
-        self.input_dim = input_dim
-        self.latent_dim = latent_dim
-        
-        self.emb = nn.Linear(self.input_dim, self.latent_dim)
-        
-    def forward(self, x):
-        return self.emb(x)
-    
+        # unconditional output
+        uncond_dict = {"uncond": True}
+        out_uncond = self.model(x_t, cond, sigma, goal, **uncond_dict)
 
-def append_dims(x, target_dims):
-    """Appends dimensions to the end of a tensor until it has target_dims dimensions."""
-    dims_to_append = target_dims - x.ndim
-    if dims_to_append < 0:
-        raise ValueError(f'input has {x.ndim} dims but target_dims is {target_dims}, which is less')
-    return x[(...,) + (None,) * dims_to_append]
+        if goal.sum() != 0:
+            out_cond = self.model(x_t, cond, sigma, goal)
+            out_uncond += self.cond_lambda * (out_cond - out_uncond)
 
+        return out_uncond
 
-def rand_log_normal(shape, loc=0., scale=1., device='cpu', dtype=torch.float32):
-    """Draws samples from a lognormal distribution."""
-    return (torch.randn(shape, device=device, dtype=dtype) * scale + loc).exp()
-
-
-def rand_log_logistic(shape, loc=0., scale=1., min_value=0., max_value=float('inf'), device='cpu', dtype=torch.float32):
-    """Draws samples from an optionally truncated log-logistic distribution."""
-    min_value = torch.as_tensor(min_value, device=device, dtype=torch.float64)
-    max_value = torch.as_tensor(max_value, device=device, dtype=torch.float64)
-    min_cdf = min_value.log().sub(loc).div(scale).sigmoid()
-    max_cdf = max_value.log().sub(loc).div(scale).sigmoid()
-    u = torch.rand(shape, device=device, dtype=torch.float64) * (max_cdf - min_cdf) + min_cdf
-    return u.logit().mul(scale).add(loc).exp().to(dtype)
-
-
-def rand_log_uniform(shape, min_value, max_value, device='cpu', dtype=torch.float32):
-    """Draws samples from an log-uniform distribution."""
-    min_value = math.log(min_value)
-    max_value = math.log(max_value)
-    return (torch.rand(shape, device=device, dtype=dtype) * (max_value - min_value) + min_value).exp()
-
-
-def rand_uniform(shape, min_value, max_value, device='cpu', dtype=torch.float32):
-    """Draws samples from an uniform distribution."""
-    return torch.rand(shape, device=device, dtype=dtype) * (max_value - min_value) + min_value
-
-
-def rand_discrete(shape, values, device='cpu', dtype=torch.float32):
-    probs = [1/len(values)] * len(values) # set equal probability for all values
-    return torch.tensor(np.random.choice(values, size=shape, p=probs), device=device, dtype=dtype)
-
-
-def rand_v_diffusion(shape, sigma_data=1., min_value=0., max_value=float('inf'), device='cpu', dtype=torch.float32):
-    """Draws samples from a truncated v-diffusion training timestep distribution."""
-    min_cdf = math.atan(min_value / sigma_data) * 2 / math.pi
-    max_cdf = math.atan(max_value / sigma_data) * 2 / math.pi
-    u = torch.rand(shape, device=device, dtype=dtype) * (max_cdf - min_cdf) + min_cdf
-    return torch.tan(u * math.pi / 2) * sigma_data
-
-
-def rand_split_log_normal(shape, loc, scale_1, scale_2, device='cpu', dtype=torch.float32):
-    """Draws samples from a split lognormal distribution."""
-    n = torch.randn(shape, device=device, dtype=dtype).abs()
-    u = torch.rand(shape, device=device, dtype=dtype)
-    n_left = n * -scale_1 + loc
-    n_right = n * scale_2 + loc
-    ratio = scale_1 / (scale_1 + scale_2)
-    return torch.where(u < ratio, n_left, n_right).exp()
+    def get_params(self):
+        return self.model.get_params()

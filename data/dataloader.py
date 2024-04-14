@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch.utils.data import TensorDataset
 
-from beso.networks.scaler.scaler_class import MinMaxScaler
+from beso.agent.utils import MinMaxScaler
 from data.trajectory_loader import TrajectoryDataset, get_train_val_sliced
 
 
@@ -33,7 +33,6 @@ def get_raisim_train_val(
     scaler = MinMaxScaler(
         train_set.dataset.dataset.get_all_observations(),
         train_set.dataset.dataset.get_all_actions(),
-        True,
         device,
     )
 
