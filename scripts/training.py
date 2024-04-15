@@ -30,8 +30,8 @@ def main(cfg: DictConfig) -> None:
         mode = "online"
 
     # set the observation dimension
-    cfg["obs_dim"] = 34
-    cfg["pred_obs_dim"] = 34
+    cfg["obs_dim"] = 38
+    cfg["pred_obs_dim"] = 35
 
     # init wandb
     wandb.config = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)

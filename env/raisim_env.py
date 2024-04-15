@@ -87,7 +87,7 @@ class RaisimEnv:
         total_rewards = 0
         total_dones = 0
         self.skill = np.zeros((self.num_envs, 1))
-        self.generate_goal()
+        # self.generate_goal()
 
         agent.reset()  # this is incorrect
         obs = self.env.reset()
@@ -116,8 +116,8 @@ class RaisimEnv:
                     total_rewards += reward.mean()
 
                     # switch skill
-                    if not n % 150:
-                        self.generate_goal()
+                    # if not n % 150:
+                    #     self.generate_goal()
 
                     delta = time.time() - start
                     if delta < 0.04 and real_time:
@@ -142,7 +142,7 @@ class RaisimEnv:
         self.set_goal(self.goal)
 
     def process_obs(self, obs):
-        obs = np.concatenate((obs, self.skill), axis=-1)
+        # obs = np.concatenate((obs, self.skill), axis=-1)
         return torch.from_numpy(obs).to(self.device)
 
     def get_frame_cartesian_pos(self):

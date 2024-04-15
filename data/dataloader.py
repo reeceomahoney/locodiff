@@ -128,10 +128,10 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
 
     def split_data(self):
         # Add skill to the observations
-        self.observations = np.concatenate(
-            [self.observations, np.zeros_like(self.observations[:, :, :1])], axis=-1
-        )
-        B = self.observations.shape[0]
+        # self.observations = np.concatenate(
+        #     [self.observations, np.zeros_like(self.observations[:, :, :1])], axis=-1
+        # )
+        # B = self.observations.shape[0]
         # self.observations[: B // 2, :, -1] = 0
         # self.observations[B // 2 :, :, -1] = 1
 

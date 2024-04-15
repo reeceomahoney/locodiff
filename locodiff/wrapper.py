@@ -22,15 +22,10 @@ class GCDenoiser(nn.Module):
         sigma_data: The data sigma for scalings (default: 1.0).
     """
 
-    def __init__(self, inner_model, sigma_data, T, T_cond):
+    def __init__(self, inner_model, sigma_data):
         super().__init__()
         self.inner_model = hydra.utils.instantiate(inner_model)
         self.sigma_data = sigma_data
-        self.T = T
-        self.T_cond = T_cond
-        self.obs_dim = inner_model.obs_dim
-        self.pred_obs_dim = inner_model.pred_obs_dim
-        self.act_dim = inner_model.act_dim
 
     def get_scalings(self, sigma):
         """
@@ -46,7 +41,7 @@ class GCDenoiser(nn.Module):
         c_in = 1 / (sigma**2 + self.sigma_data**2) ** 0.5
         return c_skip, c_out, c_in
 
-    def loss(self, state_action, noise, sigma, **kwargs):
+    def loss(self, x, cond, noise, sigma, **kwargs):
         """
         Compute the loss for the denoising process.
 
@@ -59,10 +54,6 @@ class GCDenoiser(nn.Module):
         Returns:
             The computed loss.
         """
-        # split into past and future states
-        cond = state_action[:, : self.T_cond, : self.obs_dim]
-        x = state_action[:, self.T_cond - 1 :, :]
-
         noised_input = x + noise * sigma.view(-1, 1, 1)
 
         c_skip, c_out, c_in = [x.view(-1, 1, 1) for x in self.get_scalings(sigma)]

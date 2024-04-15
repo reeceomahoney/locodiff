@@ -2,7 +2,7 @@ defaults:
   - agents: agent
   - _self_
 
-data_path: fwd
+data_path: rand
 
 hydra:
   run:
@@ -15,7 +15,7 @@ wandb:
 # general params
 device: 'cuda'
 seed: 6
-T: 20
+T: 125
 T_cond: 2
 T_action: 1
 

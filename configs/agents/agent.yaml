@@ -36,8 +36,6 @@ model:
   _recursive_: false
 
   sigma_data: ${sigma_data}
-  T: ${T}
-  T_cond: ${T_cond}
 
   inner_model:
     _target_: locodiff.transformer.DiffusionTransformer

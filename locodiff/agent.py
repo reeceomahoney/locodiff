@@ -150,7 +150,9 @@ class Agent:
 
     def train_step(self, batch: dict):
         state, action, _ = self.process_batch(batch)
-        state_action = torch.cat([state, action], dim=-1)
+        cond = state[:, : self.T_cond]
+        x = torch.cat([state[..., : self.pred_obs_dim], action], dim=-1)
+        x = x[:, self.T_cond - 1 :]
 
         self.model.train()
         self.model.training = True
@@ -158,7 +160,7 @@ class Agent:
         sa_dim = self.pred_obs_dim + self.action_dim
         noise = torch.randn((state.shape[0], self.T + 1, sa_dim)).to(self.device)
         sigma = self.make_sample_density()(shape=(len(action),), device=self.device)
-        loss = self.model.loss(state_action, noise, sigma)
+        loss = self.model.loss(x, cond, noise, sigma)
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -194,10 +196,10 @@ class Agent:
         x = x.to(self.device)
 
         # generate the action based on the chosen sampler type
-        state_action = torch.cat([state, action], dim=-1)
-        cond = state_action[:, : self.T_cond, : self.obs_dim]
+        cond = state[:, : self.T_cond]
         x_0 = self.sample_ddim(x, sigmas, cond)
 
+        state_action = torch.cat([state[..., : self.pred_obs_dim], action], dim=-1)
         mse = nn.functional.mse_loss(
             x_0, state_action[:, self.T_cond - 1 :, :], reduction="none"
         )
