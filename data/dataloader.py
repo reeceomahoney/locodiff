@@ -9,6 +9,8 @@ from torch.utils.data import TensorDataset
 from locodiff.utils import MinMaxScaler
 from data.trajectory_loader import TrajectoryDataset, get_train_val_sliced
 
+log = logging.getLogger(__name__)
+
 
 def get_raisim_train_val(
     data_directory,
@@ -80,17 +82,17 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         self.observations = data["observations"]
         self.actions = data["actions"]
         self.terminals = data["terminals"]
-        self.preprocess()
         self.split_data()
 
         self.observations = torch.from_numpy(self.observations).to(device).float()
         self.actions = torch.from_numpy(self.actions).to(device).float()
         self.masks = torch.from_numpy(self.masks).to(device).float()
+        self.cmds = torch.from_numpy(self.cmds).to(device).float()
 
-        logging.info(
+        log.info(
             f"Dataset size - Observations: {list(self.observations.size())} - Actions: {list(self.actions.size())}"
         )
-        tensors = [self.observations, self.actions, self.masks]
+        tensors = [self.observations, self.actions, self.masks, self.cmds]
 
         # The current values are in shape N x T x Dim, so all is good in the world.
         TensorDataset.__init__(self, *tensors)
@@ -113,18 +115,6 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
             T = int(self.masks[i].sum().item())
             result.append(self.observations[i, :T, :])
         return torch.cat(result, dim=0)
-
-    def preprocess(self):
-        if self.data_directory == "rand_feet" or self.data_directory == "rand_feet_com":
-            self.observations = np.concatenate(
-                [self.observations[:, :, :36], self.observations[:, :, 48:]], axis=-1
-            )
-        else:
-            self.observations = self.observations[..., : self.obs_dim]
-
-        # To split episodes correctly
-        self.terminals[:, 0] = 1
-        self.terminals[0, 0] = 0
 
     def split_data(self):
         # Add skill to the observations
@@ -169,6 +159,10 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         masks_initial_pad = np.ones((self.masks.shape[0], self.T_cond - 1))
         self.masks = np.concatenate([masks_initial_pad, self.masks], axis=1)
 
+        # Add cmds
+        self.cmds = self.observations[:, 0, -3:]
+        self.observations = self.observations[:, :, :-3]
+
     def pad_and_stack(self, splits, max_len):
         """Pad the sequences and stack them into a tensor"""
         return np.stack(
@@ -196,3 +190,15 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
     def __getitem__(self, idx):
         T = self.masks[idx].sum().int().item()
         return tuple(x[idx, :T] for x in self.tensors)
+
+
+if __name__ == "__main__":
+    data_directory = "rand_pos"
+    future_seq_len = 125
+    obs_dim = 35
+    T_cond = 2
+    device = "cuda"
+
+    dataset = RaisimTrajectoryDataset(
+        data_directory, future_seq_len, obs_dim, T_cond, device
+    )

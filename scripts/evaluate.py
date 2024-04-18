@@ -8,6 +8,7 @@ import hydra
 import wandb
 from omegaconf import DictConfig, OmegaConf
 import torch
+from tqdm import tqdm
 
 from env.raisim_env import RaisimEnv
 
@@ -38,8 +39,8 @@ def main(cfg: DictConfig) -> None:
     model_cfg.env["max_time"] = 6
 
     # set the observation dimension
-    model_cfg["obs_dim"] = 34
-    model_cfg["pred_obs_dim"] = 34
+    model_cfg["obs_dim"] = 35
+    model_cfg["pred_obs_dim"] = 35
     model_cfg["T_action"] = 1
 
     # set seeds
@@ -76,7 +77,7 @@ def main(cfg: DictConfig) -> None:
         if cfg["test_timestep_mse"]:
             inference_steps = [1, 2, 3, 4, 5, 10, 20, 40, 50]
             results = []
-            for step in inference_steps:
+            for step in tqdm(inference_steps):
                 agent.num_sampling_steps = step
                 info = agent.evaluate(batch)
                 results.append(info["timestep_mse"].cpu().numpy())
@@ -85,6 +86,7 @@ def main(cfg: DictConfig) -> None:
                 plt.plot(
                     np.arange(1, len(result) + 1),
                     result,
+                    "x-",
                     label=f"{inference_steps[i]} inference steps",
                 )
         if cfg["test_total_mse"]:
@@ -95,17 +97,43 @@ def main(cfg: DictConfig) -> None:
                 info = agent.evaluate(batch)
                 results.append(info["total_mse"])
             plt.plot(inference_steps, results, "x")
-        elif cfg["test_observation_error"]:
+        if cfg["test_observation_error"]:
             info = agent.evaluate(batch)
             results = info["mse"].cpu().numpy().mean(axis=(0, 1))
             plt.bar(range(len(results)), results)
+        if cfg["visualize x-y trajectory"]:
+            agent.num_sampling_steps = 50
+            info = agent.evaluate(batch)
+            obs = batch["observation"].cpu().numpy()
+            results = info["x_0"].cpu().numpy()
 
-        plt.yscale("log")
-        plt.legend()
-        if socket.gethostname() == "ori-drs-sid":
+            fig, axs = plt.subplots(4, 4, figsize=(15, 15))
+            axs = axs.flatten()
+
+            for i in range(16):
+                axs[i].plot(obs[i, :, 0], obs[i, :, 1], "o-", label="observed")
+                axs[i].plot(obs[i, 0, 0], obs[i, 0, 1], "go", label="Start")
+                axs[i].plot(obs[i, -1, 0], obs[i, -1, 1], "ro", label="End")
+
+                axs[i].plot(results[i, :, 0], results[i, :, 1], "x-", label="predicted")
+                axs[i].plot(results[i, 0, 0], results[i, 0, 1], "gx", label="Start")
+                axs[i].plot(results[i, -1, 0], results[i, -1, 1], "rx", label="End")
+
+                vel_cmd = batch["cmd"].cpu().numpy()
+                vel_cmd_str = ", ".join(f"{num:.2f}" for num in vel_cmd[i])
+                axs[i].set_title(f"cmd: [ {vel_cmd_str} ]") 
+                axs[i].legend()
+
+            plt.tight_layout()
             plt.show()
-        else:
-            plt.savefig("results.png")
+
+        if not cfg["visualize x-y trajectory"]:
+            plt.yscale("log")
+            plt.legend()
+            if socket.gethostname() == "ori-drs-sid":
+                plt.show()
+            else:
+                plt.savefig("results.png")
 
 if __name__ == "__main__":
     main()

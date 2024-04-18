@@ -57,7 +57,7 @@ class GCDenoiser(nn.Module):
         noised_input = x + noise * sigma.view(-1, 1, 1)
 
         c_skip, c_out, c_in = [x.view(-1, 1, 1) for x in self.get_scalings(sigma)]
-        model_output = self.inner_model(noised_input * c_in, cond, sigma)
+        model_output = self.inner_model(noised_input * c_in, cond, sigma, **kwargs)
         target = (x - c_skip * noised_input) / c_out
 
         loss = (model_output - target).pow(2).mean()
@@ -80,7 +80,7 @@ class GCDenoiser(nn.Module):
         c_skip, c_out, c_in = [
             append_dims(x, x_t.ndim) for x in self.get_scalings(sigma)
         ]
-        return self.inner_model(x_t * c_in, cond, sigma) * c_out + x_t * c_skip
+        return self.inner_model(x_t * c_in, cond, sigma, **kwargs) * c_out + x_t * c_skip
 
     def get_params(self):
         return self.inner_model.parameters()

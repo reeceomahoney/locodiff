@@ -54,7 +54,7 @@ class RaisimEnv:
         else:
             frames = self.get_frame_cartesian_pos()
             base_pos = frames[:, :2]
-            obs = np.concatenate([base_pos, self._observation[:, :36]], axis=-1)
+            obs = np.concatenate([base_pos, self._observation[:, :33]], axis=-1)
 
         return obs
 
@@ -86,7 +86,7 @@ class RaisimEnv:
         log.info("Starting trained model evaluation")
         total_rewards = 0
         total_dones = 0
-        self.skill = np.zeros((self.num_envs, 1))
+        cmd = torch.from_numpy(np.zeros((self.num_envs, 3))).to(self.device).float()
         # self.generate_goal()
 
         agent.reset()  # this is incorrect
@@ -105,7 +105,7 @@ class RaisimEnv:
                     total_dones += np.ones(done.shape, dtype="int64")
 
                 pred_action = agent.predict(
-                    {"observation": obs},
+                    {"observation": obs, "cmd": cmd},
                     new_sampling_steps=n_inference_steps,
                 )
                 pred_action = pred_action.detach().cpu().numpy()
@@ -142,7 +142,7 @@ class RaisimEnv:
         self.set_goal(self.goal)
 
     def process_obs(self, obs):
-        # obs = np.concatenate((obs, self.skill), axis=-1)
+        # obs = np.concatenate((obs, np.zeros_like(obs[..., 0:2])), axis=-1)
         return torch.from_numpy(obs).to(self.device)
 
     def get_frame_cartesian_pos(self):

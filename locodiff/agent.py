@@ -149,7 +149,7 @@ class Agent:
         log.info("Training done!")
 
     def train_step(self, batch: dict):
-        state, action, _ = self.process_batch(batch)
+        state, action, cmd = self.process_batch(batch)
         cond = state[:, : self.T_cond]
         x = torch.cat([state[..., : self.pred_obs_dim], action], dim=-1)
         x = x[:, self.T_cond - 1 :]
@@ -160,7 +160,7 @@ class Agent:
         sa_dim = self.pred_obs_dim + self.action_dim
         noise = torch.randn((state.shape[0], self.T + 1, sa_dim)).to(self.device)
         sigma = self.make_sample_density()(shape=(len(action),), device=self.device)
-        loss = self.model.loss(x, cond, noise, sigma)
+        loss = self.model.loss(x, cond, noise, sigma, cmd=cmd)
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -178,7 +178,7 @@ class Agent:
         """
         Evaluates the model using the provided batch of data and returns the mean squared error (MSE) loss.
         """
-        state, action, _ = self.process_batch(batch)
+        state, action, cmd = self.process_batch(batch)
 
         if self.use_ema:
             self.ema_helper.store(self.model.parameters())
@@ -197,7 +197,8 @@ class Agent:
 
         # generate the action based on the chosen sampler type
         cond = state[:, : self.T_cond]
-        x_0 = self.sample_ddim(x, sigmas, cond)
+        goal_pos = state[:, -1, :self.pred_obs_dim]
+        x_0 = self.sample_ddim(x, sigmas, cond, cmd, goal_pos)
 
         state_action = torch.cat([state[..., : self.pred_obs_dim], action], dim=-1)
         mse = nn.functional.mse_loss(
@@ -227,6 +228,7 @@ class Agent:
             "first_mse": first_mse,
             "last_mse": last_mse,
             "timestep_mse": timestep_mse,
+            "x_0": x_0,
         }
         return info
 
@@ -240,7 +242,7 @@ class Agent:
         """
         Predicts the output of the model based on the provided batch of data.
         """
-        state, _, _ = self.process_batch(batch)
+        state, _, cmd = self.process_batch(batch)
 
         input_state = self.stack_context(state)
 
@@ -264,7 +266,7 @@ class Agent:
         x *= self.sigma_max
 
         cond = input_state
-        x_0 = self.sample_ddim(x, sigmas, cond)
+        x_0 = self.sample_ddim(x, sigmas, cond, cmd)
 
         # get the action for the current timestep
         x_0 = x_0[:, : self.T_action, self.pred_obs_dim :]
@@ -296,7 +298,7 @@ class Agent:
         return input_state
 
     @torch.no_grad()
-    def sample_ddim(self, x_t, sigmas, cond):
+    def sample_ddim(self, x_t, sigmas, cond, cmd, goal_pos):
         """
         Sample from the model using the DDIM sampler
 
@@ -313,10 +315,13 @@ class Agent:
         t_fn = lambda sigma: sigma.log().neg()
 
         for i in trange(len(sigmas) - 1, disable=disable):
-            denoised = self.model(x_t, cond, sigmas[i] * s_in)
+            denoised = self.model(x_t, cond, sigmas[i] * s_in, cmd=cmd)
             t, t_next = t_fn(sigmas[i]), t_fn(sigmas[i + 1])
             h = t_next - t
             x_t = (sigma_fn(t_next) / sigma_fn(t)) * x_t - (-h).expm1() * denoised
+            
+            # add the goal to the state
+            # x_t[:, -1, :self.pred_obs_dim] = goal_pos
 
         return x_t
 
@@ -382,9 +387,9 @@ class Agent:
         if action is not None:
             action = self.scaler.scale_output(action)
 
-        goal = get_to_device("goal")
+        cmd = get_to_device("cmd")
 
-        return state, action, goal
+        return state, action, cmd
 
     def get_constraints(self, state: torch.Tensor) -> torch.Tensor:
         """

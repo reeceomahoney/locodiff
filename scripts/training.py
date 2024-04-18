@@ -26,11 +26,12 @@ def main(cfg: DictConfig) -> None:
     if sys.gettrace() is not None:
         mode = "disabled"
         cfg["sim_every_n_steps"] = 10
+        cfg["num_hidden_layers"] = 1
     else:
         mode = "online"
 
     # set the observation dimension
-    cfg["obs_dim"] = 38
+    cfg["obs_dim"] = 35
     cfg["pred_obs_dim"] = 35
 
     # init wandb
