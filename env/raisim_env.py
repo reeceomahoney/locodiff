@@ -44,19 +44,20 @@ class RaisimEnv:
 
     def step(self, action):
         self.env.step(action, self._reward, self._done)
-        return self.observe(), self._reward.copy(), self._done.copy()
+        return *self.observe(), self._reward.copy(), self._done.copy()
 
     def observe(self, update_statistics=False):
         self.env.observe(self._observation, update_statistics)
 
-        if self.dataset.startswith("fwd"):
-            obs = self._observation[:, :33]
-        else:
-            frames = self.get_frame_cartesian_pos()
-            base_pos = frames[:, :2]
-            obs = np.concatenate([base_pos, self._observation[:, :33]], axis=-1)
+        frames = self.get_frame_cartesian_pos()
+        base_pos = frames[:, :2]
+        obs = np.concatenate([base_pos, self._observation[:, :33]], axis=-1)
+        cmd = self._observation[:, 33:36]
 
-        return obs
+        obs = torch.from_numpy(obs).to(self.device)
+        cmd = torch.from_numpy(cmd).to(self.device)
+
+        return obs, cmd
 
     def reset(self, conditional_reset=False):
         self._reward = np.zeros(self.num_envs, dtype=np.float32)
@@ -67,7 +68,6 @@ class RaisimEnv:
             self.env.conditionalReset()
             return self.env.conditionalResetFlags()
 
-        # return [True] * self.num_envs
         return self.observe()
 
     def close(self):
@@ -82,18 +82,16 @@ class RaisimEnv:
         """
         Test the agent on the environment with the given goal function
         """
-        # TOOD: refactor this into the env
         log.info("Starting trained model evaluation")
-        total_rewards = 0
-        total_dones = 0
-        cmd = torch.from_numpy(np.zeros((self.num_envs, 3))).to(self.device).float()
-        # self.generate_goal()
 
-        agent.reset()  # this is incorrect
-        obs = self.env.reset()
+        total_rewards, total_dones = 0, 0
+        # self.generate_goal()
+        agent.reset()  # TODO: this is incorrect, needs to reset episodes separately
+        self.env.reset()
+
         for _ in range(self.eval_n_times):
             done = np.array([False])
-            obs = self.process_obs(self.observe())
+            obs, cmd = self.observe()
 
             # now run the agent for n steps
             for n in tqdm(range(self.eval_n_steps)):
@@ -111,8 +109,7 @@ class RaisimEnv:
                 pred_action = pred_action.detach().cpu().numpy()
 
                 for i in range(self.T_action):
-                    obs, reward, done = self.step(pred_action[:, i])
-                    obs = self.process_obs(obs)
+                    obs, cmd, reward, done = self.step(pred_action[:, i])
                     total_rewards += reward.mean()
 
                     # switch skill
@@ -140,10 +137,6 @@ class RaisimEnv:
     def generate_goal(self):
         self.goal = np.random.uniform(-4, 4, (self.num_envs, 2)).astype(np.float32)
         self.set_goal(self.goal)
-
-    def process_obs(self, obs):
-        # obs = np.concatenate((obs, np.zeros_like(obs[..., 0:2])), axis=-1)
-        return torch.from_numpy(obs).to(self.device)
 
     def get_frame_cartesian_pos(self):
         self.env.getFrameCartesianPositions(self._frame_cartesian_pos)

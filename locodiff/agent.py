@@ -298,7 +298,7 @@ class Agent:
         return input_state
 
     @torch.no_grad()
-    def sample_ddim(self, x_t, sigmas, cond, cmd, goal_pos):
+    def sample_ddim(self, x_t, sigmas, cond, cmd, goal_pos=None):
         """
         Sample from the model using the DDIM sampler
 
