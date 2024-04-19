@@ -256,8 +256,8 @@ class Agent:
         x_0 = self.sample_ddim(x, sigmas, state_in, cmd)
 
         # get the action for the current timestep
+        x_0 = self.scaler.clip_action(x_0)
         model_pred = self.scaler.inverse_scale_output(x_0)
-        model_pred = self.scaler.clip_action(model_pred)
         model_pred = model_pred[:, : self.T_action, self.pred_obs_dim :]
 
         if self.use_ema:
