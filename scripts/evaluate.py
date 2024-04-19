@@ -20,9 +20,7 @@ OmegaConf.register_new_resolver("add", lambda *numbers: sum(numbers))
 torch.cuda.empty_cache()
 
 
-@hydra.main(
-    config_path="../configs", config_name="evaluate.yaml", version_base=None
-)
+@hydra.main(config_path="../configs", config_name="evaluate.yaml", version_base=None)
 def main(cfg: DictConfig) -> None:
     if cfg.log_wandb:
         wandb.init(project="beso_eval", mode="disabled", config=wandb.config)
@@ -86,7 +84,6 @@ def main(cfg: DictConfig) -> None:
                 plt.plot(
                     np.arange(1, len(result) + 1),
                     result,
-                    "x-",
                     label=f"{inference_steps[i]} inference steps",
                 )
         if cfg["test_total_mse"]:
@@ -105,30 +102,32 @@ def main(cfg: DictConfig) -> None:
             agent.num_sampling_steps = 50
             info = agent.evaluate(batch)
             obs = batch["observation"].cpu().numpy()
-            results = info["x_0"].cpu().numpy()
+            vel_cmd = batch["cmd"].cpu().numpy()
+            results = info["prediction"].cpu().numpy()
 
             fig, axs = plt.subplots(4, 4, figsize=(15, 15))
             axs = axs.flatten()
 
+            T_cond = model_cfg["T_cond"]
             for i in range(16):
-                axs[i].plot(obs[i, :, 0], obs[i, :, 1], "o-", label="observed")
-                axs[i].plot(obs[i, 0, 0], obs[i, 0, 1], "go", label="Start")
-                axs[i].plot(obs[i, -1, 0], obs[i, -1, 1], "ro", label="End")
+                gt = obs[i, T_cond - 1 :, :2]
+                axs[i].plot(gt[:, 0], gt[:, 1], "o-", label="observed")
+                axs[i].plot(gt[0, 0], gt[0, 1], "go", label="Start")
+                axs[i].plot(gt[-1, 0], gt[-1, 1], "ro", label="End")
 
-                axs[i].plot(results[i, :, 0], results[i, :, 1], "x-", label="predicted")
-                axs[i].plot(results[i, 0, 0], results[i, 0, 1], "gx", label="Start")
-                axs[i].plot(results[i, -1, 0], results[i, -1, 1], "rx", label="End")
+                pred = results[i, :, :2]
+                axs[i].plot(pred[:, 0], pred[:, 1], "x-", label="predicted")
+                axs[i].plot(pred[0, 0], pred[0, 1], "gx", label="Start")
+                axs[i].plot(pred[-1, 0], pred[-1, 1], "rx", label="End")
 
-                vel_cmd = batch["cmd"].cpu().numpy()
                 vel_cmd_str = ", ".join(f"{num:.2f}" for num in vel_cmd[i])
-                axs[i].set_title(f"cmd: [ {vel_cmd_str} ]") 
+                axs[i].set_title(f"cmd: [ {vel_cmd_str} ]")
                 axs[i].legend()
 
             plt.tight_layout()
             plt.show()
 
         if not cfg["visualize x-y trajectory"]:
-            plt.yscale("log")
             plt.legend()
             if socket.gethostname() == "ori-drs-sid":
                 plt.show()

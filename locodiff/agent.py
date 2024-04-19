@@ -149,18 +149,14 @@ class Agent:
         log.info("Training done!")
 
     def train_step(self, batch: dict):
-        state, action, cmd = self.process_batch(batch)
-        cond = state[:, : self.T_cond]
-        x = torch.cat([state[..., : self.pred_obs_dim], action], dim=-1)
-        x = x[:, self.T_cond - 1 :]
+        state_in, sa_out, cmd = self.process_batch(batch)
 
         self.model.train()
         self.model.training = True
 
-        sa_dim = self.pred_obs_dim + self.action_dim
-        noise = torch.randn((state.shape[0], self.T + 1, sa_dim)).to(self.device)
-        sigma = self.make_sample_density()(shape=(len(action),), device=self.device)
-        loss = self.model.loss(x, cond, noise, sigma, cmd=cmd)
+        noise = torch.randn_like(sa_out)
+        sigma = self.make_sample_density()(shape=(len(sa_out),), device=self.device)
+        loss = self.model.loss(sa_out, state_in, noise, sigma, cmd=cmd)
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -178,7 +174,7 @@ class Agent:
         """
         Evaluates the model using the provided batch of data and returns the mean squared error (MSE) loss.
         """
-        state, action, cmd = self.process_batch(batch)
+        state_in, sa_out, cmd = self.process_batch(batch)
 
         if self.use_ema:
             self.ema_helper.store(self.model.parameters())
@@ -190,20 +186,11 @@ class Agent:
         sigmas = utils.get_sigmas_exponential(
             self.num_sampling_steps, self.sigma_min, self.sigma_max, self.device
         )
+        x = torch.randn_like(sa_out) * self.sigma_max
+        goal_pos = sa_out[:, -1, : self.pred_obs_dim]
+        x_0 = self.sample_ddim(x, sigmas, state_in, cmd, goal_pos)
 
-        sa_dim = self.pred_obs_dim + self.action_dim
-        x = torch.randn((state.shape[0], self.T + 1, sa_dim)) * self.sigma_max
-        x = x.to(self.device)
-
-        # generate the action based on the chosen sampler type
-        cond = state[:, : self.T_cond]
-        goal_pos = state[:, -1, :self.pred_obs_dim]
-        x_0 = self.sample_ddim(x, sigmas, cond, cmd, goal_pos)
-
-        state_action = torch.cat([state[..., : self.pred_obs_dim], action], dim=-1)
-        mse = nn.functional.mse_loss(
-            x_0, state_action[:, self.T_cond - 1 :, :], reduction="none"
-        )
+        mse = nn.functional.mse_loss(x_0, sa_out, reduction="none")
         total_mse = mse.mean().item()
         self.total_mse = total_mse
 
@@ -215,6 +202,8 @@ class Agent:
         first_mse = mse[:, 0, :].mean().item()
         last_mse = mse[:, -1, :].mean().item()
         timestep_mse = mse.mean(dim=(0, 2))
+
+        prediction = self.scaler.inverse_scale_output(x_0)[..., : self.pred_obs_dim]
 
         # restore the previous model parameters
         if self.use_ema:
@@ -228,7 +217,7 @@ class Agent:
             "first_mse": first_mse,
             "last_mse": last_mse,
             "timestep_mse": timestep_mse,
-            "x_0": x_0,
+            "prediction": prediction,
         }
         return info
 
@@ -242,9 +231,8 @@ class Agent:
         """
         Predicts the output of the model based on the provided batch of data.
         """
-        state, _, cmd = self.process_batch(batch)
-
-        input_state = self.stack_context(state)
+        batch["observation"] = self.stack_context(batch["observation"])
+        state_in, _, cmd = self.process_batch(batch)
 
         if new_sampling_steps is not None:
             n_sampling_steps = new_sampling_steps
@@ -265,16 +253,15 @@ class Agent:
         x = torch.randn((self.num_envs, self.T + 1, sa_dim), device=self.device)
         x *= self.sigma_max
 
-        cond = input_state
-        x_0 = self.sample_ddim(x, sigmas, cond, cmd)
+        x_0 = self.sample_ddim(x, sigmas, state_in, cmd)
 
         # get the action for the current timestep
-        x_0 = x_0[:, : self.T_action, self.pred_obs_dim :]
-        x_0 = self.scaler.clip_action(x_0)
+        model_pred = self.scaler.inverse_scale_output(x_0)
+        model_pred = self.scaler.clip_action(model_pred)
+        model_pred = model_pred[:, : self.T_action, self.pred_obs_dim :]
 
         if self.use_ema:
             self.ema_helper.restore(self.model.parameters())
-        model_pred = self.scaler.inverse_scale_output(x_0)
         # self.action_context.append(x_0)
         return model_pred
 
@@ -381,15 +368,19 @@ class Agent:
         )
 
         state = get_to_device("observation")
-        state = self.scaler.scale_input(state)
-
         action = get_to_device("action")
-        if action is not None:
-            action = self.scaler.scale_output(action)
-
         cmd = get_to_device("cmd")
 
-        return state, action, cmd
+        state_in = self.scaler.scale_input(state[:, : self.T_cond])
+        if action is not None:
+            sa_out = self.scaler.scale_output(
+                torch.cat([state[..., : self.pred_obs_dim], action], dim=-1)
+            )
+            sa_out = sa_out[:, self.T_cond - 1 :]
+        else:
+            sa_out = None
+
+        return state_in, sa_out, cmd
 
     def get_constraints(self, state: torch.Tensor) -> torch.Tensor:
         """

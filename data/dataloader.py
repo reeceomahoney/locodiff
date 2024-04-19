@@ -32,11 +32,16 @@ def get_raisim_train_val(
         window_size,
         future_seq_len,
     )
-    scaler = MinMaxScaler(
-        train_set.dataset.dataset.get_all_observations(),
-        train_set.dataset.dataset.get_all_actions(),
-        device,
+
+    x_data = train_set.dataset.dataset.get_all_observations()
+    y_data = torch.cat(
+        [
+            train_set.dataset.dataset.get_all_observations(),
+            train_set.dataset.dataset.get_all_actions(),
+        ],
+        dim=-1,
     )
+    scaler = MinMaxScaler(x_data, y_data, device)
 
     train_dataloader = torch.utils.data.DataLoader(
         train_set,
