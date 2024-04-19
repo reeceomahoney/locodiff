@@ -88,6 +88,7 @@ class RaisimEnv:
         # self.generate_goal()
         agent.reset()  # TODO: this is incorrect, needs to reset episodes separately
         self.env.reset()
+        self.turn_on_visualization()
 
         for _ in range(self.eval_n_times):
             done = np.array([False])
