@@ -1,10 +1,10 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="beso",
-    version="0.1",
-    description="Code for the RSS paper Goal Conditioned Imitation Learning using Score-based Diffusion Policies",
+    name="locodiff",
+    version="1.0",
+    description="Quadruped locomotion using diffusion models",
     license="MIT",
-    author="Moritz Reuss",
+    author="Reece O'Mahoney",
     packages=find_packages(),
 )

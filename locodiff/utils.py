@@ -158,7 +158,7 @@ class ExponentialMovingAverage:
 
 class MinMaxScaler:
     """
-    Min Max scaler, that scales the output data between -1 and 1 and the input data between 0 and 1.
+    Min Max scaler, that scales the output data between -1 and 1 and the input to a uniform Gaussian.
     """
 
     def __init__(self, x_data: np.ndarray, y_data: np.ndarray, device: str):

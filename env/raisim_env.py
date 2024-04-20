@@ -49,8 +49,7 @@ class RaisimEnv:
     def observe(self, update_statistics=False):
         self.env.observe(self._observation, update_statistics)
 
-        frames = self.get_frame_cartesian_pos()
-        base_pos = frames[:, :2]
+        base_pos = np.zeros((self.num_envs, 2), dtype=np.float32)
         obs = np.concatenate([base_pos, self._observation[:, :33]], axis=-1)
         cmd = self._observation[:, 33:36]
 

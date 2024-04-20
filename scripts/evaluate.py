@@ -22,9 +22,6 @@ torch.cuda.empty_cache()
 
 @hydra.main(config_path="../configs", config_name="evaluate.yaml", version_base=None)
 def main(cfg: DictConfig) -> None:
-    if cfg.log_wandb:
-        wandb.init(project="beso_eval", mode="disabled", config=wandb.config)
-
     # config
     cfg_store_path = os.path.join(
         os.getcwd(), cfg.model_store_path, ".hydra/config.yaml"
@@ -73,7 +70,7 @@ def main(cfg: DictConfig) -> None:
         batch = {k: v.to(cfg.device) for k, v in batch.items()}
 
         if cfg["test_timestep_mse"]:
-            inference_steps = [1, 2, 3, 4, 5, 10, 20, 40, 50]
+            inference_steps = [1, 2, 3, 4, 5, 10, 20, 50]
             results = []
             for step in tqdm(inference_steps):
                 agent.num_sampling_steps = step
@@ -87,7 +84,7 @@ def main(cfg: DictConfig) -> None:
                     label=f"{inference_steps[i]} inference steps",
                 )
         if cfg["test_total_mse"]:
-            inference_steps = [1, 2, 3, 4, 5, 10, 20, 40, 50]
+            inference_steps = [1, 2, 3, 4, 5, 10, 20, 50]
             results = []
             for step in inference_steps:
                 agent.num_sampling_steps = step

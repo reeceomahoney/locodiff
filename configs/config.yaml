@@ -2,7 +2,7 @@ defaults:
   - agents: agent
   - _self_
 
-data_path: rand
+data_path: rand_pos
 
 hydra:
   run:
@@ -10,7 +10,7 @@ hydra:
 
 wandb:
   entity: reeceomahoney
-  project: beso_experiments
+  project: locodiff
 
 # general params
 device: 'cuda'
@@ -41,7 +41,7 @@ n_heads: 4
 use_ema: True
 decay: 0.999 
 update_ema_every_n_steps: 1
-sigma_data: 0.5 
+sigma_data: 0.335
 cond_mask_prob: 0.1
 cond_lambda: 2 # only required for inference of CFG-BESO
 n_timesteps: 3
