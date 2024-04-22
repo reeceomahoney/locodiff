@@ -1,7 +1,7 @@
 import numpy as np
 import os
 import matplotlib.pyplot as plt
-from scipy.spatial.transform import Rotation as R
+
 
 def load_data(data_path):
     return np.load(data_path, allow_pickle=True).item()
@@ -39,38 +39,13 @@ def split_by_vel_cmd(obs, terminals):
 
 
 current_dir = os.path.dirname(os.path.realpath(__file__))
+data = load_data(current_dir + "/datasets/raw/heading.npy")
 
-# data = {"fwd": [], "left": [], "right": []}
-# for key in data.keys():
-#     data[key] = load_data(current_dir + "/datasets/3_actions/" + key + ".npy")
-#     obs = data[key]["observations"][..., :-3]
-#     obs = cat_zeros(obs)
-
-#     if key == "left":
-#         obs[..., -1] = 1
-#     elif key == "right":
-#         obs[..., -2] = 1
-
-#     data[key]["observations"] = obs
-
-# obs = cat(data, "observations")
-# act = cat(data, "actions")
-# terminals = cat(data, "terminals")
-
-data = load_data(current_dir + "/datasets/pos_cmd/rand.npy")
 obs, act, terminals = data["observations"], data["actions"], data["terminals"]
-
-# B, T = obs.shape[:2]
-# quat = obs[..., 2:6].reshape(B * T, 4)
-# euler = R.from_quat(quat).as_euler("xyz")
-# euler = euler.reshape(B, T, 3)
-# obs = np.concatenate([obs[..., :2], euler, obs[..., 6:]], axis=-1)
-
 terminals = shift_terminals(terminals)
 
-
 # Save the data to a new file
-name = "rand_pos"
+name = "heading"
 print(f"Saving data to {current_dir}/datasets/{name}.npy")
 print(f"Observations shape: {obs.shape}, Actions shape: {act.shape}")
 np.save(

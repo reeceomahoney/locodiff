@@ -85,7 +85,8 @@ class RaisimEnv:
         """
         log.info("Starting trained model evaluation")
 
-        total_rewards, total_dones = 0, 0
+        total_rewards = np.zeros(self.num_envs, dtype=np.float32)
+        total_dones = np.zeros(self.num_envs, dtype=np.int64)
         agent.reset()  # TODO: this is incorrect, needs to reset episodes separately
         self.env.reset()
         self.generate_goal()
@@ -111,7 +112,8 @@ class RaisimEnv:
 
                 for i in range(self.T_action):
                     obs, cmd, reward, done = self.step(pred_action[:, i])
-                    total_rewards += reward.mean()
+                    reward = cmd.norm(dim=-1).cpu().numpy()
+                    total_rewards += reward
 
                     if not n % 250:
                         self.generate_goal()

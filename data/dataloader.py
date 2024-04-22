@@ -88,9 +88,8 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         self.observations = torch.from_numpy(self.observations).to(device).float()
         self.actions = torch.from_numpy(self.actions).to(device).float()
         self.masks = torch.from_numpy(self.masks).to(device).float()
-        self.cmds = torch.from_numpy(self.cmds).to(device).float()
 
-        tensors = [self.observations, self.actions, self.masks, self.cmds]
+        tensors = [self.observations, self.actions, self.masks]
         TensorDataset.__init__(self, *tensors)
 
         log.info(
@@ -150,10 +149,6 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
 
         masks_initial_pad = np.ones((self.masks.shape[0], self.T_cond - 1))
         self.masks = np.concatenate([masks_initial_pad, self.masks], axis=1)
-
-        # Add cmds
-        self.cmds = self.observations[:, 0, -3:]
-        self.observations = self.observations[:, :, :-3]
 
     def pad_and_stack(self, splits, max_len):
         """Pad the sequences and stack them into a tensor"""
