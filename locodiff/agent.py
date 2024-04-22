@@ -187,8 +187,7 @@ class Agent:
             self.num_sampling_steps, self.sigma_min, self.sigma_max, self.device
         )
         x = torch.randn_like(sa_out) * self.sigma_max
-        goal_pos = sa_out[:, -1, : self.pred_obs_dim]
-        x_0 = self.sample_ddim(x, sigmas, state_in, cmd, goal_pos)
+        x_0 = self.sample_ddim(x, sigmas, state_in, cmd)
 
         mse = nn.functional.mse_loss(x_0, sa_out, reduction="none")
         total_mse = mse.mean().item()
@@ -267,25 +266,15 @@ class Agent:
 
     def stack_context(self, state):
         """
-        Helper function to handle obs and action history
+        Helper function to handle obs history
         """
         self.obs_context.append(state)
         while len(self.obs_context) < self.T_cond:
             self.obs_context.append(state)
-        input_state = torch.stack(tuple(self.obs_context), dim=1)
-
-        # pad = torch.zeros(state.shape[0], self.action_dim).to(self.device)
-        # while len(self.action_context) < self.T_cond - 1:
-        #     self.action_context.append(pad)
-        # input_action = torch.stack(
-        #     [*tuple(self.action_context), pad],
-        #     dim=1,
-        # )
-
-        return input_state
+        return torch.stack(tuple(self.obs_context), dim=1)
 
     @torch.no_grad()
-    def sample_ddim(self, x_t, sigmas, cond, cmd, goal_pos=None):
+    def sample_ddim(self, x_t, sigmas, cond, cmd):
         """
         Sample from the model using the DDIM sampler
 
@@ -306,9 +295,6 @@ class Agent:
             t, t_next = t_fn(sigmas[i]), t_fn(sigmas[i + 1])
             h = t_next - t
             x_t = (sigma_fn(t_next) / sigma_fn(t)) * x_t - (-h).expm1() * denoised
-            
-            # add the goal to the state
-            # x_t[:, -1, :self.pred_obs_dim] = goal_pos
 
         return x_t
 
@@ -363,15 +349,16 @@ class Agent:
         """
         Processes a batch of data and returns the state, action and goal
         """
-        get_to_device = lambda key: (
-            batch.get(key).to(self.device) if batch.get(key) is not None else None
-        )
+        state = self.get_to_device(batch, "observation")
+        action = self.get_to_device(batch, "action")
 
-        state = get_to_device("observation")
-        action = get_to_device("action")
-        cmd = get_to_device("cmd")
+        # Centre posisition around the current state
+        state[..., :2] = state[..., :2] - state[:, self.T_cond - 1, :2].unsqueeze(1)
+        cmd = state[:, -1, :2]
 
+        # Scale
         state_in = self.scaler.scale_input(state[:, : self.T_cond])
+        cmd = self.scaler.scale_input(cmd)
         if action is not None:
             sa_out = self.scaler.scale_output(
                 torch.cat([state[..., : self.pred_obs_dim], action], dim=-1)
@@ -382,28 +369,5 @@ class Agent:
 
         return state_in, sa_out, cmd
 
-    def get_constraints(self, state: torch.Tensor) -> torch.Tensor:
-        """
-        Method to calculate the constraints for the given state
-
-        Returns:
-            constraints: (B, 1, 1)
-        """
-        # calculate active foot grids
-        future_states = state[:, self.T_cond :, :]
-        future_states = self.scaler.inverse_scale_input(future_states)
-        active_grids = self.foot_grid.get_active_grids(future_states)
-
-        constraints = active_grids.reshape(state.shape[0], -1)
-        constraints = constraints.to(torch.float32).unsqueeze(1)
-        return constraints
-
-    def calculate_constraint_vector(
-        self, state: torch.Tensor, threshold: float, greater_than: bool = 0
-    ) -> torch.Tensor:
-        if greater_than:
-            constraints = torch.where(state.norm(dim=-1).max(-1)[0] > threshold, 1, 0)
-        else:
-            constraints = torch.where(state.norm(dim=-1).max(-1)[0] < threshold, 1, 0)
-        constraints = constraints.to(torch.float32).view(-1, 1, 1)
-        return constraints
+    def get_to_device(self, batch, key):
+        return batch.get(key).to(self.device) if batch.get(key) is not None else None

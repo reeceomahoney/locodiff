@@ -41,6 +41,8 @@ class RaisimEnv:
         self._base_orientation = np.zeros([self.num_envs, 9], dtype=np.float32)
         self._reward = np.zeros(self.num_envs, dtype=np.float32)
         self._done = np.zeros(self.num_envs, dtype=bool)
+        
+        self.goal = None
 
     def step(self, action):
         self.env.step(action, self._reward, self._done)
@@ -49,9 +51,9 @@ class RaisimEnv:
     def observe(self, update_statistics=False):
         self.env.observe(self._observation, update_statistics)
 
-        base_pos = np.zeros((self.num_envs, 2), dtype=np.float32)
+        base_pos = self.get_frame_cartesian_pos()[:, :2]
         obs = np.concatenate([base_pos, self._observation[:, :33]], axis=-1)
-        cmd = self._observation[:, 33:36]
+        cmd = self.goal - base_pos
 
         obs = torch.from_numpy(obs).to(self.device)
         cmd = torch.from_numpy(cmd).to(self.device)
@@ -84,10 +86,9 @@ class RaisimEnv:
         log.info("Starting trained model evaluation")
 
         total_rewards, total_dones = 0, 0
-        # self.generate_goal()
         agent.reset()  # TODO: this is incorrect, needs to reset episodes separately
         self.env.reset()
-        self.turn_on_visualization()
+        self.generate_goal()
 
         for _ in range(self.eval_n_times):
             done = np.array([False])
@@ -112,9 +113,8 @@ class RaisimEnv:
                     obs, cmd, reward, done = self.step(pred_action[:, i])
                     total_rewards += reward.mean()
 
-                    # switch skill
-                    # if not n % 150:
-                    #     self.generate_goal()
+                    if not n % 250:
+                        self.generate_goal()
 
                     delta = time.time() - start
                     if delta < 0.04 and real_time:

@@ -36,7 +36,7 @@ class DiffusionTransformer(nn.Module):
         )
         self.cond_state_emb = nn.Linear(self.obs_dim, self.d_model)
         self.sigma_emb = nn.Linear(1, self.d_model)
-        self.cmd_emb = nn.Linear(3, self.d_model)
+        self.cmd_emb = nn.Linear(2, self.d_model)
 
         self.pos_emb = (
             SinusoidalPosEmb(d_model)(torch.arange(self.T + 1)).unsqueeze(0).to(device)

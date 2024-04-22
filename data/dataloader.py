@@ -70,18 +70,14 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         T_cond: int,
         device="cpu",
     ):
-        self.device = device
-        dataset_path = (
-            os.path.dirname(os.path.realpath(__file__))
-            + "/datasets/"
-            + data_directory
-            + ".npy"
-        )
+        current_dir = os.path.dirname(os.path.realpath(__file__))
+        dataset_path = current_dir + "/datasets/" + data_directory + ".npy"
         self.dataset_path = Path(dataset_path)
         self.data_directory = data_directory
         self.obs_dim = obs_dim
         self.T_cond = T_cond
         self.future_seq_len = future_seq_len
+        self.device = device
 
         data = np.load(self.dataset_path, allow_pickle=True).item()
         self.observations = data["observations"]
@@ -94,13 +90,12 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         self.masks = torch.from_numpy(self.masks).to(device).float()
         self.cmds = torch.from_numpy(self.cmds).to(device).float()
 
+        tensors = [self.observations, self.actions, self.masks, self.cmds]
+        TensorDataset.__init__(self, *tensors)
+
         log.info(
             f"Dataset size - Observations: {list(self.observations.size())} - Actions: {list(self.actions.size())}"
         )
-        tensors = [self.observations, self.actions, self.masks, self.cmds]
-
-        # The current values are in shape N x T x Dim, so all is good in the world.
-        TensorDataset.__init__(self, *tensors)
 
     def get_seq_length(self, idx):
         return int(self.masks[idx].sum().item())
@@ -122,14 +117,6 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         return torch.cat(result, dim=0)
 
     def split_data(self):
-        # Add skill to the observations
-        # self.observations = np.concatenate(
-        #     [self.observations, np.zeros_like(self.observations[:, :, :1])], axis=-1
-        # )
-        # B = self.observations.shape[0]
-        # self.observations[: B // 2, :, -1] = 0
-        # self.observations[B // 2 :, :, -1] = 1
-
         # Flatten the first two dimensions
         obs_flat = self.observations.reshape(-1, self.observations.shape[-1])
         actions_flat = self.actions.reshape(-1, self.actions.shape[-1])

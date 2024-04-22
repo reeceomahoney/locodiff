@@ -193,9 +193,10 @@ class MinMaxScaler:
             torch.Tensor: The scaled input tensor.
         """
         x = x.to(self.device)
-        out = (x - self.x_mean) / (
-            self.x_std + 1e-12 * torch.ones((self.x_std.shape), device=self.device)
-        )
+        if x.shape[-1] == 2:
+            out = (x - self.x_mean[:2]) / (self.x_std[:2] + 1e-12)
+        else:
+            out = (x - self.x_mean) / (self.x_std + 1e-12)
         return out.to(torch.float32)
 
     @torch.no_grad()
@@ -208,9 +209,14 @@ class MinMaxScaler:
             torch.Tensor: The scaled output tensor.
         """
         y = y.to(self.device)
-        out = (y - self.y_min) / (self.y_max - self.y_min) * (
-            self.new_max_y - self.new_min_y
-        ) + self.new_min_y
+        if y.shape[-1] == 2:
+            out = (y - self.y_min[:2]) / (self.y_max[:2] - self.y_min[:2]) * (
+                self.new_max_y[:2] - self.new_min_y[:2]
+            ) + self.new_min_y[:2]
+        else:
+            out = (y - self.y_min) / (self.y_max - self.y_min) * (
+                self.new_max_y - self.new_min_y
+            ) + self.new_min_y
         return out.to(torch.float32)
 
     @torch.no_grad()
