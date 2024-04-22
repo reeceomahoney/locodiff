@@ -106,23 +106,29 @@ def main(cfg: DictConfig) -> None:
             axs = axs.flatten()
 
             T_cond = model_cfg["T_cond"]
-            for i in range(16):
+            i, plots = 0, 0
+            while plots < 16:
+                if np.linalg.norm(vel_cmd[i]) < 0.1:
+                    i += 1
+                    continue
+
                 gt = obs[i, T_cond - 1 :, :2]
-                axs[i].plot(gt[:, 0], gt[:, 1], "o-", label="observed")
-                axs[i].plot(gt[0, 0], gt[0, 1], "go", label="Start")
-                axs[i].plot(gt[-1, 0], gt[-1, 1], "ro", label="End")
+                axs[plots].plot(gt[:, 0], gt[:, 1], "o-", label="observed")
+                axs[plots].plot(gt[0, 0], gt[0, 1], "go", label="Start")
+                axs[plots].plot(gt[-1, 0], gt[-1, 1], "ro", label="End")
 
                 pred = results[i, :, :2]
-                axs[i].plot(pred[:, 0], pred[:, 1], "x-", label="predicted")
-                axs[i].plot(pred[0, 0], pred[0, 1], "gx", label="Start")
-                axs[i].plot(pred[-1, 0], pred[-1, 1], "rx", label="End")
+                axs[plots].plot(pred[:, 0], pred[:, 1], "x-", label="predicted")
+                axs[plots].plot(pred[0, 0], pred[0, 1], "gx", label="Start")
+                axs[plots].plot(pred[-1, 0], pred[-1, 1], "rx", label="End")
 
-                vel_cmd_str = ", ".join(f"{num:.2f}" for num in vel_cmd[i])
-                axs[i].set_title(f"cmd: [ {vel_cmd_str} ]")
-                axs[i].legend()
+                axs[plots].legend()
+
+                i += 1
+                plots += 1
 
             plt.tight_layout()
-            plt.show()
+            plt.savefig("results.png")
 
         if not cfg["visualize x-y trajectory"]:
             plt.legend()
