@@ -27,7 +27,7 @@ goal_dim: 1
 # policy model params
 hidden_dim: 256
 use_spectral_norm: false
-num_hidden_layers: 8
+num_hidden_layers: 6
 weight_decay: 1e-3
 train_method: 'steps'
 max_train_steps: 1e6

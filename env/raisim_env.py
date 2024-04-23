@@ -89,9 +89,9 @@ class RaisimEnv:
         total_dones = np.zeros(self.num_envs, dtype=np.int64)
         agent.reset()  # TODO: this is incorrect, needs to reset episodes separately
         self.env.reset()
-        self.generate_goal()
 
         for _ in range(self.eval_n_times):
+            self.generate_goal()
             done = np.array([False])
             obs, cmd = self.observe()
 
@@ -115,16 +115,13 @@ class RaisimEnv:
                     reward = cmd.norm(dim=-1).cpu().numpy()
                     total_rewards += reward
 
-                    if not n % 250:
-                        self.generate_goal()
-
                     delta = time.time() - start
                     if delta < 0.04 and real_time:
                         time.sleep(0.04 - delta)
                     start = time.time()
 
         self.close()
-        total_rewards /= total_dones
+        total_rewards /= (self.eval_n_times * self.eval_n_steps)
         avrg_reward = total_rewards.mean()
         std_reward = total_rewards.std()
 

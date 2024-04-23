@@ -351,14 +351,13 @@ class Agent:
         """
         state = self.get_to_device(batch, "observation")
         action = self.get_to_device(batch, "action")
+        cmd = self.get_to_device(batch, "cmd")
 
         # Centre posisition around the current state
         state[..., :2] = state[..., :2] - state[:, self.T_cond - 1, :2].unsqueeze(1)
-        cmd = state[:, -1, :2]
-
-        # Scale
         state_in = self.scaler.scale_input(state[:, : self.T_cond])
-        cmd = self.scaler.scale_input(cmd)
+
+        # Action
         if action is not None:
             sa_out = self.scaler.scale_output(
                 torch.cat([state[..., : self.pred_obs_dim], action], dim=-1)
@@ -366,6 +365,10 @@ class Agent:
             sa_out = sa_out[:, self.T_cond - 1 :]
         else:
             sa_out = None
+        
+        # Command
+        cmd = state[:, -1, :2] if cmd is None else cmd
+        cmd = self.scaler.scale_input(cmd)
 
         return state_in, sa_out, cmd
 

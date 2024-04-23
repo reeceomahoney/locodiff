@@ -39,7 +39,7 @@ def split_by_vel_cmd(obs, terminals):
 
 
 current_dir = os.path.dirname(os.path.realpath(__file__))
-data = load_data(current_dir + "/datasets/raw/heading.npy")
+data = load_data(current_dir + "/datasets/raw/heading_2.npy")
 
 obs, act, terminals = data["observations"], data["actions"], data["terminals"]
 terminals = shift_terminals(terminals)
