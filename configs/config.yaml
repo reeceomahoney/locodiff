@@ -2,7 +2,7 @@ defaults:
   - agents: agent
   - _self_
 
-data_path: heading
+data_path: rand
 
 hydra:
   run:
@@ -27,7 +27,7 @@ goal_dim: 1
 # policy model params
 hidden_dim: 256
 use_spectral_norm: false
-num_hidden_layers: 6
+num_hidden_layers: 4
 weight_decay: 1e-3
 train_method: 'steps'
 max_train_steps: 1e6
@@ -36,7 +36,7 @@ eval_every_n_steps: 1000
 sim_every_n_steps: 5000
 
 # BESO hyperparameters
-dropout: 0.3
+dropout: 0.0
 n_heads: 4
 use_ema: True
 decay: 0.999 

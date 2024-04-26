@@ -359,8 +359,7 @@ namespace raisim {
         }
 
         void getBaseOrientation(Eigen::Ref<EigenVec> baseOrientation) {
-            Eigen::Matrix3f baseRotation = observationHandler_.getBaseRotation().e().cast<float>();
-            baseOrientation = Eigen::Map<Eigen::VectorXf>(baseRotation.data(), baseRotation.size());
+            baseOrientation = observationHandler_.getGeneralizedCoordinate().segment(3, 4).cast<float>();
         }
 
         void killServer() {

@@ -252,7 +252,7 @@ class MinMaxScaler:
         return out
 
     @torch.no_grad()
-    def clip_action(self, y):
+    def clip(self, y):
         """
         Clips the input tensor `y` based on the defined action bounds.
         """

@@ -105,7 +105,9 @@ class Agent:
         best_test_mse = 1e10
         generator = iter(self.train_loader)
 
-        for step in tqdm(range(self.max_train_steps), position=0, leave=True):
+        for step in tqdm(
+            range(self.max_train_steps), position=0, leave=True, dynamic_ncols=True
+        ):
             # evaluate
             if not self.steps % self.eval_every_n_steps:
                 log_info = {
@@ -129,7 +131,7 @@ class Agent:
                     log.info("New best test loss. Stored weights have been updated!")
                 log_info["lr"] = self.optimizer.param_groups[0]["lr"]
 
-                wandb.log({k: v for k, v in log_info.items()})
+                wandb.log({k: v for k, v in log_info.items()}, step=self.steps)
 
             # train
             try:
@@ -138,12 +140,13 @@ class Agent:
                 # restart the generator if the previous generator is exhausted.
                 generator = iter(self.train_loader)
                 batch_loss = self.train_step(next(generator))
-            wandb.log({"loss": batch_loss})
+            if not self.steps % 100:
+                wandb.log({"loss": batch_loss}, step=self.steps)
 
             # simulate
             if not self.steps % self.sim_every_n_steps:
                 results = self.env.simulate(self)
-                wandb.log(results)
+                wandb.log(results, step=self.steps)
 
         self.store_model_weights(self.working_dir)
         log.info("Training done!")
@@ -255,14 +258,14 @@ class Agent:
         x_0 = self.sample_ddim(x, sigmas, state_in, cmd)
 
         # get the action for the current timestep
-        x_0 = self.scaler.clip_action(x_0)
-        model_pred = self.scaler.inverse_scale_output(x_0)
-        model_pred = model_pred[:, : self.T_action, self.pred_obs_dim :]
+        x_0 = self.scaler.clip(x_0)
+        pred_traj = self.scaler.inverse_scale_output(x_0).cpu().numpy()
+        pred_action = pred_traj[:, : self.T_action, self.pred_obs_dim :].copy()
 
         if self.use_ema:
             self.ema_helper.restore(self.model.parameters())
-        # self.action_context.append(x_0)
-        return model_pred
+
+        return pred_action, pred_traj
 
     def stack_context(self, state):
         """
@@ -365,7 +368,7 @@ class Agent:
             sa_out = sa_out[:, self.T_cond - 1 :]
         else:
             sa_out = None
-        
+
         # Command
         cmd = state[:, -1, :2] if cmd is None else cmd
         cmd = self.scaler.scale_input(cmd)

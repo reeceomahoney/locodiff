@@ -7,6 +7,8 @@ import numpy as np
 import torch
 from omegaconf import OmegaConf
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+from scipy.spatial.transform import Rotation as R
 
 from env.lib.raisim_env import RaisimWrapper
 
@@ -38,10 +40,10 @@ class RaisimEnv:
         # initialize variables
         self._observation = np.zeros([self.num_envs, self.num_obs], dtype=np.float32)
         self._frame_cartesian_pos = np.zeros([self.num_envs, 3 * 5], dtype=np.float32)
-        self._base_orientation = np.zeros([self.num_envs, 9], dtype=np.float32)
+        self._base_orientation = np.zeros([self.num_envs, 4], dtype=np.float32)
         self._reward = np.zeros(self.num_envs, dtype=np.float32)
         self._done = np.zeros(self.num_envs, dtype=bool)
-        
+
         self.goal = None
 
     def step(self, action):
@@ -52,7 +54,11 @@ class RaisimEnv:
         self.env.observe(self._observation, update_statistics)
 
         base_pos = self.get_frame_cartesian_pos()[:, :2]
-        obs = np.concatenate([base_pos, self._observation[:, :33]], axis=-1)
+        orientation = self.get_base_orientation()
+        obs = np.concatenate(
+            [base_pos, orientation, self._observation[:, 3:33]], axis=-1
+        )
+
         cmd = self.goal - base_pos
 
         obs = torch.from_numpy(obs).to(self.device)
@@ -88,9 +94,9 @@ class RaisimEnv:
         total_rewards = np.zeros(self.num_envs, dtype=np.float32)
         total_dones = np.zeros(self.num_envs, dtype=np.int64)
         agent.reset()  # TODO: this is incorrect, needs to reset episodes separately
-        self.env.reset()
 
         for _ in range(self.eval_n_times):
+            self.env.reset()
             self.generate_goal()
             done = np.array([False])
             obs, cmd = self.observe()
@@ -104,11 +110,13 @@ class RaisimEnv:
                 if n == self.eval_n_steps - 1:
                     total_dones += np.ones(done.shape, dtype="int64")
 
-                pred_action = agent.predict(
+                pred_action, pred_traj = agent.predict(
                     {"observation": obs, "cmd": cmd},
                     new_sampling_steps=n_inference_steps,
                 )
-                pred_action = pred_action.detach().cpu().numpy()
+
+                if real_time:
+                    self.plot_trajectory(pred_traj, cmd)
 
                 for i in range(self.T_action):
                     obs, cmd, reward, done = self.step(pred_action[:, i])
@@ -121,7 +129,7 @@ class RaisimEnv:
                     start = time.time()
 
         self.close()
-        total_rewards /= (self.eval_n_times * self.eval_n_steps)
+        total_rewards /= self.eval_n_times * self.eval_n_steps
         avrg_reward = total_rewards.mean()
         std_reward = total_rewards.std()
 
@@ -132,6 +140,35 @@ class RaisimEnv:
             "total_done": total_dones.mean(),
         }
         return return_dict
+
+    def plot_trajectory(self, pred_traj, cmd):
+        # Calculate yaw angles from quaternions
+        quat = pred_traj[0, :, 2:6]
+        quat = np.roll(quat, shift=-1, axis=1)  # w, x, y, z -> x, y, z, w
+        yaw = R.from_quat(quat).as_euler("xyz")[:, 2]
+
+        # plot the trajectory
+        cmd = cmd.cpu().numpy()
+        plt.plot(pred_traj[0, :, 0], pred_traj[0, :, 1], "r")
+        plt.plot(cmd[0, 0], cmd[0, 1], "go")
+
+        # plot orientation using yaw angles
+        for i in range(0, pred_traj.shape[1], 10):
+            plt.quiver(
+                pred_traj[0, i, 0],
+                pred_traj[0, i, 1],
+                np.cos(yaw[i]),
+                np.sin(yaw[i]),
+                color="b",
+                scale=10,
+                width=0.005,
+            )
+        plt.xlim(-4, 4)
+        plt.ylim(-4, 4)
+
+        plt.draw()
+        plt.pause(0.0001)
+        plt.clf()
 
     def generate_goal(self):
         self.goal = np.random.uniform(-4, 4, (self.num_envs, 2)).astype(np.float32)
