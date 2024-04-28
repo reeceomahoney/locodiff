@@ -3,12 +3,14 @@ import os
 import platform
 import time
 
+import imageio
 import numpy as np
 import torch
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from matplotlib.figure import Figure
 from omegaconf import OmegaConf
-from tqdm import tqdm
-import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R
+from tqdm import tqdm
 
 from env.lib.raisim_env import RaisimWrapper
 
@@ -94,6 +96,7 @@ class RaisimEnv:
         total_rewards = np.zeros(self.num_envs, dtype=np.float32)
         total_dones = np.zeros(self.num_envs, dtype=np.int64)
         agent.reset()  # TODO: this is incorrect, needs to reset episodes separately
+        self.images = []
 
         for _ in range(self.eval_n_times):
             self.env.reset()
@@ -128,6 +131,10 @@ class RaisimEnv:
                         time.sleep(0.04 - delta)
                     start = time.time()
 
+            # Save images as gif
+            if real_time:
+                imageio.mimsave("trajectory.gif", self.images, fps=10)
+
         self.close()
         total_rewards /= self.eval_n_times * self.eval_n_steps
         avrg_reward = total_rewards.mean()
@@ -147,28 +154,36 @@ class RaisimEnv:
         quat = np.roll(quat, shift=-1, axis=1)  # w, x, y, z -> x, y, z, w
         yaw = R.from_quat(quat).as_euler("xyz")[:, 2]
 
-        # plot the trajectory
         cmd = cmd.cpu().numpy()
-        plt.plot(pred_traj[0, :, 0], pred_traj[0, :, 1], "r")
-        plt.plot(cmd[0, 0], cmd[0, 1], "go")
+
+        # plot the trajectory
+        fig = Figure()
+        canvas = FigureCanvas(fig)
+        ax = fig.gca()
+        ax.plot(pred_traj[0, :, 0], pred_traj[0, :, 1], "r")
+        ax.plot(cmd[0, 0], cmd[0, 1], "go")
+        ax.set_xlim(-4, 4)
+        ax.set_ylim(-4, 4)
 
         # plot orientation using yaw angles
         for i in range(0, pred_traj.shape[1], 10):
-            plt.quiver(
+            ax.quiver(
                 pred_traj[0, i, 0],
                 pred_traj[0, i, 1],
+                # pred_traj[0, i, 33],
+                # pred_traj[0, i, 34],
                 np.cos(yaw[i]),
                 np.sin(yaw[i]),
                 color="b",
                 scale=10,
                 width=0.005,
             )
-        plt.xlim(-4, 4)
-        plt.ylim(-4, 4)
 
-        plt.draw()
-        plt.pause(0.0001)
-        plt.clf()
+        # Convert plot to image array
+        canvas.draw()
+        s, (width, height) = canvas.print_to_buffer()
+        image = np.frombuffer(s, np.uint8).reshape((height, width, 4))
+        self.images.append(image)
 
     def generate_goal(self):
         self.goal = np.random.uniform(-4, 4, (self.num_envs, 2)).astype(np.float32)

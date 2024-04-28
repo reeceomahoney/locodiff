@@ -4,16 +4,6 @@ import torch
 import torch.nn as nn
 
 
-def append_dims(x, target_dims):
-    """Appends dimensions to the end of a tensor until it has target_dims dimensions."""
-    dims_to_append = target_dims - x.ndim
-    if dims_to_append < 0:
-        raise ValueError(
-            f"input has {x.ndim} dims but target_dims is {target_dims}, which is less"
-        )
-    return x[(...,) + (None,) * dims_to_append]
-
-
 def get_sigmas_exponential(n, sigma_min, sigma_max, device="cpu"):
     """Constructs an exponential noise schedule."""
     sigmas = torch.linspace(
@@ -180,7 +170,7 @@ class MinMaxScaler:
             self.y_bounds = np.zeros((2, y_data.shape[-1]))
             self.y_bounds[0, :] = -1 * np.ones_like(y_data.min(0))[:]
             self.y_bounds[1, :] = np.ones_like(y_data.min(0))[:]
-            self.y_bounds_tensor = torch.from_numpy(self.y_bounds).to(device)
+            self.y_bounds = torch.from_numpy(self.y_bounds).to(device)
 
     @torch.no_grad()
     def scale_input(self, x):
@@ -257,9 +247,7 @@ class MinMaxScaler:
         Clips the input tensor `y` based on the defined action bounds.
         """
         return (
-            torch.clamp(
-                y, self.y_bounds_tensor[0, :] * 1.1, self.y_bounds_tensor[1, :] * 1.1
-            )
+            torch.clamp(y, self.y_bounds[0, :] * 1.1, self.y_bounds[1, :] * 1.1)
             .to(self.device)
             .to(torch.float32)
         )

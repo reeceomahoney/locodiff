@@ -1,6 +1,5 @@
 import hydra
 from torch import nn
-from .utils import append_dims
 
 """
 Wrappers for the score-based models based on Karras et al. 2022
@@ -77,10 +76,10 @@ class GCDenoiser(nn.Module):
             The output of the forward pass.
         """
 
-        c_skip, c_out, c_in = [
-            append_dims(x, x_t.ndim) for x in self.get_scalings(sigma)
-        ]
-        return self.inner_model(x_t * c_in, cond, sigma, **kwargs) * c_out + x_t * c_skip
+        c_skip, c_out, c_in = [x.view(-1, 1, 1) for x in self.get_scalings(sigma)]
+        return (
+            self.inner_model(x_t * c_in, cond, sigma, **kwargs) * c_out + x_t * c_skip
+        )
 
     def get_params(self):
         return self.inner_model.parameters()
