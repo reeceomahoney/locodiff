@@ -178,7 +178,11 @@ class DiffusionTransformer(nn.Module):
         sigma = sigma.view(-1, 1, 1).log() / 4
         sigma_emb = self.sigma_emb(sigma)
 
-        cmd_emb = self.cmd_emb(kwargs["cmd"]).unsqueeze(1)
+        # command embedding
+        cmd = kwargs["cmd"]
+        force_mask = kwargs.get("uncond", False)
+        cmd = self.mask_cond(cmd, force_mask=force_mask)
+        cmd_emb = self.cmd_emb(cmd).unsqueeze(1)
 
         cond = torch.cat([sigma_emb, cmd_emb, cond_emb], dim=1)
         cond += self.cond_pos_emb
@@ -206,7 +210,7 @@ class DiffusionTransformer(nn.Module):
         if force_mask:
             return torch.zeros_like(cond)
         elif self.training and self.cond_mask_prob > 0:
-            mask = torch.rand_like(cond[:, :, 0]) < self.cond_mask_prob
+            mask = torch.rand_like(cond[:, 0]) < self.cond_mask_prob
             return cond * mask.unsqueeze(-1).float()
         else:
             return cond

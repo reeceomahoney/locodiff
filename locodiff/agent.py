@@ -45,6 +45,7 @@ class Agent:
         num_envs: int,
         sim_every_n_steps: int,
         weight_decay: float,
+        cond_lambda: int,
     ):
         # model
         self.model = hydra.utils.instantiate(model).to(device)
@@ -80,6 +81,7 @@ class Agent:
         self.sigma_data = sigma_data
         self.sigma_min = sigma_min
         self.sigma_max = sigma_max
+        self.cond_lambda = cond_lambda
 
         # env
         self.obs_dim = obs_dim
@@ -255,7 +257,7 @@ class Agent:
         x = torch.randn((self.num_envs, self.T + 1, sa_dim), device=self.device)
         x *= self.sigma_max
 
-        x_0 = self.sample_ddim(x, sigmas, state_in, cmd)
+        x_0 = self.sample_ddim(x, sigmas, state_in, cmd, predict=True)
 
         # get the action for the current timestep
         x_0 = self.scaler.clip(x_0)
@@ -277,7 +279,7 @@ class Agent:
         return torch.stack(tuple(self.obs_context), dim=1)
 
     @torch.no_grad()
-    def sample_ddim(self, x_t, sigmas, cond, cmd):
+    def sample_ddim(self, x_t, sigmas, cond, cmd, predict=False):
         """
         Sample from the model using the DDIM sampler
 
@@ -294,12 +296,27 @@ class Agent:
         t_fn = lambda sigma: sigma.log().neg()
 
         for i in trange(len(sigmas) - 1, disable=disable):
-            denoised = self.model(x_t, cond, sigmas[i] * s_in, cmd=cmd)
+            if predict:
+                denoised = self.cfg_forward(x_t, cond, sigmas[i] * s_in, cmd=cmd)
+            else:
+                denoised = self.model(x_t, cond, sigmas[i] * s_in, cmd=cmd)
             t, t_next = t_fn(sigmas[i]), t_fn(sigmas[i + 1])
             h = t_next - t
             x_t = (sigma_fn(t_next) / sigma_fn(t)) * x_t - (-h).expm1() * denoised
 
         return x_t
+
+    def cfg_forward(self, x_t, cond, sigma, **kwargs):
+        """
+        Classifier-free guidance sample
+        """
+        out_cond = self.model(x_t, cond, sigma, **kwargs)
+
+        kwargs["uncond"] = True
+        out = self.model(x_t, cond, sigma, **kwargs)
+        out += self.cond_lambda * (out_cond - out)
+
+        return out
 
     def load_pretrained_model(self, weights_path: str, **kwargs) -> None:
         self.model.load_state_dict(
