@@ -46,6 +46,7 @@ class Agent:
         sim_every_n_steps: int,
         weight_decay: float,
         cond_lambda: int,
+        cond_mask_prob: float,
     ):
         # model
         self.model = hydra.utils.instantiate(model).to(device)
@@ -82,6 +83,7 @@ class Agent:
         self.sigma_min = sigma_min
         self.sigma_max = sigma_max
         self.cond_lambda = cond_lambda
+        self.cond_mask_prob = cond_mask_prob
 
         # env
         self.obs_dim = obs_dim
@@ -310,11 +312,12 @@ class Agent:
         """
         Classifier-free guidance sample
         """
-        out_cond = self.model(x_t, cond, sigma, **kwargs)
-
-        kwargs["uncond"] = True
         out = self.model(x_t, cond, sigma, **kwargs)
-        out += self.cond_lambda * (out_cond - out)
+
+        if self.cond_mask_prob > 0:
+            kwargs["uncond"] = True
+            out_uncond = self.model(x_t, cond, sigma, **kwargs)
+            out = out_uncond + self.cond_lambda * (out - out_uncond)
 
         return out
 
