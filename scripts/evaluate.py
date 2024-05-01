@@ -32,10 +32,6 @@ def main(cfg: DictConfig) -> None:
     model_cfg.env["num_envs"] = 1
     model_cfg.env["server_port"] = 8081
     model_cfg.env["max_time"] = 10
-
-    # set the observation dimension
-    model_cfg["obs_dim"] = 35
-    model_cfg["pred_obs_dim"] = 35
     model_cfg["T_action"] = 1
 
     # set seeds
@@ -51,6 +47,7 @@ def main(cfg: DictConfig) -> None:
     # set new noise limits
     agent.sigma_max = cfg.sigma_max
     agent.sigma_min = cfg.sigma_min
+    agent.cond_lambda = cfg.cond_lambda
 
     # set seeds
     torch.manual_seed(model_cfg.seed)
@@ -106,6 +103,7 @@ def main(cfg: DictConfig) -> None:
 
             T_cond = model_cfg["T_cond"]
             for i in range(16):
+                axs[i].title.set_text(f"Reward: {info['reward'][i].item()}")
                 gt = obs[i, T_cond - 1 :, :2]
                 axs[i].plot(gt[:, 0], gt[:, 1], "o-", label="observed")
                 axs[i].plot(gt[0, 0], gt[0, 1], "go", label="Start")
@@ -119,7 +117,33 @@ def main(cfg: DictConfig) -> None:
                 axs[i].legend()
 
             plt.tight_layout()
-            plt.show()
+            plt.savefig("results.png")
+        if cfg["test_cond_lambda"]:
+            agent.num_sampling_steps = 10
+            lambdas = [0, 1, 1.5, 2, 5, 10, 20, 50, 100]
+            batch = {k: v[6:7] for k, v in batch.items()}
+            fix, axs = plt.subplots(3, 3, figsize=(15, 15))
+            axs = axs.flatten()
+            for i, l in enumerate(lambdas):
+                agent.cond_lambda = l
+                info = agent.evaluate(batch)
+                obs = batch["observation"].cpu().numpy()
+                results = info["prediction"].cpu().numpy()
+                gt = obs[0, model_cfg["T_cond"] - 1 :, :2]
+
+                axs[i].title.set_text(
+                    f"Lambda: {l}, pred_reward: {info['pred_reward'].item()}"
+                )
+                axs[i].plot(gt[:, 0], gt[:, 1], "o-", label="observed")
+                axs[i].plot(gt[0, 0], gt[0, 1], "go", label="Start")
+                axs[i].plot(gt[-1, 0], gt[-1, 1], "ro", label="End")
+
+                pred = results[0, :, :2]
+                axs[i].plot(pred[:, 0], pred[:, 1], "x-", label="predicted")
+                axs[i].plot(pred[0, 0], pred[0, 1], "gx", label="Start")
+                axs[i].plot(pred[-1, 0], pred[-1, 1], "rx", label="End")
+
+                axs[i].legend()
 
         if not cfg["visualize x-y trajectory"]:
             plt.legend()
@@ -127,6 +151,7 @@ def main(cfg: DictConfig) -> None:
                 plt.show()
             else:
                 plt.savefig("results.png")
+
 
 if __name__ == "__main__":
     main()

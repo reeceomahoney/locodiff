@@ -30,10 +30,6 @@ def main(cfg: DictConfig) -> None:
     else:
         mode = "online"
 
-    # set the observation dimension
-    cfg["obs_dim"] = 36
-    cfg["pred_obs_dim"] = 36
-
     # init wandb
     wandb.config = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
     output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir

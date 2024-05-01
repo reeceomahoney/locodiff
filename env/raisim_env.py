@@ -61,10 +61,8 @@ class RaisimEnv:
             [base_pos, orientation, self._observation[:, 3:33]], axis=-1
         )
 
-        cmd = self.goal - base_pos
-
+        cmd = torch.ones((self.num_envs, 1), dtype=torch.float32, device=self.device)
         obs = torch.from_numpy(obs).to(self.device)
-        cmd = torch.from_numpy(cmd).to(self.device)
 
         return obs, cmd
 
@@ -103,6 +101,7 @@ class RaisimEnv:
             self.generate_goal()
             done = np.array([False])
             obs, cmd = self.observe()
+            goal = np.array([4, 0])
 
             # now run the agent for n steps
             for n in tqdm(range(self.eval_n_steps)):
@@ -123,7 +122,8 @@ class RaisimEnv:
 
                 for i in range(self.T_action):
                     obs, cmd, reward, done = self.step(pred_action[:, i])
-                    reward = cmd.norm(dim=-1).cpu().numpy()
+                    pos = obs[:, :2].cpu().numpy()
+                    reward = np.linalg.norm(pos - goal, axis=1)
                     total_rewards += reward
 
                     delta = time.time() - start
@@ -133,7 +133,7 @@ class RaisimEnv:
 
             # Save images as gif
             if real_time:
-                imageio.mimsave("trajectory.gif", self.images, fps=10)
+                imageio.mimsave("trajectory.gif", self.images, fps=25)
 
         self.close()
         total_rewards /= self.eval_n_times * self.eval_n_steps
@@ -161,7 +161,7 @@ class RaisimEnv:
         canvas = FigureCanvas(fig)
         ax = fig.gca()
         ax.plot(pred_traj[0, :, 0], pred_traj[0, :, 1], "r")
-        ax.plot(cmd[0, 0], cmd[0, 1], "go")
+        # ax.plot(cmd[0, 0], cmd[0, 1], "go")
         ax.set_xlim(-4, 4)
         ax.set_ylim(-4, 4)
 
@@ -170,10 +170,8 @@ class RaisimEnv:
             ax.quiver(
                 pred_traj[0, i, 0],
                 pred_traj[0, i, 1],
-                # pred_traj[0, i, 33],
-                # pred_traj[0, i, 34],
-                np.cos(yaw[i]),
-                np.sin(yaw[i]),
+                pred_traj[0, i, 33],
+                pred_traj[0, i, 34],
                 color="b",
                 scale=10,
                 width=0.005,

@@ -194,7 +194,7 @@ class Agent:
             self.num_sampling_steps, self.sigma_min, self.sigma_max, self.device
         )
         x = torch.randn_like(sa_out) * self.sigma_max
-        x_0 = self.sample_ddim(x, sigmas, state_in, cmd)
+        x_0 = self.sample_ddim(x, sigmas, state_in, cmd, predict=True)
 
         mse = nn.functional.mse_loss(x_0, sa_out, reduction="none")
         total_mse = mse.mean().item()
@@ -210,6 +210,10 @@ class Agent:
         timestep_mse = mse.mean(dim=(0, 2))
 
         prediction = self.scaler.inverse_scale_output(x_0)[..., : self.pred_obs_dim]
+        goal = torch.tensor([1.0, 0.0], device=self.device)
+        vels = prediction[:, :, 33:35]
+        pred_reward = (vels @ goal) / (torch.norm(vels, dim=-1) * torch.norm(goal))
+        pred_reward = (pred_reward - 1).exp().mean(dim=1, keepdim=True)
 
         # restore the previous model parameters
         if self.use_ema:
@@ -224,6 +228,8 @@ class Agent:
             "last_mse": last_mse,
             "timestep_mse": timestep_mse,
             "prediction": prediction,
+            "reward": cmd,
+            "pred_reward": pred_reward,
         }
         return info
 
@@ -374,7 +380,7 @@ class Agent:
         """
         state = self.get_to_device(batch, "observation")
         action = self.get_to_device(batch, "action")
-        cmd = self.get_to_device(batch, "cmd")
+        reward = self.get_to_device(batch, "cmd")
 
         # Centre posisition around the current state
         state[..., :2] = state[..., :2] - state[:, self.T_cond - 1, :2].unsqueeze(1)
@@ -389,11 +395,14 @@ class Agent:
         else:
             sa_out = None
 
-        # Command
-        cmd = state[:, -1, :2] if cmd is None else cmd
-        cmd = self.scaler.scale_input(cmd)
+        # Reward
+        if reward is None:
+            goal = torch.tensor([1.0, 0.0], device=self.device)
+            vels = state[:, self.T_cond - 1 :, 33:35]
+            reward = (vels @ goal) / (torch.norm(vels, dim=-1) * torch.norm(goal))
+            reward = (reward - 1).exp().mean(dim=1, keepdim=True)
 
-        return state_in, sa_out, cmd
+        return state_in, sa_out, reward
 
     def get_to_device(self, batch, key):
         return batch.get(key).to(self.device) if batch.get(key) is not None else None

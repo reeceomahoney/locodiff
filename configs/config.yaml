@@ -15,19 +15,19 @@ wandb:
 # general params
 device: 'cuda'
 seed: 6
-T: 125
+T: 50
 T_cond: 2
 T_action: 1
 
 action_dim: 12
-obs_dim: null  # will be set automatically
-pred_obs_dim: null  # will be set automatically
+obs_dim: 36
+pred_obs_dim: 36
 goal_dim: 1
 
 # policy model params
 hidden_dim: 256
 use_spectral_norm: false
-num_hidden_layers: 4
+num_hidden_layers: 2
 weight_decay: 1e-3
 train_method: 'steps'
 max_train_steps: 1e6
@@ -43,7 +43,7 @@ decay: 0.999
 update_ema_every_n_steps: 1
 sigma_data: 0.32
 cond_mask_prob: 0.1
-cond_lambda: 2 # only required for inference of CFG-BESO
+cond_lambda: 2
 n_timesteps: 3
 
 env:
