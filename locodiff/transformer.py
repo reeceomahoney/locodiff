@@ -184,7 +184,7 @@ class DiffusionTransformer(nn.Module):
         goal = kwargs["goal"]
         force_mask = kwargs.get("uncond", False)
         goal = self.mask_cond(goal, force_mask=force_mask)
-        goal_emb = self.cmd_emb(goal).unsqueeze(1)
+        goal_emb = self.goal_emb(goal).unsqueeze(1)
 
         cond = torch.cat([sigma_emb, goal_emb, cond_emb], dim=1)
         cond += self.cond_pos_emb
