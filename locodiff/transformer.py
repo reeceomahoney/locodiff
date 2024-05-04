@@ -182,8 +182,8 @@ class DiffusionTransformer(nn.Module):
 
         # command embedding
         cmd = kwargs["goal"]
-        # force_mask = kwargs.get("uncond", False)
-        # cmd = self.mask_cond(cmd, force_mask=force_mask)
+        force_mask = kwargs.get("uncond", False)
+        cmd = self.mask_cond(cmd, force_mask=force_mask)
         cmd_emb = self.cmd_emb(cmd).unsqueeze(1)
 
         cond = torch.cat([sigma_emb, cmd_emb, cond_emb], dim=1)

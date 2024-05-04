@@ -266,7 +266,7 @@ class Agent:
         x = torch.randn((self.num_envs, self.T + 1, sa_dim), device=self.device)
         x *= self.sigma_max
 
-        x_0, denoised = self.sample_ddim(x, sigmas, state_in, goal)
+        x_0, denoised = self.sample_ddim(x, sigmas, state_in, goal, predict=True)
 
         # get the action for the current timestep
         x_0 = self.scaler.clip(x_0)
@@ -306,9 +306,13 @@ class Agent:
 
         num_steps = kwargs.get("num_steps", len(sigmas) - 1)
         kwargs["goal"] = goal
+        predict = kwargs.get("predict", False)
 
         for i in trange(num_steps, disable=disable):
-            denoised = self.model(x_t, cond, sigmas[i] * s_in, **kwargs)
+            if predict:
+                denoised = self.cfg_forward(x_t, cond, sigmas[i] * s_in, **kwargs)
+            else:
+                denoised = self.model(x_t, cond, sigmas[i] * s_in, **kwargs)
             t, t_next = t_fn(sigmas[i]), t_fn(sigmas[i + 1])
             h = t_next - t
             x_t = (sigma_fn(t_next) / sigma_fn(t)) * x_t - (-h).expm1() * denoised
