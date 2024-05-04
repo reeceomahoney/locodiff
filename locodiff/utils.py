@@ -167,17 +167,25 @@ class MinMaxScaler:
         self.y_bounds[0, :] = -1.1
         self.y_bounds[1, :] = 1.1
 
-    def update_pos_scale(self, obs_batch, T_cond):
+    def update_pos_scale(self, batch, T_cond):
+        obs_batch = batch["observation"]
+        goal_batch = batch["goal"]
+
         pos = obs_batch[..., :2] - obs_batch[:, T_cond - 1, :2].unsqueeze(1)
-        self.x_mean[:2] = pos.mean(dim=(0, 1)).to(self.device)
-        self.x_std[:2] = pos.std(dim=(0, 1)).to(self.device)
-        self.y_max[:2] = pos.reshape(-1, 2).max(dim=0).values.to(self.device)
-        self.y_min[:2] = pos.reshape(-1, 2).min(dim=0).values.to(self.device)
+        self.x_mean[:2] = pos[:, :T_cond].mean(dim=(0, 1)).to(self.device)
+        self.x_std[:2] = pos[:, :T_cond].std(dim=(0, 1)).to(self.device)
+
+        pos_flat = pos[:, T_cond - 1 :].reshape(-1, 2)
+        self.y_max[:2] = pos_flat.max(dim=0).values.to(self.device)
+        self.y_min[:2] = pos_flat.min(dim=0).values.to(self.device)
+
+        goal = goal_batch[..., :2] - obs_batch[:, T_cond - 1, :2]
+        self.goal_mean = goal.mean(dim=(0, 1)).to(self.device)
+        self.goal_std = goal.std(dim=(0, 1)).to(self.device)
 
     @torch.no_grad()
     def scale_input(self, x):
-        dim = x.shape[-1]
-        out = (x - self.x_mean[:dim]) / self.x_std[:dim]
+        out = (x - self.x_mean) / self.x_std
         return out
 
     @torch.no_grad()
@@ -194,6 +202,9 @@ class MinMaxScaler:
     def inverse_scale_output(self, y):
         out = (y + 1) * (self.y_max - self.y_min) / 2 + self.y_min
         return out
+    
+    def scale_goal(self, goal):
+        return (goal - self.goal_mean) / self.goal_std
 
     @torch.no_grad()
     def clip(self, y):

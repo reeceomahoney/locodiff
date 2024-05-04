@@ -97,8 +97,8 @@ class Agent:
         )
 
         # Update scaler to shifted position scale
-        obs = next(iter(self.train_loader))["observation"]
-        self.scaler.update_pos_scale(obs, self.T_cond)
+        batch = next(iter(self.train_loader))
+        self.scaler.update_pos_scale(batch, self.T_cond)
 
         # misc
         self.device = device
@@ -396,7 +396,7 @@ class Agent:
             sa_out = None
 
         goal = goal - current_pos
-        goal = self.scaler.scale_input(goal)
+        goal = self.scaler.scale_goal(goal)
 
         return state_in, sa_out, goal
 
