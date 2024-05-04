@@ -5,12 +5,13 @@ import matplotlib.pyplot as plt
 import socket
 
 import hydra
-import wandb
 from omegaconf import DictConfig, OmegaConf
 import torch
 from tqdm import tqdm
+from scipy.spatial.transform import Rotation as R
 
 from env.raisim_env import RaisimEnv
+from locodiff.classifier import ClassifierGuidedSampleModel
 
 
 log = logging.getLogger(__name__)
@@ -49,10 +50,11 @@ def main(cfg: DictConfig) -> None:
     agent.sigma_min = cfg.sigma_min
     agent.cond_lambda = cfg.cond_lambda
 
-    # set seeds
-    torch.manual_seed(model_cfg.seed)
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
+    # Classifier
+    classifier_cfg = OmegaConf.load(f"{cfg.classifier_path}/.hydra/config.yaml")
+    classifier = hydra.utils.instantiate(classifier_cfg.classifier)
+    classifier.load_state_dict(torch.load(f"{cfg.classifier_path}/classifier.pth"))
+    agent.model = ClassifierGuidedSampleModel(agent.model, classifier, cfg.cond_lambda)
 
     # Evaluate
     if cfg["test_rollout"]:
@@ -93,9 +95,15 @@ def main(cfg: DictConfig) -> None:
             results = info["mse"].cpu().numpy().mean(axis=(0, 1))
             plt.bar(range(len(results)), results)
         if cfg["visualize x-y trajectory"]:
-            agent.num_sampling_steps = 50
-            info = agent.evaluate(batch)
+            agent.num_sampling_steps = 10
+            T_cond = model_cfg["T_cond"]
+            batch = {k: v[:16] for k, v in batch.items()}
+
             obs = batch["observation"].cpu().numpy()
+            obs[:, :, :2] -= obs[:, T_cond - 1: T_cond, :2]
+
+            info = agent.evaluate(batch)
+            goal = info["goal"].cpu().numpy()
             results = info["prediction"].cpu().numpy()
 
             fig, axs = plt.subplots(4, 4, figsize=(15, 15))
@@ -103,16 +111,28 @@ def main(cfg: DictConfig) -> None:
 
             T_cond = model_cfg["T_cond"]
             for i in range(16):
-                axs[i].title.set_text(f"Reward: {info['reward'][i].item()}")
                 gt = obs[i, T_cond - 1 :, :2]
                 axs[i].plot(gt[:, 0], gt[:, 1], "o-", label="observed")
-                axs[i].plot(gt[0, 0], gt[0, 1], "go", label="Start")
-                axs[i].plot(gt[-1, 0], gt[-1, 1], "ro", label="End")
+                axs[i].plot(goal[i, 0], goal[i, 1], "rx", label="Goal")
+
+                gt_vel = obs[i, T_cond - 1 :, 33:36]
+                gt_ori = obs[i, T_cond - 1 :, 2:6]
+                gt_ori = np.roll(gt_ori, shift=-1, axis=1)
+                rot = R.from_quat(gt_ori).as_matrix()
+                gt_vel = np.einsum("bij, bj -> bi", rot, gt_vel)
+                for j in range(0, len(gt_vel), 10):
+                    axs[i].quiver(
+                        gt[j, 0],
+                        gt[j, 1],
+                        gt_vel[j, 0],
+                        gt_vel[j, 1],
+                        scale=5,
+                        width=0.005,
+                        color="r",
+                    )
 
                 pred = results[i, :, :2]
                 axs[i].plot(pred[:, 0], pred[:, 1], "x-", label="predicted")
-                axs[i].plot(pred[0, 0], pred[0, 1], "gx", label="Start")
-                axs[i].plot(pred[-1, 0], pred[-1, 1], "rx", label="End")
 
                 axs[i].legend()
 
@@ -120,28 +140,25 @@ def main(cfg: DictConfig) -> None:
             plt.savefig("results.png")
         if cfg["test_cond_lambda"]:
             agent.num_sampling_steps = 10
-            lambdas = [0, 1, 1.5, 2, 5, 10, 20, 50, 100]
-            batch = {k: v[6:7] for k, v in batch.items()}
-            fix, axs = plt.subplots(3, 3, figsize=(15, 15))
+            lambdas = [0, 1e-6, 2e-3]
+            batch = {k: v[3:4] for k, v in batch.items()}
+
+            fix, axs = plt.subplots(2, 3, figsize=(15, 10))
             axs = axs.flatten()
+
+            obs = batch["observation"].cpu().numpy()
+            obs[:, :, :2] -= obs[:, model_cfg["T_cond"] - 1, :2]
+
             for i, l in enumerate(lambdas):
-                agent.cond_lambda = l
-                info = agent.evaluate(batch)
-                obs = batch["observation"].cpu().numpy()
-                results = info["prediction"].cpu().numpy()
+                info = agent.evaluate(batch, cond_lambda=l)
+                goal = info["goal"].cpu().numpy()
+                pred = info["prediction"].cpu().numpy()[0, :, :2]
                 gt = obs[0, model_cfg["T_cond"] - 1 :, :2]
 
-                axs[i].title.set_text(
-                    f"Lambda: {l}, pred_reward: {info['pred_reward'].item()}"
-                )
+                axs[i].title.set_text(f"Lambda: {l}")
                 axs[i].plot(gt[:, 0], gt[:, 1], "o-", label="observed")
-                axs[i].plot(gt[0, 0], gt[0, 1], "go", label="Start")
-                axs[i].plot(gt[-1, 0], gt[-1, 1], "ro", label="End")
-
-                pred = results[0, :, :2]
                 axs[i].plot(pred[:, 0], pred[:, 1], "x-", label="predicted")
-                axs[i].plot(pred[0, 0], pred[0, 1], "gx", label="Start")
-                axs[i].plot(pred[-1, 0], pred[-1, 1], "rx", label="End")
+                axs[i].plot(goal[0, 0], goal[0, 1], "rx", label="Goal")
 
                 axs[i].legend()
 

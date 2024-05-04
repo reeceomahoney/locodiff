@@ -154,100 +154,47 @@ class MinMaxScaler:
     def __init__(self, x_data: np.ndarray, y_data: np.ndarray, device: str):
         self.device = device
 
-        x_data = x_data.detach().cpu().numpy()
-        y_data = y_data.detach().cpu().numpy()
+        x_data = x_data.detach()
+        y_data = y_data.detach()
 
-        with torch.no_grad():
-            self.y_min = torch.from_numpy(y_data.min(0)).to(device)
-            self.y_max = torch.from_numpy(y_data.max(0)).to(device)
+        self.x_mean = x_data.mean(0).to(device)
+        self.x_std = x_data.std(0).to(device)
 
-            self.new_max_y = torch.ones_like(self.y_max)
-            self.new_min_y = -1 * torch.ones_like(self.y_max)
+        self.y_min = y_data.min(0).values.to(device)
+        self.y_max = y_data.max(0).values.to(device)
 
-            self.x_mean = torch.from_numpy(x_data.mean(0)).to(device)
-            self.x_std = torch.from_numpy(x_data.std(0)).to(device)
+        self.y_bounds = torch.zeros((2, y_data.shape[-1])).to(device)
+        self.y_bounds[0, :] = -1.1
+        self.y_bounds[1, :] = 1.1
 
-            self.y_bounds = np.zeros((2, y_data.shape[-1]))
-            self.y_bounds[0, :] = -1 * np.ones_like(y_data.min(0))[:]
-            self.y_bounds[1, :] = np.ones_like(y_data.min(0))[:]
-            self.y_bounds = torch.from_numpy(self.y_bounds).to(device)
+    def update_pos_scale(self, obs_batch, T_cond):
+        pos = obs_batch[..., :2] - obs_batch[:, T_cond - 1, :2].unsqueeze(1)
+        self.x_mean[:2] = pos.mean(dim=(0, 1)).to(self.device)
+        self.x_std[:2] = pos.std(dim=(0, 1)).to(self.device)
+        self.y_max[:2] = pos.reshape(-1, 2).max(dim=0).values.to(self.device)
+        self.y_min[:2] = pos.reshape(-1, 2).min(dim=0).values.to(self.device)
 
     @torch.no_grad()
     def scale_input(self, x):
-        """
-        Scales the input tensor `x` based on the defined scaling parameters.
-
-        Args:
-            x (torch.Tensor): The input tensor to be scaled.
-        Returns:
-            torch.Tensor: The scaled input tensor.
-        """
-        x = x.to(self.device)
-        if x.shape[-1] == 2:
-            out = (x - self.x_mean[:2]) / (self.x_std[:2] + 1e-12)
-        else:
-            out = (x - self.x_mean) / (self.x_std + 1e-12)
-        return out.to(torch.float32)
+        dim = x.shape[-1]
+        out = (x - self.x_mean[:dim]) / self.x_std[:dim]
+        return out
 
     @torch.no_grad()
     def scale_output(self, y):
-        """
-        Scales the output tensor `y` based on the defined scaling parameters.
-        Args:
-            y (torch.Tensor): The output tensor to be scaled.
-        Returns:
-            torch.Tensor: The scaled output tensor.
-        """
-        y = y.to(self.device)
-        if y.shape[-1] == 2:
-            out = (y - self.y_min[:2]) / (self.y_max[:2] - self.y_min[:2]) * (
-                self.new_max_y[:2] - self.new_min_y[:2]
-            ) + self.new_min_y[:2]
-        else:
-            out = (y - self.y_min) / (self.y_max - self.y_min) * (
-                self.new_max_y - self.new_min_y
-            ) + self.new_min_y
-        return out.to(torch.float32)
+        out = (y - self.y_min) / (self.y_max - self.y_min) * 2 - 1
+        return out
 
     @torch.no_grad()
     def inverse_scale_input(self, x):
-        """
-        Inversely scales the input tensor `x` based on the defined scaling parameters.
-
-        Args:
-            x (torch.Tensor): The input tensor to be inversely scaled.
-        Returns:
-            torch.Tensor: The inversely scaled input tensor.
-        """
-        out = x * (
-            self.x_std + 1e-12 * torch.ones((self.x_std.shape), device=self.device)
-        )
-        out += self.x_mean
-        return out.to(torch.float32)
+        out = x * self.x_std + self.x_mean
+        return out
 
     @torch.no_grad()
     def inverse_scale_output(self, y):
-        """
-        Inversely scales the output tensor `y` based on the defined scaling parameters.
-
-        Args:
-            y (torch.Tensor): The output tensor to be inversely scaled.
-        Returns:
-            torch.Tensor: The inversely scaled output tensor.
-        """
-        y.to(self.device)
-        out = (y - self.new_min_y) / (self.new_max_y - self.new_min_y) * (
-            self.y_max - self.y_min
-        ) + self.y_min
+        out = (y + 1) * (self.y_max - self.y_min) / 2 + self.y_min
         return out
 
     @torch.no_grad()
     def clip(self, y):
-        """
-        Clips the input tensor `y` based on the defined action bounds.
-        """
-        return (
-            torch.clamp(y, self.y_bounds[0, :] * 1.1, self.y_bounds[1, :] * 1.1)
-            .to(self.device)
-            .to(torch.float32)
-        )
+        return torch.clamp(y, self.y_bounds[0, :], self.y_bounds[1, :])

@@ -36,13 +36,15 @@ class DiffusionTransformer(nn.Module):
         )
         self.cond_state_emb = nn.Linear(self.obs_dim, self.d_model)
         self.sigma_emb = nn.Linear(1, self.d_model)
-        self.cmd_emb = nn.Linear(1, self.d_model)
+        self.cmd_emb = nn.Linear(2, self.d_model)
 
         self.pos_emb = (
             SinusoidalPosEmb(d_model)(torch.arange(self.T + 1)).unsqueeze(0).to(device)
         )
         self.cond_pos_emb = (
-            SinusoidalPosEmb(d_model)(torch.arange(self.T_cond + 2)).unsqueeze(0).to(device)
+            SinusoidalPosEmb(d_model)(torch.arange(self.T_cond + 2))
+            .unsqueeze(0)
+            .to(device)
         )
 
         self.encoder = nn.Sequential(
@@ -179,9 +181,9 @@ class DiffusionTransformer(nn.Module):
         sigma_emb = self.sigma_emb(sigma)
 
         # command embedding
-        cmd = kwargs["cmd"]
-        force_mask = kwargs.get("uncond", False)
-        cmd = self.mask_cond(cmd, force_mask=force_mask)
+        cmd = kwargs["goal"]
+        # force_mask = kwargs.get("uncond", False)
+        # cmd = self.mask_cond(cmd, force_mask=force_mask)
         cmd_emb = self.cmd_emb(cmd).unsqueeze(1)
 
         cond = torch.cat([sigma_emb, cmd_emb, cond_emb], dim=1)

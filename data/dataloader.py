@@ -85,11 +85,7 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         self.terminals = data["terminals"]
         self.split_data()
 
-        self.observations = torch.from_numpy(self.observations).to(device).float()
-        self.actions = torch.from_numpy(self.actions).to(device).float()
-        self.masks = torch.from_numpy(self.masks).to(device).float()
-
-        tensors = [self.observations, self.actions, self.masks]
+        tensors = [self.observations, self.actions, self.masks, self.goal, self.values]
         TensorDataset.__init__(self, *tensors)
 
         log.info(
@@ -149,6 +145,30 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
 
         masks_initial_pad = np.ones((self.masks.shape[0], self.T_cond - 1))
         self.masks = np.concatenate([masks_initial_pad, self.masks], axis=1)
+
+        # Goal
+        indices_1 = np.arange(self.masks.shape[0])
+        indices_2 = (self.masks.sum(1) - 1).astype(int)
+        last_states = self.observations[indices_1, indices_2]
+        self.goal = last_states[:, :2]
+
+        self.observations = torch.from_numpy(self.observations).to(self.device).float()
+        self.actions = torch.from_numpy(self.actions).to(self.device).float()
+        self.masks = torch.from_numpy(self.masks).to(self.device).float()
+        self.goal = torch.from_numpy(self.goal).to(self.device).float()
+
+        # Rewards
+        reward = (self.observations[..., :2] - self.goal[:, None, :]).norm(dim=-1)
+        reward = (-reward).exp()
+
+        B, T = reward.shape
+        gamma = 0.992
+        timesteps = torch.arange(T).unsqueeze(-1).repeat(1, T).float().to(reward.device)
+        discount_matrix = torch.triu(gamma ** (timesteps.transpose(0, 1) - timesteps))
+        discount_matrix = discount_matrix.unsqueeze(0).expand(B, -1, -1).clone()
+
+        self.values = torch.einsum("bij,bj->bi", discount_matrix, reward)
+        self.values = self.values.to(self.device)
 
     def pad_and_stack(self, splits, max_len):
         """Pad the sequences and stack them into a tensor"""

@@ -50,7 +50,7 @@ class RaisimEnv:
 
     def step(self, action):
         self.env.step(action, self._reward, self._done)
-        return *self.observe(), self._reward.copy(), self._done.copy()
+        return self.observe(), self._reward.copy(), self._done.copy()
 
     def observe(self, update_statistics=False):
         self.env.observe(self._observation, update_statistics)
@@ -60,11 +60,8 @@ class RaisimEnv:
         obs = np.concatenate(
             [base_pos, orientation, self._observation[:, 3:33]], axis=-1
         )
-
-        cmd = torch.ones((self.num_envs, 1), dtype=torch.float32, device=self.device)
         obs = torch.from_numpy(obs).to(self.device)
-
-        return obs, cmd
+        return obs
 
     def reset(self, conditional_reset=False):
         self._reward = np.zeros(self.num_envs, dtype=np.float32)
@@ -100,8 +97,7 @@ class RaisimEnv:
             self.env.reset()
             self.generate_goal()
             done = np.array([False])
-            obs, cmd = self.observe()
-            goal = np.array([4, 0])
+            obs = self.observe()
 
             # now run the agent for n steps
             for n in tqdm(range(self.eval_n_steps)):
@@ -113,17 +109,16 @@ class RaisimEnv:
                     total_dones += np.ones(done.shape, dtype="int64")
 
                 pred_action, pred_traj = agent.predict(
-                    {"observation": obs, "cmd": cmd},
+                    {"observation": obs, "goal": self.goal},
                     new_sampling_steps=n_inference_steps,
                 )
 
                 if real_time:
-                    self.plot_trajectory(pred_traj, cmd)
+                    self.plot_trajectory(pred_traj, self.goal)
 
                 for i in range(self.T_action):
-                    obs, cmd, reward, done = self.step(pred_action[:, i])
-                    pos = obs[:, :2].cpu().numpy()
-                    reward = np.linalg.norm(pos - goal, axis=1)
+                    obs, reward, done = self.step(pred_action[:, i])
+                    reward = (obs[:, :2] - self.goal).norm(dim=1).cpu().numpy()
                     total_rewards += reward
 
                     delta = time.time() - start
@@ -148,20 +143,20 @@ class RaisimEnv:
         }
         return return_dict
 
-    def plot_trajectory(self, pred_traj, cmd):
+    def plot_trajectory(self, pred_traj, goal):
         # Calculate yaw angles from quaternions
         quat = pred_traj[0, :, 2:6]
         quat = np.roll(quat, shift=-1, axis=1)  # w, x, y, z -> x, y, z, w
         yaw = R.from_quat(quat).as_euler("xyz")[:, 2]
 
-        cmd = cmd.cpu().numpy()
+        goal = goal.cpu().numpy()
 
         # plot the trajectory
         fig = Figure()
         canvas = FigureCanvas(fig)
         ax = fig.gca()
         ax.plot(pred_traj[0, :, 0], pred_traj[0, :, 1], "r")
-        # ax.plot(cmd[0, 0], cmd[0, 1], "go")
+        ax.plot(goal[0, 0], goal[0, 1], "go")
         ax.set_xlim(-4, 4)
         ax.set_ylim(-4, 4)
 
@@ -186,6 +181,7 @@ class RaisimEnv:
     def generate_goal(self):
         self.goal = np.random.uniform(-4, 4, (self.num_envs, 2)).astype(np.float32)
         self.set_goal(self.goal)
+        self.goal = torch.from_numpy(self.goal).to(self.device)
 
     def get_frame_cartesian_pos(self):
         self.env.getFrameCartesianPositions(self._frame_cartesian_pos)

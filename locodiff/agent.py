@@ -96,6 +96,10 @@ class Agent:
             dataset_fn
         )
 
+        # Update scaler to shifted position scale
+        obs = next(iter(self.train_loader))["observation"]
+        self.scaler.update_pos_scale(obs, self.T_cond)
+
         # misc
         self.device = device
         self.env = None
@@ -156,14 +160,14 @@ class Agent:
         log.info("Training done!")
 
     def train_step(self, batch: dict):
-        state_in, sa_out, cmd = self.process_batch(batch)
+        state_in, sa_out, goal = self.process_batch(batch)
 
         self.model.train()
         self.model.training = True
 
         noise = torch.randn_like(sa_out)
         sigma = self.make_sample_density()(shape=(len(sa_out),), device=self.device)
-        loss = self.model.loss(sa_out, state_in, noise, sigma, cmd=cmd)
+        loss = self.model.loss(sa_out, state_in, noise, sigma, goal=goal)
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -177,11 +181,11 @@ class Agent:
         return loss.item()
 
     @torch.no_grad()
-    def evaluate(self, batch: dict):
+    def evaluate(self, batch: dict, **kwargs):
         """
         Evaluates the model using the provided batch of data and returns the mean squared error (MSE) loss.
         """
-        state_in, sa_out, cmd = self.process_batch(batch)
+        state_in, sa_out, goal = self.process_batch(batch)
 
         if self.use_ema:
             self.ema_helper.store(self.model.parameters())
@@ -194,7 +198,7 @@ class Agent:
             self.num_sampling_steps, self.sigma_min, self.sigma_max, self.device
         )
         x = torch.randn_like(sa_out) * self.sigma_max
-        x_0 = self.sample_ddim(x, sigmas, state_in, cmd, predict=True)
+        x_0, epsilon = self.sample_ddim(x, sigmas, state_in, goal, **kwargs)
 
         mse = nn.functional.mse_loss(x_0, sa_out, reduction="none")
         total_mse = mse.mean().item()
@@ -210,10 +214,6 @@ class Agent:
         timestep_mse = mse.mean(dim=(0, 2))
 
         prediction = self.scaler.inverse_scale_output(x_0)[..., : self.pred_obs_dim]
-        goal = torch.tensor([1.0, 0.0], device=self.device)
-        vels = prediction[:, :, 33:35]
-        pred_reward = (vels @ goal) / (torch.norm(vels, dim=-1) * torch.norm(goal))
-        pred_reward = (pred_reward - 1).exp().mean(dim=1, keepdim=True)
 
         # restore the previous model parameters
         if self.use_ema:
@@ -228,9 +228,10 @@ class Agent:
             "last_mse": last_mse,
             "timestep_mse": timestep_mse,
             "prediction": prediction,
-            "reward": cmd,
-            "pred_reward": pred_reward,
+            "goal": goal,
         }
+        if "num_steps" in kwargs:
+            info["inputs"] = (epsilon, state_in, goal)
         return info
 
     def reset(self):
@@ -244,7 +245,7 @@ class Agent:
         Predicts the output of the model based on the provided batch of data.
         """
         batch["observation"] = self.stack_context(batch["observation"])
-        state_in, _, cmd = self.process_batch(batch)
+        state_in, _, goal = self.process_batch(batch)
 
         if new_sampling_steps is not None:
             n_sampling_steps = new_sampling_steps
@@ -265,7 +266,7 @@ class Agent:
         x = torch.randn((self.num_envs, self.T + 1, sa_dim), device=self.device)
         x *= self.sigma_max
 
-        x_0 = self.sample_ddim(x, sigmas, state_in, cmd, predict=True)
+        x_0, denoised = self.sample_ddim(x, sigmas, state_in, goal)
 
         # get the action for the current timestep
         x_0 = self.scaler.clip(x_0)
@@ -287,7 +288,7 @@ class Agent:
         return torch.stack(tuple(self.obs_context), dim=1)
 
     @torch.no_grad()
-    def sample_ddim(self, x_t, sigmas, cond, cmd, predict=False):
+    def sample_ddim(self, x_t, sigmas, cond, goal, **kwargs):
         """
         Sample from the model using the DDIM sampler
 
@@ -303,16 +304,16 @@ class Agent:
         sigma_fn = lambda t: t.neg().exp()
         t_fn = lambda sigma: sigma.log().neg()
 
-        for i in trange(len(sigmas) - 1, disable=disable):
-            if predict:
-                denoised = self.cfg_forward(x_t, cond, sigmas[i] * s_in, cmd=cmd)
-            else:
-                denoised = self.model(x_t, cond, sigmas[i] * s_in, cmd=cmd)
+        num_steps = kwargs.get("num_steps", len(sigmas) - 1)
+        kwargs["goal"] = goal
+
+        for i in trange(num_steps, disable=disable):
+            denoised = self.model(x_t, cond, sigmas[i] * s_in, **kwargs)
             t, t_next = t_fn(sigmas[i]), t_fn(sigmas[i + 1])
             h = t_next - t
             x_t = (sigma_fn(t_next) / sigma_fn(t)) * x_t - (-h).expm1() * denoised
 
-        return x_t
+        return x_t, denoised
 
     def cfg_forward(self, x_t, cond, sigma, **kwargs):
         """
@@ -380,29 +381,24 @@ class Agent:
         """
         state = self.get_to_device(batch, "observation")
         action = self.get_to_device(batch, "action")
-        reward = self.get_to_device(batch, "cmd")
+        goal = self.get_to_device(batch, "goal")
 
         # Centre posisition around the current state
-        state[..., :2] = state[..., :2] - state[:, self.T_cond - 1, :2].unsqueeze(1)
+        current_pos = state[:, self.T_cond - 1, :2].clone()
+        state[..., :2] = state[..., :2] - current_pos.unsqueeze(1)
         state_in = self.scaler.scale_input(state[:, : self.T_cond])
 
         # Action
         if action is not None:
-            sa_out = self.scaler.scale_output(
-                torch.cat([state[..., : self.pred_obs_dim], action], dim=-1)
-            )
-            sa_out = sa_out[:, self.T_cond - 1 :]
+            sa = torch.cat([state[..., : self.pred_obs_dim], action], dim=-1)
+            sa_out = self.scaler.scale_output(sa[:, self.T_cond - 1:])
         else:
             sa_out = None
 
-        # Reward
-        if reward is None:
-            goal = torch.tensor([1.0, 0.0], device=self.device)
-            vels = state[:, self.T_cond - 1 :, 33:35]
-            reward = (vels @ goal) / (torch.norm(vels, dim=-1) * torch.norm(goal))
-            reward = (reward - 1).exp().mean(dim=1, keepdim=True)
+        goal = goal - current_pos
+        goal = self.scaler.scale_input(goal)
 
-        return state_in, sa_out, reward
+        return state_in, sa_out, goal
 
     def get_to_device(self, batch, key):
-        return batch.get(key).to(self.device) if batch.get(key) is not None else None
+        return batch.get(key).clone().to(self.device) if batch.get(key) is not None else None
