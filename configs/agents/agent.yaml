@@ -43,6 +43,7 @@ model:
     _target_: locodiff.transformer.DiffusionTransformer
     obs_dim: ${obs_dim}
     pred_obs_dim: ${pred_obs_dim}
+    goal_dim: ${goal_dim}
     act_dim: ${action_dim}
     d_model: ${hidden_dim}
     nhead: ${n_heads}

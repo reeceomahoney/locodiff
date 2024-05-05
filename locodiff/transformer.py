@@ -8,6 +8,7 @@ class DiffusionTransformer(nn.Module):
         self,
         obs_dim,
         pred_obs_dim,
+        goal_dim,
         act_dim,
         d_model,
         nhead,
@@ -36,7 +37,7 @@ class DiffusionTransformer(nn.Module):
         )
         self.cond_state_emb = nn.Linear(self.obs_dim, self.d_model)
         self.sigma_emb = nn.Linear(1, self.d_model)
-        self.goal_emb = nn.Linear(2, self.d_model)
+        self.goal_emb = nn.Linear(goal_dim, self.d_model)
 
         self.pos_emb = (
             SinusoidalPosEmb(d_model)(torch.arange(self.T + 1)).unsqueeze(0).to(device)
@@ -191,13 +192,11 @@ class DiffusionTransformer(nn.Module):
         cond = self.encoder(cond)
 
         input_emb += self.pos_emb
-        x = self.decoder(
-            tgt=input_emb,
-            memory=cond,
-            tgt_mask=self.mask,
-        )
+        x = self.decoder(tgt=input_emb, memory=cond, tgt_mask=self.mask)
         x = self.ln_f(x)
-        return self.state_action_pred(x)
+        out = self.state_action_pred(x)
+
+        return out
 
     def generate_mask(self, x):
         mask = (torch.triu(torch.ones(x, x)) == 1).transpose(0, 1)

@@ -180,8 +180,8 @@ class MinMaxScaler:
         self.y_min[:2] = pos_flat.min(dim=0).values.to(self.device)
 
         goal = goal_batch[..., :2] - obs_batch[:, T_cond - 1, :2]
-        self.goal_mean = goal.mean(dim=(0, 1)).to(self.device)
-        self.goal_std = goal.std(dim=(0, 1)).to(self.device)
+        self.goal_mean = goal.mean(dim=0).to(self.device)
+        self.goal_std = goal.std(dim=0).to(self.device)
 
     @torch.no_grad()
     def scale_input(self, x):

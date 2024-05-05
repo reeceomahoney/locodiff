@@ -395,14 +395,18 @@ class Agent:
         # Action
         if action is not None:
             sa = torch.cat([state[..., : self.pred_obs_dim], action], dim=-1)
-            sa_out = self.scaler.scale_output(sa[:, self.T_cond - 1:])
+            sa_out = self.scaler.scale_output(sa[:, self.T_cond - 1 :])
         else:
             sa_out = None
 
-        goal = goal - current_pos
+        goal[..., :2] -= current_pos
         goal = self.scaler.scale_goal(goal)
 
         return state_in, sa_out, goal
 
     def get_to_device(self, batch, key):
-        return batch.get(key).clone().to(self.device) if batch.get(key) is not None else None
+        return (
+            batch.get(key).clone().to(self.device)
+            if batch.get(key) is not None
+            else None
+        )
