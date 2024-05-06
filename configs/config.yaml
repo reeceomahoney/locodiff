@@ -2,7 +2,7 @@ defaults:
   - agents: agent
   - _self_
 
-data_path: rand
+data_path: heading_less_stop
 
 hydra:
   run:
@@ -13,23 +13,23 @@ wandb:
   project: locodiff
 
 # general params
-device: 'cuda'
+device: "cuda"
 seed: 6
-T: 50
+T: 1
 T_cond: 2
 T_action: 1
 
 action_dim: 12
 obs_dim: 36
 pred_obs_dim: 36
-goal_dim: 1
+goal_dim: 2
 
 # policy model params
 hidden_dim: 256
 use_spectral_norm: false
-num_hidden_layers: 2
+num_hidden_layers: 4
 weight_decay: 1e-3
-train_method: 'steps'
+train_method: "steps"
 max_train_steps: 1e6
 max_epochs: 100
 eval_every_n_steps: 1000
@@ -39,17 +39,17 @@ sim_every_n_steps: 5000
 dropout: 0.0
 n_heads: 4
 use_ema: True
-decay: 0.999 
+decay: 0.999
 update_ema_every_n_steps: 1
-sigma_data: 0.32
-cond_mask_prob: 0.1
+sigma_data: 0.2
+cond_mask_prob: 0.0
 cond_lambda: 2
 n_timesteps: 3
 
 env:
   render: True
   num_envs: 30
-  num_threads: 'auto'
+  num_threads: "auto"
   simulation_dt: 0.005
   control_dt: 0.04
   max_time: 10000
@@ -76,7 +76,7 @@ env:
     probability_lateral_command: 0.0
     probability_yaw_command: 0.0
     probability_direction_command: 0.0
-    probability_constant_command: 0.8   # includes all three velocities
+    probability_constant_command: 0.8 # includes all three velocities
 
     # Time range in seconds when the next command is sampled
     command_sampling_time_min: 3.0

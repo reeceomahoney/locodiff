@@ -63,6 +63,6 @@ dataset_fn:
   device: ${device}
   window_size: ${T_cond}
   future_seq_len: ${T}
-  train_batch_size: 512
-  test_batch_size: 512
+  train_batch_size: 1024
+  test_batch_size: 1024
   num_workers: 4
