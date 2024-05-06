@@ -157,11 +157,11 @@ class MinMaxScaler:
         x_data = x_data.detach()
         y_data = y_data.detach()
 
-        self.x_mean = x_data.mean(0).to(device)
-        self.x_std = x_data.std(0).to(device)
+        self.x_max = x_data.max(0).values.to(device)
+        self.x_min = x_data.min(0).values.to(device)
 
-        self.y_min = y_data.min(0).values.to(device)
         self.y_max = y_data.max(0).values.to(device)
+        self.y_min = y_data.min(0).values.to(device)
 
         self.y_bounds = torch.zeros((2, y_data.shape[-1])).to(device)
         self.y_bounds[0, :] = -1.1
@@ -172,40 +172,32 @@ class MinMaxScaler:
         goal_batch = batch["goal"]
 
         pos = obs_batch[..., :2] - obs_batch[:, T_cond - 1, :2].unsqueeze(1)
-        self.x_mean[:2] = pos[:, :T_cond].mean(dim=(0, 1)).to(self.device)
-        self.x_std[:2] = pos[:, :T_cond].std(dim=(0, 1)).to(self.device)
+        pos_flat_in = pos[:, :T_cond].reshape(-1, 2)
+        self.x_max[:2] = pos_flat_in.max(dim=0).values.to(self.device)
+        self.x_min[:2] = pos_flat_in.min(dim=0).values.to(self.device)
 
-        pos_flat = pos[:, T_cond - 1 :].reshape(-1, 2)
-        self.y_max[:2] = pos_flat.max(dim=0).values.to(self.device)
-        self.y_min[:2] = pos_flat.min(dim=0).values.to(self.device)
+        pos_flat_out = pos[:, T_cond - 1 :].reshape(-1, 2)
+        self.y_max[:2] = pos_flat_out.max(dim=0).values.to(self.device)
+        self.y_min[:2] = pos_flat_out.min(dim=0).values.to(self.device)
 
         goal = goal_batch[..., :2] - obs_batch[:, T_cond - 1, :2]
-        self.goal_mean = goal.mean(dim=0).to(self.device)
-        self.goal_std = goal.std(dim=0).to(self.device)
+        self.goal_min = goal.min(dim=0).values.to(self.device)
+        self.goal_max = goal.max(dim=0).values.to(self.device)
 
-    @torch.no_grad()
     def scale_input(self, x):
-        out = (x - self.x_mean) / self.x_std
+        out = (x - self.x_min) / (self.x_max - self.x_min) * 2 - 1
         return out
 
-    @torch.no_grad()
     def scale_output(self, y):
         out = (y - self.y_min) / (self.y_max - self.y_min) * 2 - 1
         return out
 
-    @torch.no_grad()
-    def inverse_scale_input(self, x):
-        out = x * self.x_std + self.x_mean
-        return out
-
-    @torch.no_grad()
     def inverse_scale_output(self, y):
         out = (y + 1) * (self.y_max - self.y_min) / 2 + self.y_min
         return out
     
     def scale_goal(self, goal):
-        return (goal - self.goal_mean) / self.goal_std
+        return (goal - self.goal_min) / (self.goal_max - self.goal_min) * 2 - 1
 
-    @torch.no_grad()
     def clip(self, y):
         return torch.clamp(y, self.y_bounds[0, :], self.y_bounds[1, :])
