@@ -334,11 +334,8 @@ class Agent:
 
     def load_pretrained_model(self, weights_path: str, **kwargs) -> None:
         self.model.load_state_dict(
-            torch.load(os.path.join(weights_path, "non_ema_model_state_dict.pth")),
+            torch.load(os.path.join(weights_path, "model_state_dict.pth")),
             strict=False,
-        )
-        self.ema_helper = utils.ExponentialMovingAverage(
-            self.model.get_params(), self.decay, self.device
         )
         log.info("Loaded pre-trained model parameters")
 
@@ -401,6 +398,7 @@ class Agent:
 
         goal[..., :2] -= current_pos
         goal = self.scaler.scale_goal(goal)
+        # goal[..., -1] = 0
 
         return state_in, sa_out, goal
 

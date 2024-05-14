@@ -72,6 +72,9 @@ class DiffusionTransformer(nn.Module):
 
         self.apply(self._init_weights)
         self.to(device)
+        
+        # uncomment for jit tracing
+        self.detach_all()
 
     def _init_weights(self, module):
         ignore_types = (
@@ -219,6 +222,10 @@ class DiffusionTransformer(nn.Module):
 
     def get_params(self):
         return self.parameters()
+    
+    def detach_all(self):
+        for name, param in self.named_parameters():
+            param.detach_()
 
 
 if __name__ == "__main__":

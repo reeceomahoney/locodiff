@@ -4,7 +4,7 @@ import numpy as np
 from typing import Union, Optional, Sequence, List
 import abc
 from torch import default_generator, randperm
-from torch._utils import _accumulate
+from itertools import accumulate
 
 
 class TrajectoryDataset(Dataset, abc.ABC):
@@ -185,7 +185,7 @@ def random_split_traj(
     indices = randperm(sum(lengths), generator=generator).tolist()
     return [
         TrajectorySubset(dataset, indices[offset - length : offset])
-        for offset, length in zip(_accumulate(lengths), lengths)
+        for offset, length in zip(accumulate(lengths), lengths)
     ]
 
 

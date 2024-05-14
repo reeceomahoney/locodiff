@@ -180,9 +180,9 @@ class MinMaxScaler:
         self.y_max[:2] = pos_flat_out.max(dim=0).values.to(self.device)
         self.y_min[:2] = pos_flat_out.min(dim=0).values.to(self.device)
 
-        goal = goal_batch[..., :2] - obs_batch[:, T_cond - 1, :2]
-        self.goal_min = goal.min(dim=0).values.to(self.device)
-        self.goal_max = goal.max(dim=0).values.to(self.device)
+        goal_batch[..., :2] -= obs_batch[:, T_cond - 1, :2]
+        self.goal_min = goal_batch.min(dim=0).values.to(self.device)
+        self.goal_max = goal_batch.max(dim=0).values.to(self.device)
 
     def scale_input(self, x):
         out = (x - self.x_min) / (self.x_max - self.x_min) * 2 - 1

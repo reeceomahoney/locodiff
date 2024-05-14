@@ -152,13 +152,17 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         last_states = self.observations[indices_1, indices_2]
         self.goal = last_states[:, :2]
 
+        # skill = self.observations[:, 0, -1]
+        # self.goal = np.concatenate([self.goal, skill[:, None]], axis=1)
+        # self.observations = self.observations[..., :-1]
+
         self.observations = torch.from_numpy(self.observations).to(self.device).float()
         self.actions = torch.from_numpy(self.actions).to(self.device).float()
         self.masks = torch.from_numpy(self.masks).to(self.device).float()
         self.goal = torch.from_numpy(self.goal).to(self.device).float()
 
         # Rewards
-        reward = (self.observations[..., :2] - self.goal[:, None, :]).norm(dim=-1)
+        reward = (self.observations[..., :2] - self.goal[:, None, :2]).norm(dim=-1)
         reward = (-reward).exp()
 
         B, T = reward.shape
