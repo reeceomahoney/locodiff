@@ -337,7 +337,17 @@ class Agent:
             torch.load(os.path.join(weights_path, "model_state_dict.pth")),
             strict=False,
         )
-        log.info("Loaded pre-trained model parameters")
+
+        # Load scaler attributes
+        scaler_state = torch.load(os.path.join(weights_path, "scaler.pth"))
+        self.scaler.x_max = scaler_state['x_max']
+        self.scaler.x_min = scaler_state['x_min']
+        self.scaler.y_max = scaler_state['y_max']
+        self.scaler.y_min = scaler_state['y_min']
+        self.scaler.goal_max = scaler_state['goal_max']
+        self.scaler.goal_min = scaler_state['goal_min']
+
+        log.info("Loaded pre-trained model parameters and scaler")
 
     def store_model_weights(self, store_path: str) -> None:
         if self.use_ema:
@@ -351,6 +361,19 @@ class Agent:
         torch.save(
             self.model.state_dict(),
             os.path.join(store_path, "non_ema_model_state_dict.pth"),
+        )
+
+        # Save scaler attributes
+        torch.save(
+            {
+                "x_max": self.scaler.x_max,
+                "x_min": self.scaler.x_min,
+                "y_max": self.scaler.y_max,
+                "y_min": self.scaler.y_min,
+                "goal_max": self.scaler.goal_max,
+                "goal_min": self.scaler.goal_min,
+            },
+            os.path.join(store_path, "scaler.pth"),
         )
 
     @torch.no_grad()
