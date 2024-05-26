@@ -41,8 +41,9 @@ def main(cfg: DictConfig) -> None:
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
 
-    agent = hydra.utils.instantiate(model_cfg.agents)
-    agent.load_pretrained_model(cfg.model_store_path)
+    # agent = hydra.utils.instantiate(model_cfg.agents)
+    # agent.load_pretrained_model(cfg.model_store_path)
+    agent = torch.jit.load(f"policy_{cfg.device}.pt")
     env = RaisimEnv(model_cfg)
 
     # set new noise limits
@@ -51,10 +52,10 @@ def main(cfg: DictConfig) -> None:
     agent.cond_lambda = cfg.cond_lambda
 
     # Classifier
-    classifier_cfg = OmegaConf.load(f"{cfg.classifier_path}/.hydra/config.yaml")
-    classifier = hydra.utils.instantiate(classifier_cfg.classifier)
-    classifier.load_state_dict(torch.load(f"{cfg.classifier_path}/classifier.pth"))
-    agent.model = ClassifierGuidedSampleModel(agent.model, classifier, cfg.cond_lambda)
+    # classifier_cfg = OmegaConf.load(f"{cfg.classifier_path}/.hydra/config.yaml")
+    # classifier = hydra.utils.instantiate(classifier_cfg.classifier)
+    # classifier.load_state_dict(torch.load(f"{cfg.classifier_path}/classifier.pth"))
+    # agent.model = ClassifierGuidedSampleModel(agent.model, classifier, cfg.cond_lambda)
 
     # Evaluate
     if cfg["test_rollout"]:
@@ -97,7 +98,7 @@ def main(cfg: DictConfig) -> None:
         if cfg["visualize x-y trajectory"]:
             agent.num_sampling_steps = 10
             T_cond = model_cfg["T_cond"]
-            batch = {k: v[:16] for k, v in batch.items()}
+            # batch = {k: v[:16] for k, v in batch.items()}
 
             obs = batch["observation"].cpu().numpy()
             obs[:, :, :2] -= obs[:, T_cond - 1: T_cond, :2]
