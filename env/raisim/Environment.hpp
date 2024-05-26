@@ -39,7 +39,7 @@ namespace raisim {
             setSimulationTimeStep(cfg["simulation_dt"].template As<double>());
 
             /// add objects
-            robot_ = world_->addArticulatedSystem(resourceDir_ + "/models/anymal_c/urdf/model.urdf");
+            robot_ = world_->addArticulatedSystem(resourceDir_ + "/models/anymal_d/urdf/anymal_d.urdf");
             robot_->setName("anymal_c");
             robot_->setControlMode(raisim::ControlMode::PD_PLUS_FEEDFORWARD_TORQUE);
 
@@ -348,14 +348,8 @@ namespace raisim {
             }
         }
 
-        void getFrameCartesianPositions(Eigen::Ref<EigenVec> frameCartesianPositions) {
-            raisim::Vec<3> framePosition;
-            frameCartesianPositions.setZero();
-            for (int i = 0; i < 5; i++) {
-                robot_->getFramePosition(frameIdxs_[i], framePosition);
-                if (i > 0) {robot_->getPositionInBodyCoordinate(0, framePosition, framePosition);}
-                frameCartesianPositions.segment(3*i, 3) = framePosition.e().cast<float>();
-            }
+        void getBasePosition(Eigen::Ref<EigenVec> basePosition) {
+            basePosition = robot_->getBasePosition().e().cast<float>();
         }
 
         void getBaseOrientation(Eigen::Ref<EigenVec> baseOrientation) {
@@ -369,6 +363,10 @@ namespace raisim {
         void setGoal(const Eigen::Ref<EigenVec> &goal) {
             goalPosition_ << goal[0], goal[1], 0;
             server_->getVisualObject("goal")->setPosition(goalPosition_);
+        }
+
+        void getNominalJointPositions(Eigen::Ref<EigenVec> nominalJointPositions) {
+            nominalJointPositions = observationHandler_.getNominalGeneralizedCoordinates().tail(nJoints_).cast<float>();
         }
 
     private:

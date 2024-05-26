@@ -236,9 +236,9 @@ namespace raisim {
             environments_[0]->killServer();
         }
 
-        void getFrameCartesianPositions(Eigen::Ref<EigenRowMajorMat> &cartesianPos) {
+        void getBasePosition(Eigen::Ref<EigenRowMajorMat> &position) {
             for (int i = 0; i < num_envs_; i++)
-                environments_[i]->getFrameCartesianPositions(cartesianPos.row(i));
+                environments_[i]->getBasePosition(position.row(i));
         }
 
         void getBaseOrientation(Eigen::Ref<EigenRowMajorMat> &orientation) {
@@ -248,6 +248,11 @@ namespace raisim {
 
         void setGoal(Eigen::Ref<EigenRowMajorMat> &goal) {
             environments_[0]->setGoal(goal.row(0));
+        }
+
+        void getNominalJointPositions(Eigen::Ref<EigenRowMajorMat> &nominalJointPos) {
+            for (int i = 0; i < num_envs_; i++)
+                environments_[i]->getNominalJointPositions(nominalJointPos.row(i));
         }
 
     private:

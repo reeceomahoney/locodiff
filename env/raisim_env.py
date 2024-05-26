@@ -41,10 +41,13 @@ class RaisimEnv:
 
         # initialize variables
         self._observation = np.zeros([self.num_envs, self.num_obs], dtype=np.float32)
-        self._frame_cartesian_pos = np.zeros([self.num_envs, 3 * 5], dtype=np.float32)
+        self._base_position = np.zeros([self.num_envs, 2], dtype=np.float32)
         self._base_orientation = np.zeros([self.num_envs, 4], dtype=np.float32)
         self._reward = np.zeros(self.num_envs, dtype=np.float32)
         self._done = np.zeros(self.num_envs, dtype=bool)
+
+        self.nominal_joint_pos = np.zeros([self.num_envs, 12], dtype=np.float32)
+        self.env.getNominalJointPositions(self.nominal_joint_pos)
 
         self.goal = None
 
@@ -55,7 +58,7 @@ class RaisimEnv:
     def observe(self, update_statistics=False):
         self.env.observe(self._observation, update_statistics)
 
-        base_pos = self.get_frame_cartesian_pos()[:, :2]
+        base_pos = self.get_base_position()[:, :2]
         orientation = self.get_base_orientation()
         obs = np.concatenate(
             [base_pos, orientation, self._observation[:, 3:33]], axis=-1
@@ -100,6 +103,8 @@ class RaisimEnv:
             obs = self.observe()
 
             # now run the agent for n steps
+            action = self.nominal_joint_pos
+            action = np.tile(action, (self.num_envs, 1))
             for n in tqdm(range(self.eval_n_steps)):
                 start = time.time()
 
@@ -117,9 +122,10 @@ class RaisimEnv:
                     self.plot_trajectory(pred_traj, self.goal)
 
                 for i in range(self.T_action):
-                    obs, reward, done = self.step(pred_action[:, i])
-                    reward = (obs[:, :2] - self.goal).norm(dim=1).cpu().numpy()
+                    obs, reward, done = self.step(action)
+                    reward = (obs[:, :2] - self.goal[:, :2]).norm(dim=1).cpu().numpy()
                     total_rewards += reward
+                    action = pred_action[:, i]
 
                     delta = time.time() - start
                     if delta < 0.04 and real_time:
@@ -179,13 +185,13 @@ class RaisimEnv:
         self.images.append(image)
 
     def generate_goal(self):
-        self.goal = np.random.uniform(-4, 4, (self.num_envs, 2)).astype(np.float32)
+        self.goal = np.random.uniform(-3, 3, (self.num_envs, 2)).astype(np.float32)
         self.set_goal(self.goal)
         self.goal = torch.from_numpy(self.goal).to(self.device)
 
-    def get_frame_cartesian_pos(self):
-        self.env.getFrameCartesianPositions(self._frame_cartesian_pos)
-        return self._frame_cartesian_pos
+    def get_base_position(self):
+        self.env.getBasePosition(self._base_position)
+        return self._base_position
 
     def get_base_orientation(self):
         self.env.getBaseOrientation(self._base_orientation)
