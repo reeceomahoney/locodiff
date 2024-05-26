@@ -1,0 +1,48 @@
+_target_: locodiff.jit_agent.JitAgent
+_recursive_: false
+
+num_sampling_steps: ${n_timesteps}
+sigma_data: ${sigma_data}
+sigma_min: 0.001
+sigma_max: 80
+device: ${device}
+
+pred_obs_dim: ${pred_obs_dim}
+action_dim: ${action_dim}
+T: ${T}
+T_cond: ${T_cond}
+T_action: ${T_action}
+
+model:
+  _target_: locodiff.wrapper.GCDenoiser
+  _recursive_: false
+
+  sigma_data: ${sigma_data}
+
+  inner_model:
+    _target_: locodiff.transformer.DiffusionTransformer
+    obs_dim: ${obs_dim}
+    pred_obs_dim: ${pred_obs_dim}
+    goal_dim: ${goal_dim}
+    act_dim: ${action_dim}
+    d_model: ${hidden_dim}
+    nhead: ${n_heads}
+    num_layers: ${num_hidden_layers}
+    T: ${T}
+    T_cond: ${T_cond}
+    device: ${device}
+    cond_mask_prob: ${cond_mask_prob}
+    dropout: ${dropout}
+
+dataset_fn:
+  _target_: data.dataloader.get_raisim_train_val
+  data_directory: ${data_path}
+  obs_dim: ${obs_dim}
+  train_fraction: 0.95
+  random_seed: ${seed}
+  device: ${device}
+  window_size: ${T_cond}
+  future_seq_len: ${T}
+  train_batch_size: 1024
+  test_batch_size: 1024
+  num_workers: 4
