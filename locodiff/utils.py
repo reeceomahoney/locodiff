@@ -176,9 +176,9 @@ class MinMaxScaler:
         self.x_max[:2] = pos_flat_in.max(dim=0).values.to(self.device)
         self.x_min[:2] = pos_flat_in.min(dim=0).values.to(self.device)
 
-        pos_flat_out = pos[:, T_cond - 1 :].reshape(-1, 2)
-        self.y_max[:2] = pos_flat_out.max(dim=0).values.to(self.device)
-        self.y_min[:2] = pos_flat_out.min(dim=0).values.to(self.device)
+        # pos_flat_out = pos[:, T_cond - 1 :].reshape(-1, 2)
+        # self.y_max[:2] = pos_flat_out.max(dim=0).values.to(self.device)
+        # self.y_min[:2] = pos_flat_out.min(dim=0).values.to(self.device)
 
         goal_batch[..., :2] -= obs_batch[:, T_cond - 1, :2]
         self.goal_min = goal_batch.min(dim=0).values.to(self.device)

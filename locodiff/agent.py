@@ -263,7 +263,7 @@ class Agent:
         )
 
         sa_dim = self.pred_obs_dim + self.action_dim
-        x = torch.randn((self.num_envs, self.T + 1, sa_dim), device=self.device)
+        x = torch.randn((self.num_envs, self.T, sa_dim), device=self.device)
         x *= self.sigma_max
 
         x_0, denoised = self.sample_ddim(x, sigmas, state_in, goal, predict=True)
@@ -334,18 +334,23 @@ class Agent:
 
     def load_pretrained_model(self, weights_path: str, **kwargs) -> None:
         self.model.load_state_dict(
-            torch.load(os.path.join(weights_path, "model_state_dict.pth")),
+            torch.load(
+                os.path.join(weights_path, "model_state_dict.pth"),
+                map_location=self.device,
+            ),
             strict=False,
         )
 
         # Load scaler attributes
-        scaler_state = torch.load(os.path.join(weights_path, "scaler.pth"))
-        self.scaler.x_max = scaler_state['x_max']
-        self.scaler.x_min = scaler_state['x_min']
-        self.scaler.y_max = scaler_state['y_max']
-        self.scaler.y_min = scaler_state['y_min']
-        self.scaler.goal_max = scaler_state['goal_max']
-        self.scaler.goal_min = scaler_state['goal_min']
+        scaler_state = torch.load(
+            os.path.join(weights_path, "scaler.pth"), map_location=self.device
+        )
+        self.scaler.x_max = scaler_state["x_max"]
+        self.scaler.x_min = scaler_state["x_min"]
+        self.scaler.y_max = scaler_state["y_max"]
+        self.scaler.y_min = scaler_state["y_min"]
+        self.scaler.goal_max = scaler_state["goal_max"]
+        self.scaler.goal_min = scaler_state["goal_min"]
 
         log.info("Loaded pre-trained model parameters and scaler")
 

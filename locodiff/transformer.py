@@ -27,8 +27,6 @@ class DiffusionTransformer(nn.Module):
         self.d_model = d_model
         self.nhead = nhead
         self.num_layers = num_layers
-        self.T = T
-        self.T_cond = T_cond
         self.device = device
         self.cond_mask_prob = cond_mask_prob
 
@@ -40,12 +38,10 @@ class DiffusionTransformer(nn.Module):
         self.goal_emb = nn.Linear(goal_dim, self.d_model)
 
         self.pos_emb = (
-            SinusoidalPosEmb(d_model)(torch.arange(self.T + 1)).unsqueeze(0).to(device)
+            SinusoidalPosEmb(d_model)(torch.arange(T)).unsqueeze(0).to(device)
         )
         self.cond_pos_emb = (
-            SinusoidalPosEmb(d_model)(torch.arange(self.T_cond + 2))
-            .unsqueeze(0)
-            .to(device)
+            SinusoidalPosEmb(d_model)(torch.arange(T_cond + 2)).unsqueeze(0).to(device)
         )
 
         self.encoder = nn.Sequential(
@@ -64,7 +60,7 @@ class DiffusionTransformer(nn.Module):
             ),
             num_layers=self.num_layers,
         )
-        mask = self.generate_mask(T + 1)
+        mask = self.generate_mask(T)
         self.register_buffer("mask", mask)
 
         self.ln_f = nn.LayerNorm(self.d_model)
@@ -72,9 +68,6 @@ class DiffusionTransformer(nn.Module):
 
         self.apply(self._init_weights)
         self.to(device)
-        
-        # uncomment for jit tracing
-        self.detach_all()
 
     def _init_weights(self, module):
         ignore_types = (
@@ -222,7 +215,7 @@ class DiffusionTransformer(nn.Module):
 
     def get_params(self):
         return self.parameters()
-    
+
     def detach_all(self):
         for name, param in self.named_parameters():
             param.detach_()
