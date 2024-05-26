@@ -34,13 +34,7 @@ def get_raisim_train_val(
     )
 
     x_data = train_set.dataset.dataset.get_all_observations()
-    y_data = torch.cat(
-        [
-            train_set.dataset.dataset.get_all_observations(),
-            train_set.dataset.dataset.get_all_actions(),
-        ],
-        dim=-1,
-    )
+    y_data = train_set.dataset.dataset.get_all_actions()
     scaler = MinMaxScaler(x_data, y_data, device)
 
     train_dataloader = torch.utils.data.DataLoader(
@@ -85,7 +79,7 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         self.terminals = data["terminals"]
         self.split_data()
 
-        tensors = [self.observations, self.actions, self.masks, self.goal, self.values]
+        tensors = [self.observations, self.actions, self.goal, self.masks]
         TensorDataset.__init__(self, *tensors)
 
         log.info(
@@ -133,14 +127,10 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         self.masks = self.create_masks(obs_splits, max_len)
 
         # Add initial padding to handle episode starts
-        obs_initial_pad = np.repeat(
-            self.observations[:, 0:1, :], self.T_cond - 1, axis=1
-        )
+        obs_initial_pad = np.zeros_like(self.observations[:, : self.T_cond - 1, :])
         self.observations = np.concatenate([obs_initial_pad, self.observations], axis=1)
 
-        actions_initial_pad = np.zeros(
-            (self.actions.shape[0], self.T_cond - 1, self.actions.shape[2])
-        )
+        actions_initial_pad = np.zeros_like(self.actions[:, : self.T_cond - 1, :])
         self.actions = np.concatenate([actions_initial_pad, self.actions], axis=1)
 
         masks_initial_pad = np.ones((self.masks.shape[0], self.T_cond - 1))
@@ -160,19 +150,6 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         self.actions = torch.from_numpy(self.actions).to(self.device).float()
         self.masks = torch.from_numpy(self.masks).to(self.device).float()
         self.goal = torch.from_numpy(self.goal).to(self.device).float()
-
-        # Rewards
-        reward = (self.observations[..., :2] - self.goal[:, None, :2]).norm(dim=-1)
-        reward = (-reward).exp()
-
-        B, T = reward.shape
-        gamma = 0.992
-        timesteps = torch.arange(T).unsqueeze(-1).repeat(1, T).float().to(reward.device)
-        discount_matrix = torch.triu(gamma ** (timesteps.transpose(0, 1) - timesteps))
-        discount_matrix = discount_matrix.unsqueeze(0).expand(B, -1, -1).clone()
-
-        self.values = torch.einsum("bij,bj->bi", discount_matrix, reward)
-        self.values = self.values.to(self.device)
 
     def pad_and_stack(self, splits, max_len):
         """Pad the sequences and stack them into a tensor"""
