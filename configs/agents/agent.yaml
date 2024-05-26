@@ -1,6 +1,9 @@
 _target_: locodiff.agent.Agent
 _recursive_: false
 
+defaults:
+  - model: transformer
+
 optimization:
   _target_: torch.optim.AdamW
   lr: 1e-4
@@ -32,27 +35,6 @@ sim_every_n_steps: ${sim_every_n_steps}
 weight_decay: ${weight_decay}
 cond_lambda: ${cond_lambda}
 cond_mask_prob: ${cond_mask_prob}
-
-model:
-  _target_: locodiff.wrapper.GCDenoiser
-  _recursive_: false
-
-  sigma_data: ${sigma_data}
-
-  inner_model:
-    _target_: locodiff.transformer.DiffusionTransformer
-    obs_dim: ${obs_dim}
-    pred_obs_dim: ${pred_obs_dim}
-    goal_dim: ${goal_dim}
-    act_dim: ${action_dim}
-    d_model: ${hidden_dim}
-    nhead: ${n_heads}
-    num_layers: ${num_hidden_layers}
-    T: ${T}
-    T_cond: ${T_cond}
-    device: ${device}
-    cond_mask_prob: ${cond_mask_prob}
-    dropout: ${dropout}
 
 dataset_fn:
   _target_: data.dataloader.get_raisim_train_val
