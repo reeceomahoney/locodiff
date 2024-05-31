@@ -2,7 +2,7 @@ defaults:
   - agents: agent
   - _self_
 
-data_path: walk_delay_new_init
+data_path: rand
 
 hydra:
   run:
@@ -13,7 +13,7 @@ wandb:
   project: locodiff
 
 # general params
-device: "cuda"
+device: cuda
 seed: 6
 T: 4
 T_cond: 8
@@ -42,8 +42,8 @@ use_ema: True
 decay: 0.999
 update_ema_every_n_steps: 1
 sigma_data: 0.2
-cond_mask_prob: 0.0
-cond_lambda: 2
+cond_mask_prob: 0.1
+cond_lambda: 1
 n_timesteps: 3
 
 env:

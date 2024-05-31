@@ -53,8 +53,7 @@ class Agent:
         self.T = T  # set to 0 to just predict the next action
         self.T_cond = T_cond
         self.T_action = T_action
-        self.obs_context = deque(maxlen=self.T_cond)
-        self.action_context = deque(maxlen=self.T_cond - 1)
+        self.obs_hist = torch.zeros((num_envs, T_cond, obs_dim), device=device)
 
         total_params = sum(p.numel() for p in self.model.get_params())
         log.info("Parameter count: {:e}".format(total_params))
@@ -235,9 +234,7 @@ class Agent:
         return info
 
     def reset(self):
-        """Resets the context of the model."""
-        self.obs_context.clear()
-        self.action_context.clear()
+        self.obs_hist.fill_(0)
 
     @torch.no_grad()
     def predict(self, batch: dict, new_sampling_steps=None) -> torch.Tensor:
@@ -282,10 +279,9 @@ class Agent:
         """
         Helper function to handle obs history
         """
-        self.obs_context.append(state)
-        while len(self.obs_context) < self.T_cond:
-            self.obs_context.append(state)
-        return torch.stack(tuple(self.obs_context), dim=1)
+        self.obs_hist[:, :-1] = self.obs_hist[:, 1:].clone()
+        self.obs_hist[:, -1] = state
+        return self.obs_hist.clone()
 
     @torch.no_grad()
     def sample_ddim(self, x_t, sigmas, cond, goal, **kwargs):
@@ -325,7 +321,7 @@ class Agent:
         """
         out = self.model(x_t, cond, sigma, **kwargs)
 
-        if self.cond_mask_prob > 0:
+        if self.cond_mask_prob > 0 and self.cond_lambda > 0:
             kwargs["uncond"] = True
             out_uncond = self.model(x_t, cond, sigma, **kwargs)
             out = out_uncond + self.cond_lambda * (out - out_uncond)

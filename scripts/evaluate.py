@@ -34,6 +34,7 @@ def main(cfg: DictConfig) -> None:
     model_cfg.env["server_port"] = 8081
     model_cfg.env["max_time"] = 10
     model_cfg["T_action"] = 1
+    model_cfg["use_ema"] = False
 
     # set seeds
     np.random.seed(model_cfg.seed)
@@ -41,9 +42,9 @@ def main(cfg: DictConfig) -> None:
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
 
-    # agent = hydra.utils.instantiate(model_cfg.agents)
-    # agent.load_pretrained_model(cfg.model_store_path)
-    agent = torch.jit.load(f"policy_{cfg.device}.pt")
+    agent = hydra.utils.instantiate(model_cfg.agents)
+    agent.load_pretrained_model(cfg.model_store_path)
+    # agent = torch.jit.load(f"data/models/policy_{cfg.device}.pt")
     env = RaisimEnv(model_cfg)
 
     # set new noise limits

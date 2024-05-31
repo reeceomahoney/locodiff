@@ -8,7 +8,7 @@ set(CMAKE_BUILD_TYPE Release)
 # ##############################################################################
 
 # python
-set(Python_ROOT_DIR "/home/reece/miniforge3/envs/locodiff")
+set(Python_ROOT_DIR "/home/reece/.local/share/virtualenvs/locodiff-ci2JOiiW")
 find_package(Python COMPONENTS Interpreter Development)
 
 # raisim

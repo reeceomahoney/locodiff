@@ -205,11 +205,12 @@ class DiffusionTransformer(nn.Module):
 
     def mask_cond(self, cond, force_mask=False):
         if force_mask:
-            return torch.full_like(cond, 0)
+            return torch.full_like(cond, 2)
         elif self.training and self.cond_mask_prob > 0:
             mask = (torch.rand_like(cond[:, 0:1]) > self.cond_mask_prob).float()
-            mask[mask == 0] = 0
-            return cond * mask
+            mask = mask.expand_as(cond)
+            cond[mask == 0] = 2
+            return cond
         else:
             return cond
 

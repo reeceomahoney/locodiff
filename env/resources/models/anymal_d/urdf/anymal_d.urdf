@@ -67,7 +67,7 @@
   </joint>
   <link name="top_shell">
     <visual>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin rpy="0 3.14159 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="../meshes/top_shell.dae" scale="1.0 1.0 1.0"/>
       </geometry>
@@ -270,7 +270,7 @@
   </joint>
   <link name="face_shell_front">
     <visual>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin rpy="0 3.14159 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="../meshes/face_shell.dae" scale="1.0 1.0 1.0"/>
       </geometry>
@@ -288,7 +288,7 @@
   </joint>
   <link name="face_shell_rear">
     <visual>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin rpy="0 3.14159 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="../meshes/face_shell.dae" scale="1.0 1.0 1.0"/>
       </geometry>
@@ -490,7 +490,7 @@
   </joint>
   <link name="LF_hip_fixed">
     <visual>
-      <origin rpy="0.0 0 0.0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="../meshes/hip.dae" scale="1.0 1.0 1.0"/>
       </geometry>
@@ -515,7 +515,7 @@
   </link>
   <link name="LF_HFE_drive">
     <visual>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin rpy="0 3.14159 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="../meshes/drive.dae" scale="1.0 1.0 1.0"/>
       </geometry>
@@ -559,7 +559,7 @@
   </joint>
   <link name="LF_thigh_fixed">
     <visual>
-      <origin rpy="0 0 0.0" xyz="0 0 0"/>
+      <origin rpy="0 3.14159 0.0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="../meshes/thigh.dae" scale="1.0 1.0 1.0"/>
       </geometry>
@@ -752,7 +752,7 @@
   </link>
   <link name="RF_HFE_drive">
     <visual>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin rpy="0 3.14159 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="../meshes/drive.dae" scale="1.0 1.0 1.0"/>
       </geometry>
@@ -796,7 +796,7 @@
   </joint>
   <link name="RF_thigh_fixed">
     <visual>
-      <origin rpy="0 0 -3.141592653589793" xyz="0 0 0"/>
+      <origin rpy="0 3.14159 -3.141592653589793" xyz="0 0 0"/>
       <geometry>
         <mesh filename="../meshes/thigh.dae" scale="1.0 1.0 1.0"/>
       </geometry>
@@ -989,7 +989,7 @@
   </link>
   <link name="LH_HFE_drive">
     <visual>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin rpy="0 3.14159 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="../meshes/drive.dae" scale="1.0 1.0 1.0"/>
       </geometry>
@@ -1033,7 +1033,7 @@
   </joint>
   <link name="LH_thigh_fixed">
     <visual>
-      <origin rpy="0 0 0.0" xyz="0 0 0"/>
+      <origin rpy="0 3.14159 0.0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="../meshes/thigh.dae" scale="1.0 1.0 1.0"/>
       </geometry>
@@ -1226,7 +1226,7 @@
   </link>
   <link name="RH_HFE_drive">
     <visual>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin rpy="0 3.14159 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="../meshes/drive.dae" scale="1.0 1.0 1.0"/>
       </geometry>
@@ -1270,7 +1270,7 @@
   </joint>
   <link name="RH_thigh_fixed">
     <visual>
-      <origin rpy="0 0 -3.141592653589793" xyz="0 0 0"/>
+      <origin rpy="0 3.14159 -3.141592653589793" xyz="0 0 0"/>
       <geometry>
         <mesh filename="../meshes/thigh.dae" scale="1.0 1.0 1.0"/>
       </geometry>

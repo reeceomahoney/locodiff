@@ -1,0 +1,25 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[[source]]
+url = "https://download.pytorch.org/whl/cu118/"
+verify_ssl = true
+name = "downloadpytorch"
+
+[packages]
+locodiff = {file = ".", editable = true}
+torch = {index="downloadpytorch", version="==2.2.1+cu118"}
+numpy = "*"
+matplotlib = "*"
+tqdm = "*"
+scipy = "*"
+imageio = "*"
+hydra-core = "*"
+wandb = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.9"

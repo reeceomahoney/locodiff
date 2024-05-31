@@ -41,7 +41,7 @@ class RaisimEnv:
 
         # initialize variables
         self._observation = np.zeros([self.num_envs, self.num_obs], dtype=np.float32)
-        self._base_position = np.zeros([self.num_envs, 2], dtype=np.float32)
+        self._base_position = np.zeros([self.num_envs, 3], dtype=np.float32)
         self._base_orientation = np.zeros([self.num_envs, 4], dtype=np.float32)
         self._reward = np.zeros(self.num_envs, dtype=np.float32)
         self._done = np.zeros(self.num_envs, dtype=bool)
@@ -63,6 +63,7 @@ class RaisimEnv:
         obs = np.concatenate(
             [base_pos, orientation, self._observation[:, 3:33]], axis=-1
         )
+        # obs = np.concatenate([obs, np.ones_like(obs[:, :1])], axis=-1)
         obs = torch.from_numpy(obs).to(self.device)
         return obs
 
@@ -118,9 +119,6 @@ class RaisimEnv:
                     new_sampling_steps=n_inference_steps,
                 )
 
-                if real_time:
-                    self.plot_trajectory(pred_traj, self.goal)
-
                 for i in range(self.T_action):
                     obs, reward, done = self.step(action)
                     reward = (obs[:, :2] - self.goal[:, :2]).norm(dim=1).cpu().numpy()
@@ -131,10 +129,6 @@ class RaisimEnv:
                     if delta < 0.04 and real_time:
                         time.sleep(0.04 - delta)
                     start = time.time()
-
-            # Save images as gif
-            if real_time:
-                imageio.mimsave("trajectory.gif", self.images, fps=25)
 
         self.close()
         total_rewards /= self.eval_n_times * self.eval_n_steps
