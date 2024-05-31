@@ -81,7 +81,13 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         self.vel_cmds = data["vel_cmds"]
         self.split_data()
 
-        tensors = [self.observations, self.actions, self.vel_cmds, self.indicator, self.masks]
+        tensors = [
+            self.observations,
+            self.actions,
+            self.vel_cmds,
+            self.indicator,
+            self.masks,
+        ]
         TensorDataset.__init__(self, *tensors)
 
         log.info(
@@ -189,12 +195,7 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
 
     def check_future_timesteps(self, obs):
         """Check if any of the future timesteps of the x-y coordinates are within the specified box."""
-        return (
-            (obs[..., 0] >= 1)
-            & (obs[..., 0] <= 3)
-            & (obs[..., 1] >= -1)
-            & (obs[..., 1] <= 1)
-        ).any(axis=1)
+        return ((obs[..., 0] >= 0)).any(axis=1)
 
     def __getitem__(self, idx):
         T = self.masks[idx].sum().int().item()

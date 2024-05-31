@@ -185,7 +185,6 @@ class DiffusionTransformer(nn.Module):
         cmd_emb = self.cmd_emb(cmd).unsqueeze(1)
 
         constraint = kwargs["indicator"]
-        constraint = self.mask_cond(constraint, force_mask=force_mask)
         constraint_emb = self.constraint_emb(constraint).unsqueeze(1)
 
         cond = torch.cat([sigma_emb, cmd_emb, constraint_emb, cond_emb], dim=1)
