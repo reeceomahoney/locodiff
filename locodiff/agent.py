@@ -155,14 +155,16 @@ class Agent:
         log.info("Training done!")
 
     def train_step(self, batch: dict):
-        state_in, sa_out, cmd = self.process_batch(batch)
+        state_in, sa_out, cmd, indicator = self.process_batch(batch)
 
         self.model.train()
         self.model.training = True
 
         noise = torch.randn_like(sa_out)
         sigma = self.make_sample_density()(shape=(len(sa_out),), device=self.device)
-        loss = self.model.loss(sa_out, state_in, noise, sigma, cmd=cmd)
+        loss = self.model.loss(
+            sa_out, state_in, noise, sigma, cmd=cmd, indicator=indicator
+        )
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -180,7 +182,8 @@ class Agent:
         """
         Evaluates the model using the provided batch of data and returns the mean squared error (MSE) loss.
         """
-        state_in, sa_out, cmd = self.process_batch(batch)
+        state_in, sa_out, cmd, indicator = self.process_batch(batch)
+        kwargs["indicator"] = indicator
 
         if self.use_ema:
             self.ema_helper.store(self.model.parameters())
@@ -233,12 +236,13 @@ class Agent:
         self.obs_hist.fill_(0)
 
     @torch.no_grad()
-    def predict(self, batch: dict, new_sampling_steps=None) -> torch.Tensor:
+    def predict(self, batch: dict, new_sampling_steps=None, **kwargs) -> torch.Tensor:
         """
         Predicts the output of the model based on the provided batch of data.
         """
         batch["observation"] = self.stack_context(batch["observation"])
-        state_in, _, goal = self.process_batch(batch)
+        state_in, _, goal, indicator = self.process_batch(batch)
+        kwargs["indicator"] = indicator
 
         if new_sampling_steps is not None:
             n_sampling_steps = new_sampling_steps
@@ -259,7 +263,8 @@ class Agent:
         x = torch.randn((self.num_envs, self.T, sa_dim), device=self.device)
         x *= self.sigma_max
 
-        x_0, denoised = self.sample_ddim(x, sigmas, state_in, goal, predict=True)
+        kwargs["predict"] = True
+        x_0, denoised = self.sample_ddim(x, sigmas, state_in, goal, **kwargs)
 
         # get the action for the current timestep
         x_0 = self.scaler.clip(x_0)
@@ -428,19 +433,19 @@ class Agent:
                     0.8 * torch.cos(angle_delta),
                     0.5 * torch.sin(angle_delta),
                     1.0 * angle_delta,
-                    torch.zeros_like(angle_delta),
                 ],
                 dim=-1,
             )
+            indicator = torch.zeros_like(cmd[:, :1])
 
             if dist.norm(dim=-1).mean() < 0.3:
                 cmd = torch.zeros_like(cmd)
         else:
-            cmd = cmd[:, self.T_cond - 1]
+            indicator = self.get_to_device(batch, "indicator")[:, self.T_cond - 1]
 
         cmd = self.scaler.scale_cmd(cmd)
 
-        return state_in, sa_out, cmd
+        return state_in, sa_out, cmd, indicator
 
     def get_to_device(self, batch, key):
         return (

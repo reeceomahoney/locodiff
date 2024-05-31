@@ -81,7 +81,7 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         self.vel_cmds = data["vel_cmds"]
         self.split_data()
 
-        tensors = [self.observations, self.actions, self.vel_cmds, self.masks]
+        tensors = [self.observations, self.actions, self.vel_cmds, self.indicator, self.masks]
         TensorDataset.__init__(self, *tensors)
 
         log.info(
@@ -144,17 +144,14 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         masks_initial_pad = np.ones((self.masks.shape[0], self.T_cond - 1))
         self.masks = np.concatenate([masks_initial_pad, self.masks], axis=1)
 
-        vel_cmds_initial_pad = np.repeat(self.vel_cmds[:, :1], self.T_cond - 1, axis=1)
-        self.vel_cmds = np.concatenate([vel_cmds_initial_pad, self.vel_cmds], axis=1)
+        self.vel_cmds = self.vel_cmds[:, 0]
 
         T = self.observations.shape[1]
         indicator = [
             self.check_future_timesteps(self.observations[:, i:T]) for i in range(1, T)
         ]
         indicator.append(indicator[-1].copy())
-        indicator = np.stack(indicator, axis=1)[..., None]
-
-        self.vel_cmds = np.concatenate([self.vel_cmds, indicator], axis=-1)
+        self.indicator = np.stack(indicator, axis=1)[..., None]
 
         # skill = self.observations[:, 0, -1]
         # self.goal = np.concatenate([self.goal, skill[:, None]], axis=1)
@@ -164,6 +161,7 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         self.actions = torch.from_numpy(self.actions).to(self.device).float()
         self.masks = torch.from_numpy(self.masks).to(self.device).float()
         self.vel_cmds = torch.from_numpy(self.vel_cmds).to(self.device).float()
+        self.indicator = torch.from_numpy(self.indicator).to(self.device).float()
 
     def pad_and_stack(self, splits, max_len):
         """Pad the sequences and stack them into a tensor"""
