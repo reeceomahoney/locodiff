@@ -22,7 +22,7 @@ T_action: 1
 action_dim: 12
 obs_dim: 36
 pred_obs_dim: 0
-goal_dim: 3
+goal_dim: 4
 
 # policy model params
 hidden_dim: 256
