@@ -106,9 +106,9 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
             T = int(self.masks[i].sum().item())
             result.append(self.observations[i, :T, :])
         return torch.cat(result, dim=0)
-    
+
     def get_all_vel_cmds(self):
-        return self.vel_cmds
+        return self.vel_cmds.reshape(-1, self.vel_cmds.shape[-1])
 
     def split_data(self):
         # Flatten the first two dimensions
@@ -144,12 +144,17 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         masks_initial_pad = np.ones((self.masks.shape[0], self.T_cond - 1))
         self.masks = np.concatenate([masks_initial_pad, self.masks], axis=1)
 
-        # Goal
-        # indices_1 = np.arange(self.masks.shape[0])
-        # indices_2 = (self.masks.sum(1) - 1).astype(int)
-        # last_states = self.observations[indices_1, indices_2]
-        # self.goal = last_states[:, :2]
-        self.vel_cmds = self.vel_cmds[:, 0]
+        vel_cmds_initial_pad = np.repeat(self.vel_cmds[:, :1], self.T_cond - 1, axis=1)
+        self.vel_cmds = np.concatenate([vel_cmds_initial_pad, self.vel_cmds], axis=1)
+
+        T = self.observations.shape[1]
+        indicator = [
+            self.check_future_timesteps(self.observations[:, i:T]) for i in range(1, T)
+        ]
+        indicator.append(indicator[-1].copy())
+        indicator = np.stack(indicator, axis=1)[..., None]
+
+        self.vel_cmds = np.concatenate([self.vel_cmds, indicator], axis=-1)
 
         # skill = self.observations[:, 0, -1]
         # self.goal = np.concatenate([self.goal, skill[:, None]], axis=1)
@@ -183,6 +188,15 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
                 for split in splits
             ]
         )
+
+    def check_future_timesteps(self, obs):
+        """Check if any of the future timesteps of the x-y coordinates are within the specified box."""
+        return (
+            (obs[..., 0] >= 1)
+            & (obs[..., 0] <= 3)
+            & (obs[..., 1] >= -1)
+            & (obs[..., 1] <= 1)
+        ).any(axis=1)
 
     def __getitem__(self, idx):
         T = self.masks[idx].sum().int().item()

@@ -428,12 +428,15 @@ class Agent:
                     0.8 * torch.cos(angle_delta),
                     0.5 * torch.sin(angle_delta),
                     1.0 * angle_delta,
+                    torch.zeros_like(angle_delta),
                 ],
                 dim=-1,
             )
 
             if dist.norm(dim=-1).mean() < 0.3:
                 cmd = torch.zeros_like(cmd)
+        else:
+            cmd = cmd[:, self.T_cond - 1]
 
         cmd = self.scaler.scale_cmd(cmd)
 
