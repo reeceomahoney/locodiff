@@ -341,8 +341,8 @@ class Agent:
         self.scaler.x_min = scaler_state["x_min"]
         self.scaler.y_max = scaler_state["y_max"]
         self.scaler.y_min = scaler_state["y_min"]
-        self.scaler.goal_max = scaler_state["goal_max"]
-        self.scaler.goal_min = scaler_state["goal_min"]
+        self.scaler.cmd_max = scaler_state["cmd_max"]
+        self.scaler.cmd_min = scaler_state["cmd_min"]
 
         log.info("Loaded pre-trained model parameters and scaler")
 
@@ -419,12 +419,20 @@ class Agent:
             goal_pos = self.get_to_device(batch, "goal")
             dist = goal_pos - current_pos
             angle = torch.atan2(dist[:, 1], dist[:, 0])
+            rot_mat = self.quat_to_rot_mat(state[:, self.T_cond - 1, 2:6])
+            robot_angle = torch.atan2(rot_mat[:, 1, 0], rot_mat[:, 0, 0])
+            angle_delta = angle - robot_angle
+
             cmd = torch.stack(
-                [torch.cos(angle), 0.5 * torch.sin(angle), torch.zeros_like(angle)],
+                [
+                    0.8 * torch.cos(angle_delta),
+                    0.5 * torch.sin(angle_delta),
+                    1.0 * angle_delta,
+                ],
                 dim=-1,
             )
 
-            if cmd.norm(dim=-1).mean() < 0.1:
+            if dist.norm(dim=-1).mean() < 0.3:
                 cmd = torch.zeros_like(cmd)
 
         cmd = self.scaler.scale_cmd(cmd)
@@ -437,3 +445,27 @@ class Agent:
             if batch.get(key) is not None
             else None
         )
+
+    def quat_to_rot_mat(self, quat):
+        """
+        Convert a tensor of w,x,y,z quaternions into a tensor of rotation matrices.
+        """
+        w, x, y, z = torch.unbind(quat, -1)
+
+        rotation_matrix = torch.stack(
+            [
+                1 - 2 * (y**2 + z**2),
+                2 * (x * y - w * z),
+                2 * (x * z + w * y),
+                2 * (x * y + w * z),
+                1 - 2 * (x**2 + z**2),
+                2 * (y * z - w * x),
+                2 * (x * z - w * y),
+                2 * (y * z + w * x),
+                1 - 2 * (x**2 + y**2),
+            ],
+            dim=-1,
+        )
+        rotation_matrix = rotation_matrix.reshape(quat.shape[:-1] + (3, 3))
+
+        return rotation_matrix
