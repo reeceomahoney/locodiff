@@ -95,10 +95,6 @@ class Agent:
             dataset_fn
         )
 
-        # Update scaler to shifted position scale
-        batch = next(iter(self.train_loader))
-        self.scaler.update_pos_scale(batch, self.T_cond)
-
         # misc
         self.device = device
         self.env = None
@@ -159,14 +155,14 @@ class Agent:
         log.info("Training done!")
 
     def train_step(self, batch: dict):
-        state_in, sa_out, goal = self.process_batch(batch)
+        state_in, sa_out, cmd = self.process_batch(batch)
 
         self.model.train()
         self.model.training = True
 
         noise = torch.randn_like(sa_out)
         sigma = self.make_sample_density()(shape=(len(sa_out),), device=self.device)
-        loss = self.model.loss(sa_out, state_in, noise, sigma, goal=goal)
+        loss = self.model.loss(sa_out, state_in, noise, sigma, cmd=cmd)
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -184,7 +180,7 @@ class Agent:
         """
         Evaluates the model using the provided batch of data and returns the mean squared error (MSE) loss.
         """
-        state_in, sa_out, goal = self.process_batch(batch)
+        state_in, sa_out, cmd = self.process_batch(batch)
 
         if self.use_ema:
             self.ema_helper.store(self.model.parameters())
@@ -197,7 +193,7 @@ class Agent:
             self.num_sampling_steps, self.sigma_min, self.sigma_max, self.device
         )
         x = torch.randn_like(sa_out) * self.sigma_max
-        x_0, epsilon = self.sample_ddim(x, sigmas, state_in, goal, **kwargs)
+        x_0, epsilon = self.sample_ddim(x, sigmas, state_in, cmd, **kwargs)
 
         mse = nn.functional.mse_loss(x_0, sa_out, reduction="none")
         total_mse = mse.mean().item()
@@ -227,10 +223,10 @@ class Agent:
             "last_mse": last_mse,
             "timestep_mse": timestep_mse,
             "prediction": prediction,
-            "goal": goal,
+            "cmd": cmd,
         }
         if "num_steps" in kwargs:
-            info["inputs"] = (epsilon, state_in, goal)
+            info["inputs"] = (epsilon, state_in, cmd)
         return info
 
     def reset(self):
@@ -284,7 +280,7 @@ class Agent:
         return self.obs_hist.clone()
 
     @torch.no_grad()
-    def sample_ddim(self, x_t, sigmas, cond, goal, **kwargs):
+    def sample_ddim(self, x_t, sigmas, cond, cmd, **kwargs):
         """
         Sample from the model using the DDIM sampler
 
@@ -301,7 +297,7 @@ class Agent:
         t_fn = lambda sigma: sigma.log().neg()
 
         num_steps = kwargs.get("num_steps", len(sigmas) - 1)
-        kwargs["goal"] = goal
+        kwargs["cmd"] = cmd
         predict = kwargs.get("predict", False)
 
         for i in trange(num_steps, disable=disable):
@@ -371,8 +367,8 @@ class Agent:
                 "x_min": self.scaler.x_min,
                 "y_max": self.scaler.y_max,
                 "y_min": self.scaler.y_min,
-                "goal_max": self.scaler.goal_max,
-                "goal_min": self.scaler.goal_min,
+                "cmd_max": self.scaler.cmd_max,
+                "cmd_min": self.scaler.cmd_min,
             },
             os.path.join(store_path, "scaler.pth"),
         )
@@ -406,11 +402,9 @@ class Agent:
         """
         state = self.get_to_device(batch, "observation")
         action = self.get_to_device(batch, "action")
-        goal = self.get_to_device(batch, "goal")
+        cmd = self.get_to_device(batch, "cmd")
 
         # Centre posisition around the current state
-        current_pos = state[:, self.T_cond - 1, :2].clone()
-        state[..., :2] = state[..., :2] - current_pos.unsqueeze(1)
         state_in = self.scaler.scale_input(state[:, : self.T_cond])
 
         # Action
@@ -420,11 +414,22 @@ class Agent:
         else:
             sa_out = None
 
-        goal[..., :2] -= current_pos
-        goal = self.scaler.scale_goal(goal)
-        # goal[..., -1] = 0
+        if cmd is None:
+            current_pos = state[:, self.T_cond - 1, :2]
+            goal_pos = self.get_to_device(batch, "goal")
+            dist = goal_pos - current_pos
+            angle = torch.atan2(dist[:, 1], dist[:, 0])
+            cmd = torch.stack(
+                [torch.cos(angle), 0.5 * torch.sin(angle), torch.zeros_like(angle)],
+                dim=-1,
+            )
 
-        return state_in, sa_out, goal
+            if cmd.norm(dim=-1).mean() < 0.1:
+                cmd = torch.zeros_like(cmd)
+
+        cmd = self.scaler.scale_cmd(cmd)
+
+        return state_in, sa_out, cmd
 
     def get_to_device(self, batch, key):
         return (

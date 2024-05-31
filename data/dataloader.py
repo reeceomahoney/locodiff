@@ -35,7 +35,8 @@ def get_raisim_train_val(
 
     x_data = train_set.dataset.dataset.get_all_observations()
     y_data = train_set.dataset.dataset.get_all_actions()
-    scaler = MinMaxScaler(x_data, y_data, device)
+    cmd_data = train_set.dataset.dataset.get_all_vel_cmds()
+    scaler = MinMaxScaler(x_data, y_data, cmd_data, device)
 
     train_dataloader = torch.utils.data.DataLoader(
         train_set,
@@ -77,9 +78,10 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         self.observations = data["observations"]
         self.actions = data["actions"]
         self.terminals = data["terminals"]
+        self.vel_cmds = data["vel_cmds"]
         self.split_data()
 
-        tensors = [self.observations, self.actions, self.goal, self.masks]
+        tensors = [self.observations, self.actions, self.vel_cmds, self.masks]
         TensorDataset.__init__(self, *tensors)
 
         log.info(
@@ -104,11 +106,15 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
             T = int(self.masks[i].sum().item())
             result.append(self.observations[i, :T, :])
         return torch.cat(result, dim=0)
+    
+    def get_all_vel_cmds(self):
+        return self.vel_cmds
 
     def split_data(self):
         # Flatten the first two dimensions
         obs_flat = self.observations.reshape(-1, self.observations.shape[-1])
         actions_flat = self.actions.reshape(-1, self.actions.shape[-1])
+        cmd_flat = self.vel_cmds.reshape(-1, self.vel_cmds.shape[-1])
         terminals_flat = self.terminals.reshape(-1)
 
         # Find the indices where terminals is True (or 1)
@@ -117,6 +123,7 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         # Split the flattened observations and actions into sequences
         obs_splits = np.split(obs_flat, split_indices)
         actions_splits = np.split(actions_flat, split_indices)
+        cmd_splits = np.split(cmd_flat, split_indices)
 
         # Find the maximum length of the sequences
         max_len = max(split.shape[0] for split in obs_splits)
@@ -124,6 +131,7 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         # Pad the sequences and reshape them back to their original shape
         self.observations = self.pad_and_stack(obs_splits, max_len).astype(np.float32)
         self.actions = self.pad_and_stack(actions_splits, max_len).astype(np.float32)
+        self.vel_cmds = self.pad_and_stack(cmd_splits, max_len).astype(np.float32)
         self.masks = self.create_masks(obs_splits, max_len)
 
         # Add initial padding to handle episode starts
@@ -137,10 +145,11 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         self.masks = np.concatenate([masks_initial_pad, self.masks], axis=1)
 
         # Goal
-        indices_1 = np.arange(self.masks.shape[0])
-        indices_2 = (self.masks.sum(1) - 1).astype(int)
-        last_states = self.observations[indices_1, indices_2]
-        self.goal = last_states[:, :2]
+        # indices_1 = np.arange(self.masks.shape[0])
+        # indices_2 = (self.masks.sum(1) - 1).astype(int)
+        # last_states = self.observations[indices_1, indices_2]
+        # self.goal = last_states[:, :2]
+        self.vel_cmds = self.vel_cmds[:, 0]
 
         # skill = self.observations[:, 0, -1]
         # self.goal = np.concatenate([self.goal, skill[:, None]], axis=1)
@@ -149,7 +158,7 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         self.observations = torch.from_numpy(self.observations).to(self.device).float()
         self.actions = torch.from_numpy(self.actions).to(self.device).float()
         self.masks = torch.from_numpy(self.masks).to(self.device).float()
-        self.goal = torch.from_numpy(self.goal).to(self.device).float()
+        self.vel_cmds = torch.from_numpy(self.vel_cmds).to(self.device).float()
 
     def pad_and_stack(self, splits, max_len):
         """Pad the sequences and stack them into a tensor"""

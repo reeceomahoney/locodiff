@@ -179,7 +179,7 @@ class RaisimEnv:
         self.images.append(image)
 
     def generate_goal(self):
-        self.goal = np.random.uniform(-3, 3, (self.num_envs, 2)).astype(np.float32)
+        self.goal = np.random.uniform(-5, 5, (self.num_envs, 2)).astype(np.float32)
         self.set_goal(self.goal)
         self.goal = torch.from_numpy(self.goal).to(self.device)
 

@@ -35,7 +35,7 @@ class DiffusionTransformer(nn.Module):
         )
         self.cond_state_emb = nn.Linear(self.obs_dim, self.d_model)
         self.sigma_emb = nn.Linear(1, self.d_model)
-        self.goal_emb = nn.Linear(goal_dim, self.d_model)
+        self.cmd_emb = nn.Linear(goal_dim, self.d_model)
 
         self.pos_emb = (
             SinusoidalPosEmb(d_model)(torch.arange(T)).unsqueeze(0).to(device)
@@ -178,12 +178,12 @@ class DiffusionTransformer(nn.Module):
         sigma_emb = self.sigma_emb(sigma)
 
         # command embedding
-        goal = kwargs["goal"]
+        cmd = kwargs["cmd"]
         force_mask = kwargs.get("uncond", False)
-        goal = self.mask_cond(goal, force_mask=force_mask)
-        goal_emb = self.goal_emb(goal).unsqueeze(1)
+        cmd = self.mask_cond(cmd, force_mask=force_mask)
+        cmd_emb = self.cmd_emb(cmd).unsqueeze(1)
 
-        cond = torch.cat([sigma_emb, goal_emb, cond_emb], dim=1)
+        cond = torch.cat([sigma_emb, cmd_emb, cond_emb], dim=1)
         cond += self.cond_pos_emb
         cond = self.encoder(cond)
 
