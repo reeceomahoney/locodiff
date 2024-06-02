@@ -50,7 +50,7 @@ class Agent:
     ):
         # model
         self.model = hydra.utils.instantiate(model).to(device)
-        self.T = T  # set to 0 to just predict the next action
+        self.T = T
         self.T_cond = T_cond
         self.T_action = T_action
         self.obs_hist = torch.zeros((num_envs, T_cond, obs_dim), device=device)
