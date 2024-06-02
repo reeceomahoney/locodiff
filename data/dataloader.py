@@ -150,18 +150,8 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         masks_initial_pad = np.ones((self.masks.shape[0], self.T_cond - 1))
         self.masks = np.concatenate([masks_initial_pad, self.masks], axis=1)
 
-        self.vel_cmds = self.vel_cmds[:, 0]
-
-        T = self.observations.shape[1]
-        indicator = [
-            self.check_future_timesteps(self.observations[:, i:T]) for i in range(1, T)
-        ]
-        indicator.append(indicator[-1].copy())
-        self.indicator = np.stack(indicator, axis=1)[..., None]
-
-        # skill = self.observations[:, 0, -1]
-        # self.goal = np.concatenate([self.goal, skill[:, None]], axis=1)
-        # self.observations = self.observations[..., :-1]
+        self.indicator = self.vel_cmds[:, 0, -2:].copy()
+        self.vel_cmds = self.vel_cmds[:, 0, :3]
 
         self.observations = torch.from_numpy(self.observations).to(self.device).float()
         self.actions = torch.from_numpy(self.actions).to(self.device).float()
@@ -192,10 +182,6 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
                 for split in splits
             ]
         )
-
-    def check_future_timesteps(self, obs):
-        """Check if any of the future timesteps of the x-y coordinates are within the specified box."""
-        return ((obs[..., 0] >= 0)).any(axis=1)
 
     def __getitem__(self, idx):
         T = self.masks[idx].sum().int().item()

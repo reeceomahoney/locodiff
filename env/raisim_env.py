@@ -11,6 +11,7 @@ from matplotlib.figure import Figure
 from omegaconf import OmegaConf
 from scipy.spatial.transform import Rotation as R
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 from env.lib.raisim_env import RaisimWrapper
 
@@ -103,6 +104,8 @@ class RaisimEnv:
             done = np.array([False])
             obs = self.observe()
 
+            x_pos, y_pos = [], []
+
             # now run the agent for n steps
             action = self.nominal_joint_pos
             action = np.tile(action, (self.num_envs, 1))
@@ -114,8 +117,15 @@ class RaisimEnv:
                 if n == self.eval_n_steps - 1:
                     total_dones += np.ones(done.shape, dtype="int64")
 
+                indicator = torch.zeros(self.num_envs, 2).to(self.device)
+                if n < 125:
+                    indicator[:, 0] = 1.0
+                else:
+                    indicator[:, 0] = 0.0
+                    indicator[:, 1] = 1.0
+
                 pred_action, pred_traj = agent.predict(
-                    {"observation": obs, "goal": self.goal},
+                    {"observation": obs, "goal": self.goal, "indicator": indicator},
                     new_sampling_steps=n_inference_steps,
                 )
 
@@ -129,6 +139,16 @@ class RaisimEnv:
                     if delta < 0.04 and real_time:
                         time.sleep(0.04 - delta)
                     start = time.time()
+
+            #     if n < self.eval_n_steps - 1:
+            #         x_pos.append(obs[:, 0].cpu().numpy())
+            #         y_pos.append(obs[:, 1].cpu().numpy())
+
+            # x_pos = np.array(x_pos)
+            # y_pos = np.array(y_pos)
+            # print("average x_pos: ", x_pos.mean())
+            # plt.plot(x_pos, y_pos)
+            # plt.show()  
 
         self.close()
         total_rewards /= self.eval_n_times * self.eval_n_steps

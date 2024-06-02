@@ -95,6 +95,9 @@ class Agent:
             dataset_fn
         )
 
+        batch = next(iter(self.train_loader))
+        self.scaler.update_pos_scale(batch, T_cond)
+
         # misc
         self.device = device
         self.env = None
@@ -410,6 +413,8 @@ class Agent:
         cmd = self.get_to_device(batch, "cmd")
 
         # Centre posisition around the current state
+        current_pos = state[:, self.T_cond - 1, :2]
+        state[:, :, :2] -= current_pos.unsqueeze(1)
         state_in = self.scaler.scale_input(state[:, : self.T_cond])
 
         # Action
@@ -420,29 +425,10 @@ class Agent:
             sa_out = None
 
         if cmd is None:
-            current_pos = state[:, self.T_cond - 1, :2]
             goal_pos = self.get_to_device(batch, "goal")
-            dist = goal_pos - current_pos
-            angle = torch.atan2(dist[:, 1], dist[:, 0])
-            rot_mat = self.quat_to_rot_mat(state[:, self.T_cond - 1, 2:6])
-            robot_angle = torch.atan2(rot_mat[:, 1, 0], rot_mat[:, 0, 0])
-            angle_delta = angle - robot_angle
+            cmd = self.calculate_vel_cmd(goal_pos, current_pos, state)
 
-            cmd = torch.stack(
-                [
-                    0.8 * torch.cos(angle_delta),
-                    0.5 * torch.sin(angle_delta),
-                    1.0 * angle_delta,
-                ],
-                dim=-1,
-            )
-            indicator = torch.zeros_like(cmd[:, :1])
-
-            if dist.norm(dim=-1).mean() < 0.3:
-                cmd = torch.zeros_like(cmd)
-        else:
-            indicator = self.get_to_device(batch, "indicator")[:, self.T_cond - 1]
-
+        indicator = self.get_to_device(batch, "indicator")
         cmd = self.scaler.scale_cmd(cmd)
 
         return state_in, sa_out, cmd, indicator
@@ -477,3 +463,23 @@ class Agent:
         rotation_matrix = rotation_matrix.reshape(quat.shape[:-1] + (3, 3))
 
         return rotation_matrix
+
+    def calculate_vel_cmd(self, goal_pos, current_pos, state):
+        if dist.norm(dim=-1).mean() < 0.3:
+            cmd = torch.ones_like(cmd)
+        else:
+            dist = goal_pos - current_pos
+            angle = torch.atan2(dist[:, 1], dist[:, 0])
+            rot_mat = self.quat_to_rot_mat(state[:, self.T_cond - 1, 2:6])
+            robot_angle = torch.atan2(rot_mat[:, 1, 0], rot_mat[:, 0, 0])
+            angle_delta = angle - robot_angle
+
+            cmd = torch.stack(
+                [
+                    0.8 * torch.cos(angle_delta),
+                    0.5 * torch.sin(angle_delta),
+                    1.0 * angle_delta,
+                ],
+                dim=-1,
+            )
+        return cmd

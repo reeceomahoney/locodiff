@@ -8,7 +8,7 @@ def load_data(data_path):
 
 
 def cat_zeros(x):
-    return np.concatenate((x, np.zeros_like(x[:, :, 0:1])), axis=-1)
+    return np.concatenate((x, np.zeros_like(x[:, :, 0:2])), axis=-1)
 
 
 def cat(x1, x2):
@@ -43,7 +43,7 @@ def split_by_vel_cmd(obs, terminals):
     return terminals
 
 
-name = "walk_stop_3"
+name = "rand"
 current_dir = os.path.dirname(os.path.realpath(__file__))
 walk_data = load_data(f"{current_dir}/datasets/raw/{name}.npy")
 crawl_data = load_data(current_dir + "/datasets/raw/crawl.npy")
@@ -54,19 +54,20 @@ act[:, -1] = act[:, -2].copy()
 walk_data["actions"] = act.copy()
 
 data = cat(walk_data, crawl_data)
+# data = walk_data
 
-obs, act, terminals = data["observations"], data["actions"], data["terminals"]
+obs, act, terminals, vel_cmds = data["observations"], data["actions"], data["terminals"], data["vel_cmds"]
 terminals = shift_terminals(terminals)
 
-obs = cat_zeros(obs)
-obs[:1000, :, -1] = 1
-obs[1000:, :, -1] = -1
+vel_cmds = cat_zeros(vel_cmds)
+vel_cmds[:1000, :, -2] = 1
+vel_cmds[1000:, :, -1] = 1
 
 # Save the data to a new file
 print(f"Saving data to {current_dir}/datasets/walk_crawl.npy")
 print(f"Observations shape: {obs.shape}, Actions shape: {act.shape}")
 np.save(
-    f"{current_dir}/datasets/{name}.npy",
-    {"observations": obs, "actions": act, "terminals": terminals},
+    f"{current_dir}/datasets/walk_crawl.npy",
+    {"observations": obs, "actions": act, "terminals": terminals, "vel_cmds": vel_cmds},
 )
 print("done")
