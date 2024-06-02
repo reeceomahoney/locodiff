@@ -465,10 +465,11 @@ class Agent:
         return rotation_matrix
 
     def calculate_vel_cmd(self, goal_pos, current_pos, state):
+        dist = goal_pos - current_pos
+
         if dist.norm(dim=-1).mean() < 0.3:
             cmd = torch.ones_like(cmd)
         else:
-            dist = goal_pos - current_pos
             angle = torch.atan2(dist[:, 1], dist[:, 0])
             rot_mat = self.quat_to_rot_mat(state[:, self.T_cond - 1, 2:6])
             robot_angle = torch.atan2(rot_mat[:, 1, 0], rot_mat[:, 0, 0])
