@@ -43,10 +43,10 @@ def split_by_vel_cmd(obs, terminals):
     return terminals
 
 
-name = "rand"
+name = "walk"
 current_dir = os.path.dirname(os.path.realpath(__file__))
 walk_data = load_data(f"{current_dir}/datasets/raw/{name}.npy")
-crawl_data = load_data(current_dir + "/datasets/raw/crawl.npy")
+crawl_data = load_data(current_dir + "/datasets/raw/crawl_trot.npy")
 
 # roll actions (only need this for pmtg)
 act = np.roll(walk_data["actions"], -1, axis=1)
@@ -67,7 +67,7 @@ vel_cmds[1000:, :, -1] = 1
 print(f"Saving data to {current_dir}/datasets/walk_crawl.npy")
 print(f"Observations shape: {obs.shape}, Actions shape: {act.shape}")
 np.save(
-    f"{current_dir}/datasets/walk_crawl.npy",
+    f"{current_dir}/datasets/walk_crawl_2.npy",
     {"observations": obs, "actions": act, "terminals": terminals, "vel_cmds": vel_cmds},
 )
 print("done")

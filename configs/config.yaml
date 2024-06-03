@@ -2,7 +2,7 @@ defaults:
   - agents: agent
   - _self_
 
-data_path: walk_crawl
+data_path: walk_crawl_2
 
 hydra:
   run:
