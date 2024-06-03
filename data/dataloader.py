@@ -85,7 +85,6 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
             self.observations,
             self.actions,
             self.vel_cmds,
-            self.indicator,
             self.masks,
         ]
         TensorDataset.__init__(self, *tensors)
@@ -152,22 +151,10 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
 
         self.vel_cmds = self.vel_cmds[:, 0]
 
-        T = self.observations.shape[1]
-        indicator = [
-            self.check_future_timesteps(self.observations[:, i:T]) for i in range(1, T)
-        ]
-        indicator.append(indicator[-1].copy())
-        self.indicator = np.stack(indicator, axis=1)[..., None]
-
-        # skill = self.observations[:, 0, -1]
-        # self.goal = np.concatenate([self.goal, skill[:, None]], axis=1)
-        # self.observations = self.observations[..., :-1]
-
         self.observations = torch.from_numpy(self.observations).to(self.device).float()
         self.actions = torch.from_numpy(self.actions).to(self.device).float()
         self.masks = torch.from_numpy(self.masks).to(self.device).float()
         self.vel_cmds = torch.from_numpy(self.vel_cmds).to(self.device).float()
-        self.indicator = torch.from_numpy(self.indicator).to(self.device).float()
 
     def pad_and_stack(self, splits, max_len):
         """Pad the sequences and stack them into a tensor"""
@@ -192,10 +179,6 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
                 for split in splits
             ]
         )
-
-    def check_future_timesteps(self, obs):
-        """Check if any of the future timesteps of the x-y coordinates are within the specified box."""
-        return ((obs[..., 0] >= 0)).any(axis=1)
 
     def __getitem__(self, idx):
         T = self.masks[idx].sum().int().item()

@@ -95,6 +95,9 @@ class Agent:
             dataset_fn
         )
 
+        batch = next(iter(self.train_loader))
+        self.scaler.update_pos_scale(batch, T_cond)
+
         # misc
         self.device = device
         self.env = None
@@ -155,16 +158,14 @@ class Agent:
         log.info("Training done!")
 
     def train_step(self, batch: dict):
-        state_in, sa_out, cmd, indicator = self.process_batch(batch)
+        state_in, sa_out, cmd, returns = self.process_batch(batch)
 
         self.model.train()
         self.model.training = True
 
         noise = torch.randn_like(sa_out)
         sigma = self.make_sample_density()(shape=(len(sa_out),), device=self.device)
-        loss = self.model.loss(
-            sa_out, state_in, noise, sigma, cmd=cmd, indicator=indicator
-        )
+        loss = self.model.loss(sa_out, state_in, noise, sigma, cmd=cmd, returns=returns)
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -182,8 +183,8 @@ class Agent:
         """
         Evaluates the model using the provided batch of data and returns the mean squared error (MSE) loss.
         """
-        state_in, sa_out, cmd, indicator = self.process_batch(batch)
-        kwargs["indicator"] = indicator
+        state_in, sa_out, cmd, returns = self.process_batch(batch)
+        kwargs["returns"] = returns
 
         if self.use_ema:
             self.ema_helper.store(self.model.parameters())
@@ -241,8 +242,8 @@ class Agent:
         Predicts the output of the model based on the provided batch of data.
         """
         batch["observation"] = self.stack_context(batch["observation"])
-        state_in, _, goal, indicator = self.process_batch(batch)
-        kwargs["indicator"] = indicator
+        state_in, _, goal, returns = self.process_batch(batch)
+        kwargs["returns"] = returns
 
         if new_sampling_steps is not None:
             n_sampling_steps = new_sampling_steps
@@ -407,45 +408,31 @@ class Agent:
         """
         state = self.get_to_device(batch, "observation")
         action = self.get_to_device(batch, "action")
-        cmd = self.get_to_device(batch, "cmd")
+        cmd = self.get_to_device(batch, "goal")
 
         # Centre posisition around the current state
+        current_pos = state[:, self.T_cond - 1, :2]
+        state[:, :, :2] -= current_pos.unsqueeze(1)
         state_in = self.scaler.scale_input(state[:, : self.T_cond])
 
         # Action
         if action is not None:
             sa = torch.cat([state[..., : self.pred_obs_dim], action], dim=-1)
-            sa_out = self.scaler.scale_output(sa[:, self.T_cond - 1 :])
+            sa_out = self.scaler.scale_output(sa[:, self.T_cond - 1 : self.T_cond + 3])
         else:
             sa_out = None
 
         if cmd is None:
-            current_pos = state[:, self.T_cond - 1, :2]
-            goal_pos = self.get_to_device(batch, "goal")
-            dist = goal_pos - current_pos
-            angle = torch.atan2(dist[:, 1], dist[:, 0])
-            rot_mat = self.quat_to_rot_mat(state[:, self.T_cond - 1, 2:6])
-            robot_angle = torch.atan2(rot_mat[:, 1, 0], rot_mat[:, 0, 0])
-            angle_delta = angle - robot_angle
-
-            cmd = torch.stack(
-                [
-                    0.8 * torch.cos(angle_delta),
-                    0.5 * torch.sin(angle_delta),
-                    1.0 * angle_delta,
-                ],
-                dim=-1,
-            )
-            indicator = torch.zeros_like(cmd[:, :1])
-
-            if dist.norm(dim=-1).mean() < 0.3:
-                cmd = torch.zeros_like(cmd)
+            cmd = 4 * torch.rand((state.shape[0], 2), device=self.device)
+            cmd -= current_pos
+            returns = self.calculate_returns(state, cmd)
         else:
-            indicator = self.get_to_device(batch, "indicator")[:, self.T_cond - 1]
+            cmd -= current_pos
+            returns = torch.ones((state.shape[0], 1), device=self.device)
 
-        cmd = self.scaler.scale_cmd(cmd)
+        cmd = self.scaler.scale_goal(cmd)
 
-        return state_in, sa_out, cmd, indicator
+        return state_in, sa_out, cmd, returns
 
     def get_to_device(self, batch, key):
         return (
@@ -477,3 +464,18 @@ class Agent:
         rotation_matrix = rotation_matrix.reshape(quat.shape[:-1] + (3, 3))
 
         return rotation_matrix
+
+    def calculate_returns(self, state, cmd):
+        """
+        Calculate the expected discounted return for each state.
+        """
+        rewards = -torch.linalg.norm((state[:, self.T_cond - 1:, :2] - cmd.unsqueeze(1)), dim=-1)
+        rewards = torch.exp(rewards / 4)
+
+        gammas = torch.ones(50, device=self.device) * 0.99
+        gammas = gammas.cumprod(dim=0)
+
+        returns = (rewards * gammas).sum(dim=-1, keepdim=True)
+        returns /= returns.max()
+
+        return returns

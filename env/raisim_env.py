@@ -120,8 +120,8 @@ class RaisimEnv:
                 )
 
                 for i in range(self.T_action):
-                    obs, reward, done = self.step(action)
-                    reward = (obs[:, :2] - self.goal[:, :2]).norm(dim=1).cpu().numpy()
+                    obs, _, done = self.step(action)
+                    reward = (obs[:, :2] - self.goal).norm(dim=-1).cpu().numpy()
                     total_rewards += reward
                     action = pred_action[:, i]
 
@@ -179,7 +179,7 @@ class RaisimEnv:
         self.images.append(image)
 
     def generate_goal(self):
-        self.goal = np.random.uniform(-5, 5, (self.num_envs, 2)).astype(np.float32)
+        self.goal = np.random.uniform(-4, 4, (self.num_envs, 2)).astype(np.float32)
         self.set_goal(self.goal)
         self.goal = torch.from_numpy(self.goal).to(self.device)
 

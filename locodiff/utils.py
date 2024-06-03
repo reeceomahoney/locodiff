@@ -170,22 +170,22 @@ class MinMaxScaler:
         self.y_bounds[0, :] = -1.1
         self.y_bounds[1, :] = 1.1
 
-    # def update_pos_scale(self, batch, T_cond):
-    #     obs_batch = batch["observation"]
-    #     goal_batch = batch["goal"]
+    def update_pos_scale(self, batch, T_cond):
+        obs_batch = batch["observation"]
+        goal_batch = 4 * torch.rand((obs_batch.shape[0], 2))
 
-    #     pos = obs_batch[..., :2] - obs_batch[:, T_cond - 1, :2].unsqueeze(1)
-    #     pos_flat_in = pos[:, :T_cond].reshape(-1, 2)
-    #     self.x_max[:2] = pos_flat_in.max(dim=0).values.to(self.device)
-    #     self.x_min[:2] = pos_flat_in.min(dim=0).values.to(self.device)
+        pos = obs_batch[..., :2] - obs_batch[:, T_cond - 1, :2].unsqueeze(1)
+        pos_flat_in = pos[:, :T_cond].reshape(-1, 2)
+        self.x_max[:2] = pos_flat_in.max(dim=0).values.to(self.device)
+        self.x_min[:2] = pos_flat_in.min(dim=0).values.to(self.device)
 
-    #     # pos_flat_out = pos[:, T_cond - 1 :].reshape(-1, 2)
-    #     # self.y_max[:2] = pos_flat_out.max(dim=0).values.to(self.device)
-    #     # self.y_min[:2] = pos_flat_out.min(dim=0).values.to(self.device)
+        # pos_flat_out = pos[:, T_cond - 1 :].reshape(-1, 2)
+        # self.y_max[:2] = pos_flat_out.max(dim=0).values.to(self.device)
+        # self.y_min[:2] = pos_flat_out.min(dim=0).values.to(self.device)
 
-    #     goal_batch[..., :2] -= obs_batch[:, T_cond - 1, :2]
-    #     self.goal_min = goal_batch.min(dim=0).values.to(self.device)
-    #     self.goal_max = goal_batch.max(dim=0).values.to(self.device)
+        goal_batch[..., :2] -= obs_batch[:, T_cond - 1, :2]
+        self.goal_min = goal_batch.min(dim=0).values.to(self.device)
+        self.goal_max = goal_batch.max(dim=0).values.to(self.device)
 
     def scale_input(self, x):
         out = (x - self.x_min) / (self.x_max - self.x_min) * 2 - 1
@@ -199,11 +199,11 @@ class MinMaxScaler:
         out = (y + 1) * (self.y_max - self.y_min) / 2 + self.y_min
         return out
     
-    # def scale_goal(self, goal):
-    #     return (goal - self.goal_min) / (self.goal_max - self.goal_min) * 2 - 1
+    def scale_goal(self, goal):
+        return (goal - self.goal_min) / (self.goal_max - self.goal_min) * 2 - 1
 
-    def scale_cmd(self, cmd):
-        return (cmd - self.cmd_min) / (self.cmd_max - self.cmd_min) * 2 - 1
+    # def scale_cmd(self, cmd):
+    #     return (cmd - self.cmd_min) / (self.cmd_max - self.cmd_min) * 2 - 1
 
     def clip(self, y):
         return torch.clamp(y, self.y_bounds[0, :], self.y_bounds[1, :])
