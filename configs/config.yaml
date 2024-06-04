@@ -2,7 +2,7 @@ defaults:
   - agents: agent
   - _self_
 
-data_path: walk_crawl_2
+data_path: walk_crawl_mid
 
 hydra:
   run:
@@ -20,7 +20,7 @@ T_cond: 8
 T_action: 1
 
 action_dim: 12
-obs_dim: 37
+obs_dim: 36
 pred_obs_dim: 0
 goal_dim: 3
 

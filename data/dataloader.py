@@ -150,10 +150,11 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         masks_initial_pad = np.ones((self.masks.shape[0], self.T_cond - 1))
         self.masks = np.concatenate([masks_initial_pad, self.masks], axis=1)
 
-        self.indicator = self.vel_cmds[:, 0, -2:].copy()
-        self.vel_cmds = self.vel_cmds[:, 0, :3]
+        self.indicator = self.vel_cmds[:, :, -2:].copy()
+        indicator_initial_pad = np.zeros_like(self.indicator[:, : self.T_cond - 1, :])
+        self.indicator = np.concatenate([indicator_initial_pad, self.indicator], axis=1)
 
-        self.observations = torch.cat([self.observations, self.indicator], dim=-1)
+        self.vel_cmds = self.vel_cmds[:, 0, :3]
 
         self.observations = torch.from_numpy(self.observations).to(self.device).float()
         self.actions = torch.from_numpy(self.actions).to(self.device).float()

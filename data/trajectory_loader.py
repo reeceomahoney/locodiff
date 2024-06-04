@@ -131,7 +131,7 @@ class TrajectorySlicerDataset(TrajectoryDataset):
         data_batch["observation"] = values[0]
         data_batch["action"] = values[1]
         data_batch["cmd"] = self.dataset[i][2]
-        data_batch["indicator"] = self.dataset[i][3]
+        data_batch["indicator"] = values[3]
 
         return data_batch
 

@@ -429,6 +429,7 @@ class Agent:
             cmd = self.calculate_vel_cmd(goal_pos, current_pos, state)
 
         indicator = self.get_to_device(batch, "indicator")
+        indicator = indicator[:, : self.T_cond]
         cmd = self.scaler.scale_cmd(cmd)
 
         return state_in, sa_out, cmd, indicator
