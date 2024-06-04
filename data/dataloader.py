@@ -153,6 +153,8 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         self.indicator = self.vel_cmds[:, 0, -2:].copy()
         self.vel_cmds = self.vel_cmds[:, 0, :3]
 
+        self.observations = torch.cat([self.observations, self.indicator], dim=-1)
+
         self.observations = torch.from_numpy(self.observations).to(self.device).float()
         self.actions = torch.from_numpy(self.actions).to(self.device).float()
         self.masks = torch.from_numpy(self.masks).to(self.device).float()

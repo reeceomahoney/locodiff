@@ -64,7 +64,7 @@ class RaisimEnv:
         obs = np.concatenate(
             [base_pos, orientation, self._observation[:, 3:33]], axis=-1
         )
-        # obs = np.concatenate([obs, np.ones_like(obs[:, :1])], axis=-1)
+        obs = np.concatenate([obs, np.ones_like(obs[:, :2])], axis=-1)
         obs = torch.from_numpy(obs).to(self.device)
         return obs
 
@@ -118,11 +118,10 @@ class RaisimEnv:
                     total_dones += np.ones(done.shape, dtype="int64")
 
                 indicator = torch.zeros(self.num_envs, 2).to(self.device)
-                if n < 125:
-                    indicator[:, 0] = 1.0
-                else:
-                    indicator[:, 0] = 0.0
-                    indicator[:, 1] = 1.0
+                if n < 100:
+                    obs[:, -1] = 0
+                if n > 150:
+                    obs[:, -1] = 0
 
                 pred_action, pred_traj = agent.predict(
                     {"observation": obs, "goal": self.goal, "indicator": indicator},
@@ -140,15 +139,15 @@ class RaisimEnv:
                         time.sleep(0.04 - delta)
                     start = time.time()
 
-            #     if n < self.eval_n_steps - 1:
-            #         x_pos.append(obs[:, 0].cpu().numpy())
-            #         y_pos.append(obs[:, 1].cpu().numpy())
+                if n < self.eval_n_steps - 1 and real_time:
+                    x_pos.append(obs[:, 33].cpu().numpy())
+                    y_pos.append(obs[:, 34].cpu().numpy())
 
-            # x_pos = np.array(x_pos)
-            # y_pos = np.array(y_pos)
-            # print("average x_pos: ", x_pos.mean())
-            # plt.plot(x_pos, y_pos)
-            # plt.show()  
+            if real_time:
+                x_pos = np.array(x_pos)
+                y_pos = np.array(y_pos)
+                plt.plot(x_pos, y_pos)
+                plt.show()  
 
         self.close()
         total_rewards /= self.eval_n_times * self.eval_n_steps

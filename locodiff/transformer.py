@@ -42,7 +42,7 @@ class DiffusionTransformer(nn.Module):
             SinusoidalPosEmb(d_model)(torch.arange(T)).unsqueeze(0).to(device)
         )
         self.cond_pos_emb = (
-            SinusoidalPosEmb(d_model)(torch.arange(T_cond + 3)).unsqueeze(0).to(device)
+            SinusoidalPosEmb(d_model)(torch.arange(T_cond + 2)).unsqueeze(0).to(device)
         )
 
         self.encoder = nn.Sequential(
@@ -182,12 +182,12 @@ class DiffusionTransformer(nn.Module):
         cmd = kwargs["cmd"]
         cmd_emb = self.cmd_emb(cmd).unsqueeze(1)
 
-        constraint = kwargs["indicator"]
-        force_mask = kwargs.get("uncond", False)
-        constraint = self.mask_cond(constraint, force_mask=force_mask)
-        constraint_emb = self.constraint_emb(constraint).unsqueeze(1)
+        # constraint = kwargs["indicator"]
+        # force_mask = kwargs.get("uncond", False)
+        # constraint = self.mask_cond(constraint, force_mask=force_mask)
+        # constraint_emb = self.constraint_emb(constraint).unsqueeze(1)
 
-        cond = torch.cat([sigma_emb, cmd_emb, constraint_emb, cond_emb], dim=1)
+        cond = torch.cat([sigma_emb, cmd_emb, cond_emb], dim=1)
         cond += self.cond_pos_emb
         cond = self.encoder(cond)
 

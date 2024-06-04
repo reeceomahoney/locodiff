@@ -468,7 +468,7 @@ class Agent:
         dist = goal_pos - current_pos
 
         if dist.norm(dim=-1).mean() < 0.3:
-            cmd = torch.ones_like(cmd)
+            cmd = torch.zeros((len(state), 3), device=self.device)
         else:
             angle = torch.atan2(dist[:, 1], dist[:, 0])
             rot_mat = self.quat_to_rot_mat(state[:, self.T_cond - 1, 2:6])
