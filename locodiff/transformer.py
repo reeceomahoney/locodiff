@@ -33,7 +33,7 @@ class DiffusionTransformer(nn.Module):
         self.state_action_emb = nn.Linear(
             self.pred_obs_dim + self.act_dim, self.d_model
         )
-        self.cond_state_emb = nn.Linear(self.obs_dim, self.d_model)
+        self.cond_state_emb = nn.Linear(self.obs_dim + 1, self.d_model)
         self.sigma_emb = nn.Linear(1, self.d_model)
         self.cmd_emb = nn.Linear(goal_dim, self.d_model)
         self.return_emb = nn.Linear(1, self.d_model)
@@ -42,7 +42,7 @@ class DiffusionTransformer(nn.Module):
             SinusoidalPosEmb(d_model)(torch.arange(T)).unsqueeze(0).to(device)
         )
         self.cond_pos_emb = (
-            SinusoidalPosEmb(d_model)(torch.arange(T_cond + 3)).unsqueeze(0).to(device)
+            SinusoidalPosEmb(d_model)(torch.arange(T_cond + 1)).unsqueeze(0).to(device)
         )
 
         self.encoder = nn.Sequential(
@@ -171,6 +171,12 @@ class DiffusionTransformer(nn.Module):
         cond: [batch_size, T_cond, obs_dim] observation history
         sigma: [batch_size] noise level
         """
+        returns = kwargs["returns"]
+        force_mask = kwargs.get("uncond", False)
+        returns = self.mask_cond(returns, force_mask=force_mask)
+
+        cond = torch.cat([cond, returns], dim=-1)
+
         cond_emb = self.cond_state_emb(cond)
         input_emb = self.state_action_emb(x)
 
@@ -178,18 +184,7 @@ class DiffusionTransformer(nn.Module):
         sigma = sigma.view(-1, 1, 1).log() / 4
         sigma_emb = self.sigma_emb(sigma)
 
-        # command embedding
-        cmd = kwargs["cmd"]
-        # force_mask = kwargs.get("uncond", False)
-        # cmd = self.mask_cond(cmd, force_mask=force_mask)
-        cmd_emb = self.cmd_emb(cmd).unsqueeze(1)
-
-        returns = kwargs["returns"]
-        force_mask = kwargs.get("uncond", False)
-        returns = self.mask_cond(returns, force_mask=force_mask)
-        return_emb = self.return_emb(returns).unsqueeze(1)
-
-        cond = torch.cat([sigma_emb, cmd_emb, return_emb, cond_emb], dim=1)
+        cond = torch.cat([sigma_emb, cond_emb], dim=1)
         cond += self.cond_pos_emb
         cond = self.encoder(cond)
 
@@ -213,7 +208,7 @@ class DiffusionTransformer(nn.Module):
         if force_mask:
             return torch.full_like(cond, 0)
         elif self.training and self.cond_mask_prob > 0:
-            mask = (torch.rand_like(cond[..., 0:1]) > self.cond_mask_prob).float()
+            mask = (torch.rand_like(cond[:, 0:1]) > self.cond_mask_prob).float()
             mask = mask.expand_as(cond)
             cond[mask == 0] = 0
             return cond

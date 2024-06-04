@@ -93,7 +93,7 @@ class TrajectorySlicerDataset(TrajectoryDataset):
         self.future_seq_len = future_seq_len
         self.slices = []
         min_seq_length = np.inf
-        effective_window = window + future_seq_len - 1 + 46
+        effective_window = window + future_seq_len - 1 + 49
 
         for i in range(len(self.dataset)):  # type: ignore
             T = self.dataset.get_seq_length(i)  # avoid reading actual seq (slow)

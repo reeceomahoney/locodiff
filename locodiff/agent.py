@@ -6,6 +6,7 @@ from faulthandler import disable
 from functools import partial
 
 import hydra
+import numpy as np
 import torch
 import torch.nn as nn
 from omegaconf import DictConfig
@@ -418,7 +419,7 @@ class Agent:
         # Action
         if action is not None:
             sa = torch.cat([state[..., : self.pred_obs_dim], action], dim=-1)
-            sa_out = self.scaler.scale_output(sa[:, self.T_cond - 1 : self.T_cond + 3])
+            sa_out = self.scaler.scale_output(sa[:, self.T_cond - 1 : self.T_cond + 1]) # change this
         else:
             sa_out = None
 
@@ -428,7 +429,7 @@ class Agent:
             returns = self.calculate_returns(state, cmd)
         else:
             cmd -= current_pos
-            returns = torch.ones((state.shape[0], 1), device=self.device)
+            returns = self.get_to_device(batch, "returns")
 
         cmd = self.scaler.scale_goal(cmd)
 
@@ -469,13 +470,13 @@ class Agent:
         """
         Calculate the expected discounted return for each state.
         """
-        rewards = -torch.linalg.norm((state[:, self.T_cond - 1:, :2] - cmd.unsqueeze(1)), dim=-1)
-        rewards = torch.exp(rewards / 4)
+        rewards = ((state[:, self.T_cond :, 33] > 0.5) & (state[:, self.T_cond :, 33] < 0.8)) * 1
 
         gammas = torch.ones(50, device=self.device) * 0.99
         gammas = gammas.cumprod(dim=0)
 
         returns = (rewards * gammas).sum(dim=-1, keepdim=True)
         returns /= returns.max()
+        returns = returns.repeat(1, self.T_cond).unsqueeze(-1)
 
         return returns

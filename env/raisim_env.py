@@ -11,6 +11,7 @@ from matplotlib.figure import Figure
 from omegaconf import OmegaConf
 from scipy.spatial.transform import Rotation as R
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 from env.lib.raisim_env import RaisimWrapper
 
@@ -63,7 +64,6 @@ class RaisimEnv:
         obs = np.concatenate(
             [base_pos, orientation, self._observation[:, 3:33]], axis=-1
         )
-        # obs = np.concatenate([obs, np.ones_like(obs[:, :1])], axis=-1)
         obs = torch.from_numpy(obs).to(self.device)
         return obs
 
@@ -103,6 +103,8 @@ class RaisimEnv:
             done = np.array([False])
             obs = self.observe()
 
+            x_pos, y_pos = [], []
+
             # now run the agent for n steps
             action = self.nominal_joint_pos
             action = np.tile(action, (self.num_envs, 1))
@@ -114,14 +116,16 @@ class RaisimEnv:
                 if n == self.eval_n_steps - 1:
                     total_dones += np.ones(done.shape, dtype="int64")
 
+                returns = torch.ones(self.num_envs, 2, 1).to(self.device)
+
                 pred_action, pred_traj = agent.predict(
-                    {"observation": obs, "goal": self.goal},
+                    {"observation": obs, "goal": self.goal, "returns": returns},
                     new_sampling_steps=n_inference_steps,
                 )
 
                 for i in range(self.T_action):
                     obs, _, done = self.step(action)
-                    reward = (obs[:, :2] - self.goal).norm(dim=-1).cpu().numpy()
+                    reward = ((obs[:, 33] > 0.5) & (obs[:, 33] < 0.8)).cpu().numpy()
                     total_rewards += reward
                     action = pred_action[:, i]
 
@@ -129,6 +133,16 @@ class RaisimEnv:
                     if delta < 0.04 and real_time:
                         time.sleep(0.04 - delta)
                     start = time.time()
+
+                if n < self.eval_n_steps - 1 and real_time:
+                    x_pos.append(obs[:, 0].cpu().numpy())
+                    y_pos.append(obs[:, 1].cpu().numpy())
+
+            if real_time:
+                x_pos = np.array(x_pos)
+                y_pos = np.array(y_pos)
+                plt.plot(x_pos, y_pos, "o")
+                plt.show()
 
         self.close()
         total_rewards /= self.eval_n_times * self.eval_n_steps
@@ -179,7 +193,8 @@ class RaisimEnv:
         self.images.append(image)
 
     def generate_goal(self):
-        self.goal = np.random.uniform(-4, 4, (self.num_envs, 2)).astype(np.float32)
+        # self.goal = np.random.uniform(-5, 5, (self.num_envs, 3)).astype(np.float32)
+        self.goal = 4 * np.random.random((self.num_envs, 2)).astype(np.float32)
         self.set_goal(self.goal)
         self.goal = torch.from_numpy(self.goal).to(self.device)
 
