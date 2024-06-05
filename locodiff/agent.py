@@ -324,7 +324,7 @@ class Agent:
         """
         out = self.model(x_t, cond, sigma, **kwargs)
 
-        if self.cond_mask_prob > 0 and self.cond_lambda > 0:
+        if self.cond_mask_prob > 0:
             kwargs["uncond"] = True
             out_uncond = self.model(x_t, cond, sigma, **kwargs)
             out = out_uncond + self.cond_lambda * (out - out_uncond)
@@ -419,7 +419,9 @@ class Agent:
         # Action
         if action is not None:
             sa = torch.cat([state[..., : self.pred_obs_dim], action], dim=-1)
-            sa_out = self.scaler.scale_output(sa[:, self.T_cond - 1 : self.T_cond + 1]) # change this
+            sa_out = self.scaler.scale_output(
+                sa[:, self.T_cond - 1 : self.T_cond + self.T - 1]
+            )
         else:
             sa_out = None
 

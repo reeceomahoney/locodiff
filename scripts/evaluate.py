@@ -30,7 +30,7 @@ def main(cfg: DictConfig) -> None:
     model_cfg = OmegaConf.load(cfg_store_path)
     model_cfg.device = cfg.device
     model_cfg.agents["device"] = cfg["device"]
-    model_cfg.env["num_envs"] = 1
+    model_cfg.env["num_envs"] = 50
     model_cfg.env["server_port"] = 8081
     model_cfg.env["max_time"] = 10
     model_cfg["T_action"] = 1
@@ -141,35 +141,40 @@ def main(cfg: DictConfig) -> None:
             plt.tight_layout()
             plt.savefig("results.png")
         if cfg["test_cond_lambda"]:
-            agent.num_sampling_steps = 10
-            lambdas = [0, 1e-6, 2e-3]
-            batch = {k: v[3:4] for k, v in batch.items()}
+            env.eval_n_times = 1
+            env.eval_n_steps = 250
+            lambda_values = [-5, -2, 0, 1, 2, 5, 10]
+            rewards = []
 
-            fix, axs = plt.subplots(2, 3, figsize=(15, 10))
-            axs = axs.flatten()
+            for i, lam in enumerate(lambda_values):
+                agent.cond_lambda = lam
+                results_dict = env.simulate(
+                    agent, n_inference_steps=cfg["n_inference_steps"], real_time=True
+                )
+                reward = np.exp(-((results_dict["x_pos"] - 0.6) ** 2)*10)
+                # reward = ((results_dict["x_pos"] > 0.5 ) & (results_dict["x_pos"] < 0.8)).astype(float)
+                rewards.append(reward.mean(axis=-1))
 
-            obs = batch["observation"].cpu().numpy()
-            obs[:, :, :2] -= obs[:, model_cfg["T_cond"] - 1, :2]
+            x_coords = range(1, len(lambda_values) + 1)
+            rewards = np.array(rewards)
+            np.save("target.npy", rewards)
 
-            for i, l in enumerate(lambdas):
-                info = agent.evaluate(batch, cond_lambda=l)
-                goal = info["goal"].cpu().numpy()
-                pred = info["prediction"].cpu().numpy()[0, :, :2]
-                gt = obs[0, model_cfg["T_cond"] - 1 :, :2]
+            box = plt.boxplot(rewards.T, patch_artist=True, showfliers=False)
 
-                axs[i].title.set_text(f"Lambda: {l}")
-                axs[i].plot(gt[:, 0], gt[:, 1], "o-", label="observed")
-                axs[i].plot(pred[:, 0], pred[:, 1], "x-", label="predicted")
-                axs[i].plot(goal[0, 0], goal[0, 1], "rx", label="Goal")
+            for patch in box["boxes"]:
+                patch.set_facecolor("lightblue")
 
-                axs[i].legend()
+            plt.xticks(x_coords, lambda_values)
+            plt.xlabel('Lambda values')
+            plt.ylabel('Rewards')
+            plt.show()
 
-        if not cfg["visualize x-y trajectory"]:
-            plt.legend()
-            if socket.gethostname() == "ori-drs-sid":
-                plt.show()
-            else:
-                plt.savefig("results.png")
+        # if not cfg["visualize x-y trajectory"]:
+        #     plt.legend()
+        #     if socket.gethostname() == "ori-drs-sid":
+        #         plt.show()
+        #     else:
+        #         plt.savefig("results.png")
 
 
 if __name__ == "__main__":

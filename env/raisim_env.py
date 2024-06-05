@@ -116,7 +116,7 @@ class RaisimEnv:
                 if n == self.eval_n_steps - 1:
                     total_dones += np.ones(done.shape, dtype="int64")
 
-                returns = torch.ones(self.num_envs, 2, 1).to(self.device)
+                returns = torch.ones(self.num_envs, 8, 1).to(self.device)
 
                 pred_action, pred_traj = agent.predict(
                     {"observation": obs, "goal": self.goal, "returns": returns},
@@ -125,7 +125,7 @@ class RaisimEnv:
 
                 for i in range(self.T_action):
                     obs, _, done = self.step(action)
-                    reward = ((obs[:, 33] > 0.5) & (obs[:, 33] < 0.8)).cpu().numpy()
+                    reward = (torch.exp(-(obs[:, 33] - 0.6) ** 2)).cpu().numpy()
                     total_rewards += reward
                     action = pred_action[:, i]
 
@@ -135,14 +135,12 @@ class RaisimEnv:
                     start = time.time()
 
                 if n < self.eval_n_steps - 1 and real_time:
-                    x_pos.append(obs[:, 0].cpu().numpy())
-                    y_pos.append(obs[:, 1].cpu().numpy())
+                    x_pos.append(obs[:, 33].cpu().numpy())
+                    y_pos.append(obs[:, 34].cpu().numpy())
 
             if real_time:
                 x_pos = np.array(x_pos)
                 y_pos = np.array(y_pos)
-                plt.plot(x_pos, y_pos, "o")
-                plt.show()
 
         self.close()
         total_rewards /= self.eval_n_times * self.eval_n_steps
@@ -154,6 +152,8 @@ class RaisimEnv:
             "avrg_reward": avrg_reward,
             "std_reward": std_reward,
             "total_done": total_dones.mean(),
+            "x_pos": x_pos,
+            "y_pos": y_pos,
         }
         return return_dict
 
