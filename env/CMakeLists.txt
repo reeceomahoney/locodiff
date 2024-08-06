@@ -7,10 +7,6 @@ set(CMAKE_BUILD_TYPE Release)
 # dependencies
 # ##############################################################################
 
-# python
-set(Python_ROOT_DIR "/home/reece/.local/share/virtualenvs/locodiff-ci2JOiiW")
-find_package(Python COMPONENTS Interpreter Development)
-
 # raisim
 list(APPEND CMAKE_PREFIX_PATH "$ENV{RAISIM_LIB}/raisim/linux")
 find_package(raisim CONFIG REQUIRED)

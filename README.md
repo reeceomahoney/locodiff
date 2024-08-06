@@ -1,7 +1,8 @@
+# TODO
+
 - [x] refactor dataloader
+- [x] move build to setup.py
 - [ ] trim configs
 - [ ] simplify env
-- [ ] switch to named tuples
-- [ ] change cmake to use which python
 - [ ] add type annotations
-- [ ] move build to setup.py
+- [ ] fix cmake stdout

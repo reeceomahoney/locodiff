@@ -1,12 +1,10 @@
 import logging
 import math
 import os
-from collections import deque
 from faulthandler import disable
 from functools import partial
 
 import hydra
-import numpy as np
 import torch
 import torch.nn as nn
 from omegaconf import DictConfig

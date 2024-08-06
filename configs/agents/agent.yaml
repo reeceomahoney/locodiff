@@ -37,7 +37,7 @@ cond_lambda: ${cond_lambda}
 cond_mask_prob: ${cond_mask_prob}
 
 dataset_fn:
-  _target_: data.dataloader.get_dataloaders_and_scaler
+  _target_: locodiff.dataloader.get_dataloaders_and_scaler
   data_directory: ${data_path}
   obs_dim: ${obs_dim}
   train_fraction: 0.95

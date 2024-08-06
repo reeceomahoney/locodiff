@@ -21,7 +21,7 @@ class ExpertDataset(Dataset):
         self.device = device
 
         current_dir = os.path.dirname(os.path.realpath(__file__))
-        dataset_path = current_dir + "/datasets/" + data_directory + ".npy"
+        dataset_path = current_dir + "/../data/" + data_directory + ".npy"
 
         self.data = self.load_and_process_data(dataset_path)
 
