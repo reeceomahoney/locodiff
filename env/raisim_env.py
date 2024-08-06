@@ -103,16 +103,6 @@ class RaisimEnv:
             done = np.array([False])
             obs = self.observe()
 
-            all_obs, all_cmds = [], []
-            cmd = torch.zeros(self.num_envs, 3).to(self.device)
-            cmd[:, 0] = 0.8 * torch.rand(self.num_envs, device=self.device)
-            cmd[:, 1] = 0.5 * torch.rand(self.num_envs, device=self.device)
-            cmd[:, 2] = 1.0 * torch.rand(self.num_envs, device=self.device)
-
-            indicator = -torch.ones(self.num_envs, 8, 2).to(self.device)
-            indicator[..., 0] = 1
-            agent.cond_lambda = 1
-
             # now run the agent for n steps
             action = self.nominal_joint_pos
             action = np.tile(action, (self.num_envs, 1))
@@ -125,25 +115,14 @@ class RaisimEnv:
                 if n == self.eval_n_steps - 1:
                     total_dones += np.ones(done.shape, dtype="int64")
 
-                if n % 125 == 0:
-                    switch_step = n
-                    agent.cond_lambda = 150
-                    if indicator[0, 0, 1] == 1:
-                        indicator[..., 1] = -1
-                    else:
-                        indicator[..., 1] = 1
-
-                if n == (switch_step + 25):
-                    agent.cond_lambda = 1
-
                 pred_action, pred_traj = agent.predict(
-                    {"observation": obs, "cmd": cmd, "indicator": indicator},
+                    {"observation": obs, "goal": self.goal},
                     new_sampling_steps=n_inference_steps,
                 )
 
                 for i in range(self.T_action):
-                    obs, reward, done = self.step(action)
-                    reward = (obs[:, :2] - self.goal[:, :2]).norm(dim=1).cpu().numpy()
+                    obs, _, done = self.step(action)
+                    reward = (torch.exp(-(obs[:, 33] - 0.6) ** 2)).cpu().numpy()
                     total_rewards += reward
                     action = pred_action[:, i]
 
@@ -151,10 +130,6 @@ class RaisimEnv:
                     if delta < 0.04 and real_time:
                         time.sleep(0.04 - delta)
                     start = time.time()
-
-                # if n < self.eval_n_steps - 1 and real_time:
-                #     all_obs.append(obs.cpu().numpy())
-                #     all_cmds.append(cmd.cpu().numpy())
 
         self.close()
         total_rewards /= self.eval_n_times * self.eval_n_steps
@@ -166,8 +141,6 @@ class RaisimEnv:
             "avrg_reward": avrg_reward,
             "std_reward": std_reward,
             "total_done": total_dones.mean(),
-            "all_obs": np.array(all_obs),
-            "all_cmds": np.array(all_cmds),
         }
         return return_dict
 
@@ -208,7 +181,7 @@ class RaisimEnv:
 
     def generate_goal(self):
         self.goal = np.random.uniform(-5, 5, (self.num_envs, 2)).astype(np.float32)
-        # self.set_goal(self.goal)
+        self.set_goal(self.goal)
         self.goal = torch.from_numpy(self.goal).to(self.device)
 
     def get_base_position(self):

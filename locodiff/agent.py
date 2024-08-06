@@ -6,6 +6,7 @@ from faulthandler import disable
 from functools import partial
 
 import hydra
+import numpy as np
 import torch
 import torch.nn as nn
 from omegaconf import DictConfig
@@ -158,16 +159,14 @@ class Agent:
         log.info("Training done!")
 
     def train_step(self, batch: dict):
-        state_in, sa_out, cmd, indicator = self.process_batch(batch)
+        state_in, sa_out, cmd, returns = self.process_batch(batch)
 
         self.model.train()
         self.model.training = True
 
         noise = torch.randn_like(sa_out)
         sigma = self.make_sample_density()(shape=(len(sa_out),), device=self.device)
-        loss = self.model.loss(
-            sa_out, state_in, noise, sigma, cmd=cmd, indicator=indicator
-        )
+        loss = self.model.loss(sa_out, state_in, noise, sigma, cmd=cmd, returns=returns)
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -185,8 +184,8 @@ class Agent:
         """
         Evaluates the model using the provided batch of data and returns the mean squared error (MSE) loss.
         """
-        state_in, sa_out, cmd, indicator = self.process_batch(batch)
-        kwargs["indicator"] = indicator
+        state_in, sa_out, cmd, returns = self.process_batch(batch)
+        kwargs["returns"] = returns
 
         if self.use_ema:
             self.ema_helper.store(self.model.parameters())
@@ -244,8 +243,8 @@ class Agent:
         Predicts the output of the model based on the provided batch of data.
         """
         batch["observation"] = self.stack_context(batch["observation"])
-        state_in, _, goal, indicator = self.process_batch(batch)
-        kwargs["indicator"] = indicator
+        state_in, _, goal, returns = self.process_batch(batch)
+        kwargs["returns"] = returns
 
         if new_sampling_steps is not None:
             n_sampling_steps = new_sampling_steps
@@ -325,7 +324,7 @@ class Agent:
         """
         out = self.model(x_t, cond, sigma, **kwargs)
 
-        if self.cond_mask_prob > 0 and self.cond_lambda > 0:
+        if self.cond_mask_prob > 0:
             kwargs["uncond"] = True
             out_uncond = self.model(x_t, cond, sigma, **kwargs)
             out = out_uncond + self.cond_lambda * (out - out_uncond)
@@ -410,7 +409,7 @@ class Agent:
         """
         state = self.get_to_device(batch, "observation")
         action = self.get_to_device(batch, "action")
-        cmd = self.get_to_device(batch, "cmd")
+        cmd = self.get_to_device(batch, "goal")
 
         # Centre posisition around the current state
         current_pos = state[:, self.T_cond - 1, :2]
@@ -420,7 +419,9 @@ class Agent:
         # Action
         if action is not None:
             sa = torch.cat([state[..., : self.pred_obs_dim], action], dim=-1)
-            sa_out = self.scaler.scale_output(sa[:, self.T_cond - 1 :])
+            sa_out = self.scaler.scale_output(
+                sa[:, self.T_cond - 1 : self.T_cond + self.T - 1]
+            )
         else:
             sa_out = None
 
@@ -432,7 +433,16 @@ class Agent:
         indicator = indicator[:, : self.T_cond]
         cmd = self.scaler.scale_cmd(cmd)
 
-        return state_in, sa_out, cmd, indicator
+        #     cmd = 4 * torch.rand((state.shape[0], 2), device=self.device)
+        #     cmd -= current_pos
+        #     returns = self.calculate_returns(state, cmd)
+        # else:
+        #     cmd -= current_pos
+        #     returns = self.get_to_device(batch, "returns")
+
+        # cmd = self.scaler.scale_goal(cmd)
+
+        return state_in, sa_out, cmd
 
     def get_to_device(self, batch, key):
         return (
@@ -485,3 +495,17 @@ class Agent:
                 dim=-1,
             )
         return cmd
+    def calculate_returns(self, state, cmd):
+        """
+        Calculate the expected discounted return for each state.
+        """
+        rewards = ((state[:, self.T_cond :, 33] > 0.5) & (state[:, self.T_cond :, 33] < 0.8)) * 1
+
+        gammas = torch.ones(50, device=self.device) * 0.99
+        gammas = gammas.cumprod(dim=0)
+
+        returns = (rewards * gammas).sum(dim=-1, keepdim=True)
+        returns /= returns.max()
+        returns = returns.repeat(1, self.T_cond).unsqueeze(-1)
+
+        return returns

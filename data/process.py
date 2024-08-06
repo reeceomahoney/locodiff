@@ -64,7 +64,7 @@ vel_cmds[:1000, :, -2] = 1
 vel_cmds[1000:, :, -1] = 1
 
 # Save the data to a new file
-print(f"Saving data to {current_dir}/datasets/walk_crawl.npy")
+print(f"Saving data to {current_dir}/datasets/{name}.npy")
 print(f"Observations shape: {obs.shape}, Actions shape: {act.shape}")
 np.save(
     f"{current_dir}/datasets/walk_crawl_2.npy",
