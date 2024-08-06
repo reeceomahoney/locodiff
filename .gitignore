@@ -167,3 +167,4 @@ wandb
 outputs/
 *.csv
 *.bag
+*.pt
