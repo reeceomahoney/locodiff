@@ -1,7 +1,7 @@
-- [ ] Trim configs
-- [ ] refactor dataloader
+- [x] refactor dataloader
+- [ ] trim configs
 - [ ] simplify env
 - [ ] switch to named tuples
 - [ ] change cmake to use which python
-- [ ] Add type annotations
-- [ ] Move build to setup.py
+- [ ] add type annotations
+- [ ] move build to setup.py
