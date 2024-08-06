@@ -9,6 +9,7 @@ from omegaconf import DictConfig, OmegaConf
 import torch
 from tqdm import tqdm
 from scipy.spatial.transform import Rotation as R
+from sklearn.manifold import TSNE
 
 from env.raisim_env import RaisimEnv
 from locodiff.classifier import ClassifierGuidedSampleModel
@@ -32,7 +33,7 @@ def main(cfg: DictConfig) -> None:
     model_cfg.agents["device"] = cfg["device"]
     model_cfg.env["num_envs"] = 1
     model_cfg.env["server_port"] = 8081
-    model_cfg.env["max_time"] = 10
+    model_cfg.env["max_time"] = 100
     model_cfg["T_action"] = 1
     model_cfg["use_ema"] = False
 
@@ -102,7 +103,7 @@ def main(cfg: DictConfig) -> None:
             # batch = {k: v[:16] for k, v in batch.items()}
 
             obs = batch["observation"].cpu().numpy()
-            obs[:, :, :2] -= obs[:, T_cond - 1: T_cond, :2]
+            obs[:, :, :2] -= obs[:, T_cond - 1 : T_cond, :2]
 
             info = agent.evaluate(batch)
             goal = info["goal"].cpu().numpy()
@@ -163,13 +164,40 @@ def main(cfg: DictConfig) -> None:
                 axs[i].plot(goal[0, 0], goal[0, 1], "rx", label="Goal")
 
                 axs[i].legend()
+        if cfg["test_t_sne"]:
+            env.eval_n_times = 10
+            results_dict = env.simulate(
+                agent, n_inference_steps=cfg["n_inference_steps"], real_time=True
+            )
 
-        if not cfg["visualize x-y trajectory"]:
-            plt.legend()
-            if socket.gethostname() == "ori-drs-sid":
-                plt.show()
-            else:
-                plt.savefig("results.png")
+            obs_dim = 36
+            obs = results_dict["all_obs"]
+            vels = np.concatenate([obs[..., 33:35], obs[..., 20:21]], axis=-1)
+            cmds = results_dict["all_cmds"]
+
+            error = (vels - cmds) ** 2
+            error = error.mean(axis=(0, 1))
+            print(error)
+
+            # dataset = np.load("data/datasets/walk.npy", allow_pickle=True).item()
+            # dataset_obs = dataset["observations"].reshape(-1, obs_dim)[:12450, 6:18]
+
+
+
+            # tsne_1 = TSNE(n_components=2).fit_transform(obs)
+            # tsne_2 = TSNE(n_components=2).fit_transform(dataset_obs)
+
+            # plt.scatter(tsne_1[:, 0], tsne_1[:, 1], label="Ground truth")
+            # plt.scatter(tsne_2[:, 0], tsne_2[:, 1], label="Generated")
+            # plt.legend()
+            # plt.show()
+
+        # if not cfg["visualize x-y trajectory"]:
+        #     plt.legend()
+        #     if socket.gethostname() == "ori-drs-sid":gg
+        #         plt.show()
+        #     else:
+        #         plt.savefig("results.png")
 
 
 if __name__ == "__main__":
