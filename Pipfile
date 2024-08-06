@@ -18,6 +18,7 @@ scipy = "*"
 imageio = "*"
 hydra-core = "*"
 wandb = "*"
+scikit-learn = "*"
 
 [dev-packages]
 
