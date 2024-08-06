@@ -7,52 +7,8 @@ import torch
 from torch.utils.data import Dataset
 
 from locodiff.utils import MinMaxScaler
-from data.trajectory_loader import get_train_val_sliced
 
 log = logging.getLogger(__name__)
-
-
-def get_raisim_train_val(
-    data_directory,
-    obs_dim,
-    window_size,
-    future_seq_len,
-    train_fraction,
-    random_seed,
-    device,
-    train_batch_size,
-    test_batch_size,
-    num_workers,
-):
-    train_set, test_set = get_train_val_sliced(
-        RaisimTrajectoryDataset(data_directory, future_seq_len, obs_dim, window_size),
-        train_fraction,
-        random_seed,
-        window_size,
-        future_seq_len,
-    )
-
-    x_data = train_set.dataset.dataset.get_all_observations()
-    y_data = train_set.dataset.dataset.get_all_actions()
-    cmd_data = train_set.dataset.dataset.get_all_vel_cmds()
-    scaler = MinMaxScaler(x_data, y_data, cmd_data, device)
-
-    train_dataloader = torch.utils.data.DataLoader(
-        train_set,
-        batch_size=train_batch_size,
-        shuffle=True,
-        num_workers=num_workers,
-        pin_memory=True,
-    )
-
-    test_dataloader = torch.utils.data.DataLoader(
-        test_set,
-        batch_size=test_batch_size,
-        shuffle=True,
-        num_workers=num_workers,
-        pin_memory=True,
-    )
-    return train_dataloader, test_dataloader, scaler
 
 
 class RaisimTrajectoryDataset(Dataset):
@@ -190,6 +146,108 @@ class RaisimTrajectoryDataset(Dataset):
                 for split in splits
             ]
         )
+
+
+class TrajectorySlicerDataset(Dataset):
+    def __init__(self, dataset, window: int, future_seq_len: int):
+        self.dataset = dataset
+        self.window = window
+        self.future_seq_len = future_seq_len
+        self.slices = self._create_slices()
+
+    def _create_slices(self):
+        slices = []
+        effective_window = self.window + self.future_seq_len - 1 + 49
+        for i in range(len(self.dataset)):
+            T = len(self.dataset[i]["obs"])
+            if T >= effective_window:
+                slices += [
+                    (i, start, start + effective_window)
+                    for start in range(T - effective_window + 1)
+                ]
+        return slices
+
+    def __len__(self):
+        return len(self.slices)
+
+    def __getitem__(self, idx):
+        i, start, end = self.slices[idx]
+        x = self.dataset[i]
+        return {k: v[start:end] if v.ndim > 1 else v for k, v in x.items()}
+
+
+def get_raisim_train_val(
+    data_directory,
+    obs_dim,
+    window_size,
+    future_seq_len,
+    train_fraction,
+    random_seed,
+    device,
+    train_batch_size,
+    test_batch_size,
+    num_workers,
+):
+    train_set, test_set = get_train_val_sliced(
+        RaisimTrajectoryDataset(data_directory, future_seq_len, obs_dim, window_size),
+        train_fraction,
+        random_seed,
+        window_size,
+        future_seq_len,
+    )
+
+    x_data = train_set.dataset.dataset.get_all_observations()
+    y_data = train_set.dataset.dataset.get_all_actions()
+    cmd_data = train_set.dataset.dataset.get_all_vel_cmds()
+    scaler = MinMaxScaler(x_data, y_data, cmd_data, device)
+
+    train_dataloader = torch.utils.data.DataLoader(
+        train_set,
+        batch_size=train_batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+
+    test_dataloader = torch.utils.data.DataLoader(
+        test_set,
+        batch_size=test_batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+    return train_dataloader, test_dataloader, scaler
+
+
+def split_dataset(
+    dataset: Dataset, train_fraction: float = 0.95, random_seed: int = 42
+):
+    dataset_size = len(dataset)
+    train_size = int(train_fraction * dataset_size)
+    val_size = dataset_size - train_size
+
+    generator = torch.Generator().manual_seed(random_seed)
+    train_dataset, val_dataset = torch.utils.data.random_split(
+        dataset, [train_size, val_size], generator=generator
+    )
+
+    return train_dataset, val_dataset
+
+
+def get_train_val_sliced(
+    dataset: Dataset,
+    train_fraction: float = 0.95,
+    random_seed: int = 42,
+    window_size: int = 10,
+    future_seq_len: int = 10,
+):
+    train, val = split_dataset(dataset, train_fraction, random_seed)
+    if window_size > 0:
+        return (
+            TrajectorySlicerDataset(train, window_size, future_seq_len),
+            TrajectorySlicerDataset(val, window_size, future_seq_len),
+        )
+    return train, val
 
 
 if __name__ == "__main__":
