@@ -33,7 +33,7 @@ class DiffusionTransformer(nn.Module):
         self.state_action_emb = nn.Linear(
             self.pred_obs_dim + self.act_dim, self.d_model
         )
-        self.cond_state_emb = nn.Linear(self.obs_dim + 2, self.d_model)
+        self.cond_state_emb = nn.Linear(self.obs_dim, self.d_model)
         self.sigma_emb = nn.Linear(1, self.d_model)
         self.cmd_emb = nn.Linear(goal_dim, self.d_model)
         self.constraint_emb = nn.Linear(2, self.d_model)
@@ -171,11 +171,11 @@ class DiffusionTransformer(nn.Module):
         cond: [batch_size, T_cond, obs_dim] observation history
         sigma: [batch_size] noise level
         """
-        constraint = kwargs["indicator"]
-        force_mask = kwargs.get("uncond", False)
-        constraint = self.mask_cond(constraint, force_mask=force_mask)
+        # constraint = kwargs["indicator"]
+        # force_mask = kwargs.get("uncond", False)
+        # constraint = self.mask_cond(constraint, force_mask=force_mask)
 
-        cond = torch.cat([cond, constraint], dim=-1)
+        # cond = torch.cat([cond, constraint], dim=-1)
 
         cond_emb = self.cond_state_emb(cond)
         input_emb = self.state_action_emb(x)

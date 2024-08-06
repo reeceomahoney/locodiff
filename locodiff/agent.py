@@ -409,7 +409,7 @@ class Agent:
         """
         state = self.get_to_device(batch, "observation")
         action = self.get_to_device(batch, "action")
-        cmd = self.get_to_device(batch, "goal")
+        cmd = self.get_to_device(batch, "cmd")
 
         # Centre posisition around the current state
         current_pos = state[:, self.T_cond - 1, :2]
@@ -428,10 +428,12 @@ class Agent:
         if cmd is None:
             goal_pos = self.get_to_device(batch, "goal")
             cmd = self.calculate_vel_cmd(goal_pos, current_pos, state)
+        
+        returns = None
 
-        indicator = self.get_to_device(batch, "indicator")
-        indicator = indicator[:, : self.T_cond]
-        cmd = self.scaler.scale_cmd(cmd)
+        # indicator = self.get_to_device(batch, "indicator")
+        # indicator = indicator[:, : self.T_cond]
+        # cmd = self.scaler.scale_cmd(cmd)
 
         #     cmd = 4 * torch.rand((state.shape[0], 2), device=self.device)
         #     cmd -= current_pos
@@ -442,7 +444,7 @@ class Agent:
 
         # cmd = self.scaler.scale_goal(cmd)
 
-        return state_in, sa_out, cmd
+        return state_in, sa_out, cmd, returns
 
     def get_to_device(self, batch, key):
         return (

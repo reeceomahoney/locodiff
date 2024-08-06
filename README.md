@@ -1,5 +1,7 @@
-- Trim configs
-- refactor dataloader
-- simplify env
-- switch to named tuples
-- change cmake to use which python
+- [ ] Trim configs
+- [ ] refactor dataloader
+- [ ] simplify env
+- [ ] switch to named tuples
+- [ ] change cmake to use which python
+- [ ] Add type annotations
+- [ ] Move build to setup.py
