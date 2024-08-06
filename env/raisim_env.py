@@ -11,6 +11,7 @@ from matplotlib.figure import Figure
 from omegaconf import OmegaConf
 from scipy.spatial.transform import Rotation as R
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 from env.lib.raisim_env import RaisimWrapper
 
@@ -63,7 +64,6 @@ class RaisimEnv:
         obs = np.concatenate(
             [base_pos, orientation, self._observation[:, 3:33]], axis=-1
         )
-        # obs = np.concatenate([obs, np.ones_like(obs[:, :1])], axis=-1)
         obs = torch.from_numpy(obs).to(self.device)
         return obs
 
@@ -94,28 +94,50 @@ class RaisimEnv:
 
         total_rewards = np.zeros(self.num_envs, dtype=np.float32)
         total_dones = np.zeros(self.num_envs, dtype=np.int64)
-        agent.reset()  # TODO: this is incorrect, needs to reset episodes separately
         self.images = []
 
         for _ in range(self.eval_n_times):
             self.env.reset()
+            agent.reset()
             self.generate_goal()
             done = np.array([False])
             obs = self.observe()
 
+            all_obs, all_cmds = [], []
+            cmd = torch.zeros(self.num_envs, 3).to(self.device)
+            cmd[:, 0] = 0.8 * torch.rand(self.num_envs, device=self.device)
+            cmd[:, 1] = 0.5 * torch.rand(self.num_envs, device=self.device)
+            cmd[:, 2] = 1.0 * torch.rand(self.num_envs, device=self.device)
+
+            indicator = -torch.ones(self.num_envs, 8, 2).to(self.device)
+            indicator[..., 0] = 1
+            agent.cond_lambda = 1
+
             # now run the agent for n steps
             action = self.nominal_joint_pos
             action = np.tile(action, (self.num_envs, 1))
-            for n in tqdm(range(self.eval_n_steps)):
+            for n in tqdm(range(10 * self.eval_n_steps)):
                 start = time.time()
 
                 if done.any():
                     total_dones += done
+                    agent.reset()
                 if n == self.eval_n_steps - 1:
                     total_dones += np.ones(done.shape, dtype="int64")
 
+                if n % 125 == 0:
+                    switch_step = n
+                    agent.cond_lambda = 150
+                    if indicator[0, 0, 1] == 1:
+                        indicator[..., 1] = -1
+                    else:
+                        indicator[..., 1] = 1
+
+                if n == (switch_step + 25):
+                    agent.cond_lambda = 1
+
                 pred_action, pred_traj = agent.predict(
-                    {"observation": obs, "goal": self.goal},
+                    {"observation": obs, "cmd": cmd, "indicator": indicator},
                     new_sampling_steps=n_inference_steps,
                 )
 
@@ -130,6 +152,10 @@ class RaisimEnv:
                         time.sleep(0.04 - delta)
                     start = time.time()
 
+                # if n < self.eval_n_steps - 1 and real_time:
+                #     all_obs.append(obs.cpu().numpy())
+                #     all_cmds.append(cmd.cpu().numpy())
+
         self.close()
         total_rewards /= self.eval_n_times * self.eval_n_steps
         avrg_reward = total_rewards.mean()
@@ -140,6 +166,8 @@ class RaisimEnv:
             "avrg_reward": avrg_reward,
             "std_reward": std_reward,
             "total_done": total_dones.mean(),
+            "all_obs": np.array(all_obs),
+            "all_cmds": np.array(all_cmds),
         }
         return return_dict
 
@@ -179,8 +207,8 @@ class RaisimEnv:
         self.images.append(image)
 
     def generate_goal(self):
-        self.goal = np.random.uniform(-3, 3, (self.num_envs, 2)).astype(np.float32)
-        self.set_goal(self.goal)
+        self.goal = np.random.uniform(-5, 5, (self.num_envs, 2)).astype(np.float32)
+        # self.set_goal(self.goal)
         self.goal = torch.from_numpy(self.goal).to(self.device)
 
     def get_base_position(self):

@@ -35,7 +35,7 @@ class JitAgent:
         # model
         self.model = hydra.utils.instantiate(model).to(device).eval()
         self.model.inner_model.detach_all()
-        self.T = T  # set to 0 to just predict the next action
+        self.T = T
         self.T_cond = T_cond
         self.T_action = T_action
 
@@ -53,11 +53,11 @@ class JitAgent:
         self.device = device
 
     @torch.no_grad()
-    def forward(self, obs, goal) -> torch.Tensor:
+    def forward(self, obs, cmd, indicator) -> torch.Tensor:
         """
         Predicts the output of the model based on the provided batch of data.
         """
-        state_in, goal = self.process_batch({"observation": obs, "goal": goal})
+        state_in, cmd, indicator = self.process_batch({"observation": obs, "cmd": cmd, "indicator": indicator})
 
         # get the sigma distribution for the desired sampling method
         sigmas = utils.get_sigmas_exponential(
@@ -68,7 +68,7 @@ class JitAgent:
         x = torch.ones((1, self.T, sa_dim), device=self.device)
         x *= self.sigma_max
 
-        x_0 = self.sample_ddim(x, sigmas, state_in, goal)
+        x_0 = self.sample_ddim(x, sigmas, state_in, cmd, indicator=indicator)
 
         # get the action for the current timestep
         x_0 = self.scaler.clip(x_0)
@@ -78,7 +78,7 @@ class JitAgent:
         return pred_action
 
     @torch.no_grad()
-    def sample_ddim(self, x_t, sigmas, cond, goal):
+    def sample_ddim(self, x_t, sigmas, cond, cmd, **kwargs):
         """
         Sample from the model using the DDIM sampler
 
@@ -91,9 +91,10 @@ class JitAgent:
             torch.Tensor: The predicted output of the model.
         """
         s_in = x_t.new_ones([x_t.shape[0]])
+        kwargs["cmd"] = cmd
 
         for i in trange(sigmas.shape[0] - 1, disable=disable):
-            denoised = self.model(x_t, cond, sigmas[i] * s_in, goal=goal)
+            denoised = self.model(x_t, cond, sigmas[i] * s_in, **kwargs)
             t, t_next = self.t_fn(sigmas[i]), self.t_fn(sigmas[i + 1])
             h = t_next - t
             x_t = (self.sigma_fn(t_next) / self.sigma_fn(t)) * x_t - (
@@ -125,8 +126,8 @@ class JitAgent:
         self.scaler.x_min = scaler_state["x_min"]
         self.scaler.y_max = scaler_state["y_max"]
         self.scaler.y_min = scaler_state["y_min"]
-        self.scaler.goal_max = scaler_state["goal_max"]
-        self.scaler.goal_min = scaler_state["goal_min"]
+        self.scaler.cmd_max = scaler_state["cmd_max"]
+        self.scaler.cmd_min = scaler_state["cmd_min"]
 
         log.info("Loaded pre-trained model parameters and scaler")
 
@@ -158,17 +159,17 @@ class JitAgent:
         Processes a batch of data and returns the state, action and goal
         """
         state = self.get_to_device(batch, "observation")
-        goal = self.get_to_device(batch, "goal")
+        cmd = self.get_to_device(batch, "cmd")
+        indicator = self.get_to_device(batch, "indicator")
 
         # Centre posisition around the current state
         current_pos = state[:, self.T_cond - 1, :2].clone()
-        state[..., :2] = state[..., :2] - current_pos.unsqueeze(1)
+        state[..., :2] -= current_pos.unsqueeze(1)
         state_in = self.scaler.scale_input(state[:, : self.T_cond])
 
-        goal[..., :2] -= current_pos
-        goal = self.scaler.scale_goal(goal)
+        cmd = self.scaler.scale_cmd(cmd)
 
-        return state_in, goal
+        return state_in, cmd, indicator
 
     def get_to_device(self, batch, key):
         return batch.get(key).clone().to(self.device)

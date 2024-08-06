@@ -33,9 +33,10 @@ class DiffusionTransformer(nn.Module):
         self.state_action_emb = nn.Linear(
             self.pred_obs_dim + self.act_dim, self.d_model
         )
-        self.cond_state_emb = nn.Linear(self.obs_dim, self.d_model)
+        self.cond_state_emb = nn.Linear(self.obs_dim + 2, self.d_model)
         self.sigma_emb = nn.Linear(1, self.d_model)
-        self.goal_emb = nn.Linear(goal_dim, self.d_model)
+        self.cmd_emb = nn.Linear(goal_dim, self.d_model)
+        self.constraint_emb = nn.Linear(2, self.d_model)
 
         self.pos_emb = (
             SinusoidalPosEmb(d_model)(torch.arange(T)).unsqueeze(0).to(device)
@@ -170,6 +171,12 @@ class DiffusionTransformer(nn.Module):
         cond: [batch_size, T_cond, obs_dim] observation history
         sigma: [batch_size] noise level
         """
+        constraint = kwargs["indicator"]
+        force_mask = kwargs.get("uncond", False)
+        constraint = self.mask_cond(constraint, force_mask=force_mask)
+
+        cond = torch.cat([cond, constraint], dim=-1)
+
         cond_emb = self.cond_state_emb(cond)
         input_emb = self.state_action_emb(x)
 
@@ -178,12 +185,10 @@ class DiffusionTransformer(nn.Module):
         sigma_emb = self.sigma_emb(sigma)
 
         # command embedding
-        goal = kwargs["goal"]
-        force_mask = kwargs.get("uncond", False)
-        goal = self.mask_cond(goal, force_mask=force_mask)
-        goal_emb = self.goal_emb(goal).unsqueeze(1)
+        cmd = kwargs["cmd"]
+        cmd_emb = self.cmd_emb(cmd).unsqueeze(1)
 
-        cond = torch.cat([sigma_emb, goal_emb, cond_emb], dim=1)
+        cond = torch.cat([sigma_emb, cmd_emb, cond_emb], dim=1)
         cond += self.cond_pos_emb
         cond = self.encoder(cond)
 
@@ -205,11 +210,11 @@ class DiffusionTransformer(nn.Module):
 
     def mask_cond(self, cond, force_mask=False):
         if force_mask:
-            return torch.full_like(cond, 2)
+            return torch.full_like(cond, 0)
         elif self.training and self.cond_mask_prob > 0:
-            mask = (torch.rand_like(cond[:, 0:1]) > self.cond_mask_prob).float()
+            mask = (torch.rand_like(cond[..., 0:1]) > self.cond_mask_prob).float()
             mask = mask.expand_as(cond)
-            cond[mask == 0] = 2
+            cond[mask == 0] = 0
             return cond
         else:
             return cond
