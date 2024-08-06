@@ -1,21 +1,16 @@
-import logging
 import os
-from pathlib import Path
 
 import numpy as np
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import DataLoader, Dataset, Subset, random_split
 
 from locodiff.utils import MinMaxScaler
-
-log = logging.getLogger(__name__)
 
 
 class ExpertDataset(Dataset):
     def __init__(
         self,
-        data_directory: os.PathLike,
-        future_seq_len: int,
+        data_directory: str,
         obs_dim: int,
         T_cond: int,
         device="cpu",
@@ -23,80 +18,62 @@ class ExpertDataset(Dataset):
         self.data_directory = data_directory
         self.obs_dim = obs_dim
         self.T_cond = T_cond
-        self.future_seq_len = future_seq_len
         self.device = device
 
         current_dir = os.path.dirname(os.path.realpath(__file__))
         dataset_path = current_dir + "/datasets/" + data_directory + ".npy"
-        self.dataset_path = Path(dataset_path)
 
-        self.load_and_process_data()
+        self.data = self.load_and_process_data(dataset_path)
 
-        log.info(
-            f"Dataset size - Observations: {self.data['obs'].shape} - Actions: {self.data['action'].shape}"
-        )
+        obs_size = list(self.data["obs"].shape)
+        action_size = list(self.data["action"].shape)
+        print(f"Dataset size | Observations: {obs_size} | Actions: {action_size}")
 
-    def load_and_process_data(self):
-        data = np.load(self.dataset_path, allow_pickle=True).item()
+    # --------------
+    # Initialization
+    # --------------
 
-        obs, actions, vel_cmds, masks = self.process_raw_data(data)
+    def load_and_process_data(self, dataset_path):
+        data = np.load(dataset_path, allow_pickle=True).item()
 
-        # (batch, time, features)
-        self.data = {
+        obs = data["obs"]
+        actions = data["action"]
+        vel_cmds = data["vel_cmd"]
+        skills = data["skill"]
+        terminals = data["terminal"]
+
+        # Find episode ends
+        terminals_flat = terminals.reshape(-1)
+        split_indices = np.where(terminals_flat == 1)[0]
+
+        # Split the sequences at episode ends
+        obs_splits = self.split_eps(obs, split_indices)
+        actions_splits = self.split_eps(actions, split_indices)
+        vel_cmds_splits = self.split_eps(vel_cmds, split_indices)
+        skills_splits = self.split_eps(skills, split_indices)
+
+        max_len = max(split.shape[0] for split in obs_splits)
+
+        obs = self.add_padding(obs_splits, max_len, temporal=True)
+        actions = self.add_padding(actions_splits, max_len, temporal=True)
+        vel_cmds = self.add_padding(vel_cmds_splits, max_len, temporal=False)
+        skills = self.add_padding(skills_splits, max_len, temporal=False)
+
+        masks = self.create_masks(obs_splits, max_len)
+
+        processed_data = {
             "obs": obs,
             "action": actions,
             "vel_cmd": vel_cmds,
+            "skill": skills,
             "mask": masks,
-            "indicator": vel_cmds[:, :2],
         }
 
-    def process_raw_data(self, data):
-        obs = data["observations"]
-        actions = data["actions"]
-        vel_cmds = data["vel_cmds"]
-        terminals = data["terminals"]
+        return processed_data
 
-        # Flatten the first two dimensions
-        obs_flat = obs.reshape(-1, obs.shape[-1])
-        actions_flat = actions.reshape(-1, actions.shape[-1])
-        cmd_flat = vel_cmds.reshape(-1, vel_cmds.shape[-1])
-        terminals_flat = terminals.reshape(-1)
-
-        # Find the indices where terminals is True (or 1)
-        split_indices = np.where(terminals_flat == 1)[0]
-
-        # Split the flattened observations and actions into sequences
-        obs_splits = np.split(obs_flat, split_indices)
-        actions_splits = np.split(actions_flat, split_indices)
-        cmd_splits = np.split(cmd_flat, split_indices)
-
-        # Find the maximum length of the sequences
-        max_len = max(split.shape[0] for split in obs_splits)
-
-        # Pad the sequences and reshape them back to their original shape
-        obs = self.pad_and_stack(obs_splits, max_len).astype(np.float32)
-        actions = self.pad_and_stack(actions_splits, max_len).astype(np.float32)
-        vel_cmds = self.pad_and_stack(cmd_splits, max_len).astype(np.float32)
-        masks = self.create_masks(obs_splits, max_len)
-
-        # Add initial padding to handle episode starts
-        obs_initial_pad = np.zeros_like(obs[:, : self.T_cond - 1, :])
-        obs = np.concatenate([obs_initial_pad, obs], axis=1)
-
-        actions_initial_pad = np.zeros_like(actions[:, : self.T_cond - 1, :])
-        actions = np.concatenate([actions_initial_pad, actions], axis=1)
-
-        masks_initial_pad = np.ones((masks.shape[0], self.T_cond - 1))
-        masks = np.concatenate([masks_initial_pad, masks], axis=1)
-
-        vel_cmds = vel_cmds[:, 0, :3]
-
-        obs = torch.from_numpy(obs).to(self.device).float()
-        actions = torch.from_numpy(actions).to(self.device).float()
-        masks = torch.from_numpy(masks).to(self.device).float()
-        vel_cmds = torch.from_numpy(vel_cmds).to(self.device).float()
-
-        return obs, actions, vel_cmds, masks
+    # -------
+    # Getters
+    # -------
 
     def __len__(self):
         return len(self.data["obs"])
@@ -110,60 +87,79 @@ class ExpertDataset(Dataset):
     def get_seq_length(self, idx):
         return int(self.data["mask"][idx].sum().item())
 
+    def get_all_obs(self):
+        return torch.cat(
+            [self.data["obs"][i, : self.get_seq_length(i)] for i in range(len(self))]
+        )
+
     def get_all_actions(self):
         return torch.cat(
             [self.data["action"][i, : self.get_seq_length(i)] for i in range(len(self))]
         )
 
-    def get_all_observations(self):
-        return torch.cat(
-            [self.data["obs"][i, : self.get_seq_length(i)] for i in range(len(self))]
-        )
-
     def get_all_vel_cmds(self):
-        return self.data["vel_cmd"].flatten(0, 1)
+        return self.data["vel_cmd"].flatten()
 
-    def pad_and_stack(self, splits, max_len):
-        """Pad the sequences and stack them into a tensor"""
-        return np.stack(
-            [
-                np.pad(
-                    split, ((0, max_len - split.shape[0]), (0, 0)), mode="constant"
-                ).reshape(-1, max_len, split.shape[1])
-                for split in splits
-            ]
-        ).squeeze()
+    # ----------------
+    # Helper functions
+    # ----------------
+
+    def split_eps(self, x, split_indices):
+        return np.split(x.reshape(-1, x.shape[-1]), split_indices)
+
+    def add_padding(self, splits, max_len, temporal):
+        x = []
+
+        # Make all sequences the same length
+        for split in splits:
+            pad = np.pad(split, ((0, max_len - split.shape[0]), (0, 0)))
+            reshaped_split = pad.reshape(-1, max_len, split.shape[1])
+            x.append(reshaped_split)
+        x = np.stack(x).squeeze()
+
+        if temporal:
+            # Add initial padding to handle episode starts
+            x_pad = np.zeros_like(x[:, : self.T_cond - 1, :])
+            x = np.concatenate([x_pad, x], axis=1)
+        else:
+            # For non-temporal data, e.g. skills, just take the first timestep
+            x = x[:, 0]
+
+        return torch.from_numpy(x).to(self.device).float()
 
     def create_masks(self, splits, max_len):
-        """Create masks for the sequences"""
-        return np.stack(
-            [
-                np.pad(
-                    np.ones(split.shape[0]),
-                    (0, max_len - split.shape[0]),
-                    mode="constant",
-                )
-                for split in splits
-            ]
-        )
+        masks = []
+
+        # Create masks to indicate the padding values
+        for split in splits:
+            mask = np.concatenate(
+                [np.ones(split.shape[0]), np.zeros(max_len - split.shape[0])]
+            )
+            masks.append(mask)
+        masks = np.stack(masks)
+
+        # Add initial padding to handle episode starts
+        masks_pad = np.ones((masks.shape[0], self.T_cond - 1))
+        masks = np.concatenate([masks_pad, masks], axis=1)
+
+        return torch.from_numpy(masks).to(self.device).float()
 
 
 class SlicerWrapper(Dataset):
-    def __init__(self, dataset, window: int, future_seq_len: int):
+    def __init__(self, dataset: Subset, T_cond: int, T: int):
         self.dataset = dataset
-        self.window = window
-        self.future_seq_len = future_seq_len
-        self.slices = self._create_slices()
+        self.T_cond = T_cond
+        self.T = T
+        self.slices = self._create_slices(T_cond, T)
 
-    def _create_slices(self):
+    def _create_slices(self, T_cond, T):
         slices = []
-        effective_window = self.window + self.future_seq_len - 1 + 49
+        window = T_cond + T - 1 + 49
         for i in range(len(self.dataset)):
-            T = len(self.dataset[i]["obs"])
-            if T >= effective_window:
+            length = len(self.dataset[i]["obs"])
+            if length >= window:
                 slices += [
-                    (i, start, start + effective_window)
-                    for start in range(T - effective_window + 1)
+                    (i, start, start + window) for start in range(length - window + 1)
                 ]
         return slices
 
@@ -173,43 +169,52 @@ class SlicerWrapper(Dataset):
     def __getitem__(self, idx):
         i, start, end = self.slices[idx]
         x = self.dataset[i]
+
+        # This is to handle data without a time dimension (e.g. skills)
         return {k: v[start:end] if v.ndim > 1 else v for k, v in x.items()}
+
+    def get_all_obs(self):
+        return self.dataset.dataset.get_all_obs()
+
+    def get_all_actions(self):
+        return self.dataset.dataset.get_all_actions()
+
+    def get_all_vel_cmds(self):
+        return self.dataset.dataset.get_all_vel_cmds()
 
 
 def get_dataloaders_and_scaler(
-    data_directory,
-    obs_dim,
-    T_cond,
-    T,
-    train_fraction,
-    device,
-    train_batch_size,
-    test_batch_size,
-    num_workers,
+    data_directory: str,
+    obs_dim: int,
+    T_cond: int,
+    T: int,
+    train_fraction: float,
+    device: str,
+    train_batch_size: int,
+    test_batch_size: int,
+    num_workers: int,
 ):
     # Build the datasets
-    dataset = ExpertDataset(data_directory, T, obs_dim, T_cond)
-    train, val = torch.utils.data.random_split(
-        dataset, [train_fraction, 1 - train_fraction]
-    )
+    dataset = ExpertDataset(data_directory, obs_dim, T_cond)
+    train, val = random_split(dataset, [train_fraction, 1 - train_fraction])
     train_set = SlicerWrapper(train, T_cond, T)
     test_set = SlicerWrapper(val, T_cond, T)
 
     # Build the scaler
-    x_data = train_set.dataset.dataset.get_all_observations()
-    y_data = train_set.dataset.dataset.get_all_actions()
-    cmd_data = train_set.dataset.dataset.get_all_vel_cmds()
+    x_data = train_set.get_all_obs()
+    y_data = train_set.get_all_actions()
+    cmd_data = train_set.get_all_vel_cmds()
     scaler = MinMaxScaler(x_data, y_data, cmd_data, device)
 
     # Build the dataloaders
-    train_dataloader = torch.utils.data.DataLoader(
+    train_dataloader = DataLoader(
         train_set,
         batch_size=train_batch_size,
         shuffle=True,
         num_workers=num_workers,
         pin_memory=True,
     )
-    test_dataloader = torch.utils.data.DataLoader(
+    test_dataloader = DataLoader(
         test_set,
         batch_size=test_batch_size,
         shuffle=True,
