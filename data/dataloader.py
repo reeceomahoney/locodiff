@@ -4,10 +4,10 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from torch.utils.data import TensorDataset
+from torch.utils.data import Dataset
 
 from locodiff.utils import MinMaxScaler
-from data.trajectory_loader import TrajectoryDataset, get_train_val_sliced
+from data.trajectory_loader import get_train_val_sliced
 
 log = logging.getLogger(__name__)
 
@@ -28,7 +28,6 @@ def get_raisim_train_val(
         RaisimTrajectoryDataset(data_directory, future_seq_len, obs_dim, window_size),
         train_fraction,
         random_seed,
-        device,
         window_size,
         future_seq_len,
     )
@@ -56,7 +55,7 @@ def get_raisim_train_val(
     return train_dataloader, test_dataloader, scaler
 
 
-class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
+class RaisimTrajectoryDataset(Dataset):
     def __init__(
         self,
         data_directory: os.PathLike,
@@ -65,62 +64,47 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         T_cond: int,
         device="cpu",
     ):
-        current_dir = os.path.dirname(os.path.realpath(__file__))
-        dataset_path = current_dir + "/datasets/" + data_directory + ".npy"
-        self.dataset_path = Path(dataset_path)
         self.data_directory = data_directory
         self.obs_dim = obs_dim
         self.T_cond = T_cond
         self.future_seq_len = future_seq_len
         self.device = device
 
-        data = np.load(self.dataset_path, allow_pickle=True).item()
-        self.observations = data["observations"]
-        self.actions = data["actions"]
-        self.terminals = data["terminals"]
-        self.vel_cmds = data["vel_cmds"]
-        self.split_data()
+        current_dir = os.path.dirname(os.path.realpath(__file__))
+        dataset_path = current_dir + "/datasets/" + data_directory + ".npy"
+        self.dataset_path = Path(dataset_path)
 
-        tensors = [
-            self.observations,
-            self.actions,
-            self.vel_cmds,
-            self.masks,
-        ]
-        TensorDataset.__init__(self, *tensors)
+        self.load_and_process_data()
 
         log.info(
-            f"Dataset size - Observations: {list(self.observations.size())} - Actions: {list(self.actions.size())}"
+            f"Dataset size - Observations: {self.data['obs'].shape} - Actions: {self.data['action'].shape}"
         )
 
-    def get_seq_length(self, idx):
-        return int(self.masks[idx].sum().item())
+    def load_and_process_data(self):
+        data = np.load(self.dataset_path, allow_pickle=True).item()
 
-    def get_all_actions(self):
-        result = []
-        # mask out invalid actions
-        for i in range(len(self.masks)):
-            T = int(self.masks[i].sum().item())
-            result.append(self.actions[i, :T, :])
-        return torch.cat(result, dim=0)
+        obs, actions, vel_cmds, masks = self.process_raw_data(data)
 
-    def get_all_observations(self):
-        result = []
-        # mask out invalid actions
-        for i in range(len(self.masks)):
-            T = int(self.masks[i].sum().item())
-            result.append(self.observations[i, :T, :])
-        return torch.cat(result, dim=0)
+        # (batch, time, features)
+        self.data = {
+            "obs": obs,
+            "action": actions,
+            "vel_cmd": vel_cmds,
+            "mask": masks,
+            "indicator": vel_cmds[:, :2],
+        }
 
-    def get_all_vel_cmds(self):
-        return self.vel_cmds.reshape(-1, self.vel_cmds.shape[-1])
+    def process_raw_data(self, data):
+        obs = data["observations"]
+        actions = data["actions"]
+        vel_cmds = data["vel_cmds"]
+        terminals = data["terminals"]
 
-    def split_data(self):
         # Flatten the first two dimensions
-        obs_flat = self.observations.reshape(-1, self.observations.shape[-1])
-        actions_flat = self.actions.reshape(-1, self.actions.shape[-1])
-        cmd_flat = self.vel_cmds.reshape(-1, self.vel_cmds.shape[-1])
-        terminals_flat = self.terminals.reshape(-1)
+        obs_flat = obs.reshape(-1, obs.shape[-1])
+        actions_flat = actions.reshape(-1, actions.shape[-1])
+        cmd_flat = vel_cmds.reshape(-1, vel_cmds.shape[-1])
+        terminals_flat = terminals.reshape(-1)
 
         # Find the indices where terminals is True (or 1)
         split_indices = np.where(terminals_flat == 1)[0]
@@ -134,31 +118,54 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
         max_len = max(split.shape[0] for split in obs_splits)
 
         # Pad the sequences and reshape them back to their original shape
-        self.observations = self.pad_and_stack(obs_splits, max_len).astype(np.float32)
-        self.actions = self.pad_and_stack(actions_splits, max_len).astype(np.float32)
-        self.vel_cmds = self.pad_and_stack(cmd_splits, max_len).astype(np.float32)
-        self.masks = self.create_masks(obs_splits, max_len)
+        obs = self.pad_and_stack(obs_splits, max_len).astype(np.float32)
+        actions = self.pad_and_stack(actions_splits, max_len).astype(np.float32)
+        vel_cmds = self.pad_and_stack(cmd_splits, max_len).astype(np.float32)
+        masks = self.create_masks(obs_splits, max_len)
 
         # Add initial padding to handle episode starts
-        obs_initial_pad = np.zeros_like(self.observations[:, : self.T_cond - 1, :])
-        self.observations = np.concatenate([obs_initial_pad, self.observations], axis=1)
+        obs_initial_pad = np.zeros_like(obs[:, : self.T_cond - 1, :])
+        obs = np.concatenate([obs_initial_pad, obs], axis=1)
 
-        actions_initial_pad = np.zeros_like(self.actions[:, : self.T_cond - 1, :])
-        self.actions = np.concatenate([actions_initial_pad, self.actions], axis=1)
+        actions_initial_pad = np.zeros_like(actions[:, : self.T_cond - 1, :])
+        actions = np.concatenate([actions_initial_pad, actions], axis=1)
 
-        masks_initial_pad = np.ones((self.masks.shape[0], self.T_cond - 1))
-        self.masks = np.concatenate([masks_initial_pad, self.masks], axis=1)
+        masks_initial_pad = np.ones((masks.shape[0], self.T_cond - 1))
+        masks = np.concatenate([masks_initial_pad, masks], axis=1)
 
-        self.indicator = self.vel_cmds[:, :, -2:].copy()
-        indicator_initial_pad = np.zeros_like(self.indicator[:, : self.T_cond - 1, :])
-        self.indicator = np.concatenate([indicator_initial_pad, self.indicator], axis=1)
+        vel_cmds = vel_cmds[:, 0, :3]
 
-        self.vel_cmds = self.vel_cmds[:, 0, :3]
+        obs = torch.from_numpy(obs).to(self.device).float()
+        actions = torch.from_numpy(actions).to(self.device).float()
+        masks = torch.from_numpy(masks).to(self.device).float()
+        vel_cmds = torch.from_numpy(vel_cmds).to(self.device).float()
 
-        self.observations = torch.from_numpy(self.observations).to(self.device).float()
-        self.actions = torch.from_numpy(self.actions).to(self.device).float()
-        self.masks = torch.from_numpy(self.masks).to(self.device).float()
-        self.vel_cmds = torch.from_numpy(self.vel_cmds).to(self.device).float()
+        return obs, actions, vel_cmds, masks
+
+    def __len__(self):
+        return len(self.data["obs"])
+
+    def __getitem__(self, idx):
+        T = self.data["mask"][idx].sum().int().item()
+        return {
+            key: tensor[idx, :T] for key, tensor in self.data.items() if key != "mask"
+        }
+
+    def get_seq_length(self, idx):
+        return int(self.data["mask"][idx].sum().item())
+
+    def get_all_actions(self):
+        return torch.cat(
+            [self.data["action"][i, : self.get_seq_length(i)] for i in range(len(self))]
+        )
+
+    def get_all_observations(self):
+        return torch.cat(
+            [self.data["obs"][i, : self.get_seq_length(i)] for i in range(len(self))]
+        )
+
+    def get_all_vel_cmds(self):
+        return self.data["vel_cmd"].flatten(0, 1)
 
     def pad_and_stack(self, splits, max_len):
         """Pad the sequences and stack them into a tensor"""
@@ -183,10 +190,6 @@ class RaisimTrajectoryDataset(TensorDataset, TrajectoryDataset):
                 for split in splits
             ]
         )
-
-    def __getitem__(self, idx):
-        T = self.masks[idx].sum().int().item()
-        return tuple(x[idx, :T] for x in self.tensors)
 
 
 if __name__ == "__main__":

@@ -242,7 +242,7 @@ class Agent:
         """
         Predicts the output of the model based on the provided batch of data.
         """
-        batch["observation"] = self.stack_context(batch["observation"])
+        batch["obs"] = self.stack_context(batch["obs"])
         state_in, _, goal, returns = self.process_batch(batch)
         kwargs["returns"] = returns
 
@@ -407,9 +407,9 @@ class Agent:
         """
         Processes a batch of data and returns the state, action and goal
         """
-        state = self.get_to_device(batch, "observation")
+        state = self.get_to_device(batch, "obs")
         action = self.get_to_device(batch, "action")
-        cmd = self.get_to_device(batch, "cmd")
+        cmd = self.get_to_device(batch, "vel_cmd")
 
         # Centre posisition around the current state
         current_pos = state[:, self.T_cond - 1, :2]

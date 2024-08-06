@@ -116,7 +116,7 @@ class RaisimEnv:
                     total_dones += np.ones(done.shape, dtype="int64")
 
                 pred_action, pred_traj = agent.predict(
-                    {"observation": obs, "goal": self.goal},
+                    {"obs": obs, "goal": self.goal},
                     new_sampling_steps=n_inference_steps,
                 )
 

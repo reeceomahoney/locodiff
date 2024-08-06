@@ -171,7 +171,7 @@ class MinMaxScaler:
         self.y_bounds[1, :] = 1.1
 
     def update_pos_scale(self, batch, T_cond):
-        obs_batch = batch["observation"]
+        obs_batch = batch["obs"]
         # goal_batch = batch["goal"]
 
         pos = obs_batch[..., :2] - obs_batch[:, T_cond - 1, :2].unsqueeze(1)
