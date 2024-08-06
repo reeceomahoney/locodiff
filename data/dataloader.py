@@ -11,7 +11,7 @@ from locodiff.utils import MinMaxScaler
 log = logging.getLogger(__name__)
 
 
-class RaisimTrajectoryDataset(Dataset):
+class ExpertDataset(Dataset):
     def __init__(
         self,
         data_directory: os.PathLike,
@@ -148,7 +148,7 @@ class RaisimTrajectoryDataset(Dataset):
         )
 
 
-class TrajectorySlicerDataset(Dataset):
+class SlicerWrapper(Dataset):
     def __init__(self, dataset, window: int, future_seq_len: int):
         self.dataset = dataset
         self.window = window
@@ -176,31 +176,32 @@ class TrajectorySlicerDataset(Dataset):
         return {k: v[start:end] if v.ndim > 1 else v for k, v in x.items()}
 
 
-def get_raisim_train_val(
+def get_dataloaders_and_scaler(
     data_directory,
     obs_dim,
-    window_size,
-    future_seq_len,
+    T_cond,
+    T,
     train_fraction,
-    random_seed,
     device,
     train_batch_size,
     test_batch_size,
     num_workers,
 ):
-    train_set, test_set = get_train_val_sliced(
-        RaisimTrajectoryDataset(data_directory, future_seq_len, obs_dim, window_size),
-        train_fraction,
-        random_seed,
-        window_size,
-        future_seq_len,
+    # Build the datasets
+    dataset = ExpertDataset(data_directory, T, obs_dim, T_cond)
+    train, val = torch.utils.data.random_split(
+        dataset, [train_fraction, 1 - train_fraction]
     )
+    train_set = SlicerWrapper(train, T_cond, T)
+    test_set = SlicerWrapper(val, T_cond, T)
 
+    # Build the scaler
     x_data = train_set.dataset.dataset.get_all_observations()
     y_data = train_set.dataset.dataset.get_all_actions()
     cmd_data = train_set.dataset.dataset.get_all_vel_cmds()
     scaler = MinMaxScaler(x_data, y_data, cmd_data, device)
 
+    # Build the dataloaders
     train_dataloader = torch.utils.data.DataLoader(
         train_set,
         batch_size=train_batch_size,
@@ -208,7 +209,6 @@ def get_raisim_train_val(
         num_workers=num_workers,
         pin_memory=True,
     )
-
     test_dataloader = torch.utils.data.DataLoader(
         test_set,
         batch_size=test_batch_size,
@@ -216,47 +216,5 @@ def get_raisim_train_val(
         num_workers=num_workers,
         pin_memory=True,
     )
+
     return train_dataloader, test_dataloader, scaler
-
-
-def split_dataset(
-    dataset: Dataset, train_fraction: float = 0.95, random_seed: int = 42
-):
-    dataset_size = len(dataset)
-    train_size = int(train_fraction * dataset_size)
-    val_size = dataset_size - train_size
-
-    generator = torch.Generator().manual_seed(random_seed)
-    train_dataset, val_dataset = torch.utils.data.random_split(
-        dataset, [train_size, val_size], generator=generator
-    )
-
-    return train_dataset, val_dataset
-
-
-def get_train_val_sliced(
-    dataset: Dataset,
-    train_fraction: float = 0.95,
-    random_seed: int = 42,
-    window_size: int = 10,
-    future_seq_len: int = 10,
-):
-    train, val = split_dataset(dataset, train_fraction, random_seed)
-    if window_size > 0:
-        return (
-            TrajectorySlicerDataset(train, window_size, future_seq_len),
-            TrajectorySlicerDataset(val, window_size, future_seq_len),
-        )
-    return train, val
-
-
-if __name__ == "__main__":
-    data_directory = "rand_pos"
-    future_seq_len = 125
-    obs_dim = 35
-    T_cond = 2
-    device = "cuda"
-
-    dataset = RaisimTrajectoryDataset(
-        data_directory, future_seq_len, obs_dim, T_cond, device
-    )
