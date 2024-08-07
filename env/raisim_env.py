@@ -59,11 +59,12 @@ class RaisimEnv:
     def observe(self, update_statistics=False):
         self.env.observe(self._observation, update_statistics)
 
-        base_pos = self.get_base_position()[:, :2]
-        orientation = self.get_base_orientation()
-        obs = np.concatenate(
-            [base_pos, orientation, self._observation[:, 3:33]], axis=-1
-        )
+        # base_pos = self.get_base_position()[:, :2]
+        # orientation = self.get_base_orientation()
+        # obs = np.concatenate(
+        #     [base_pos, orientation, self._observation[:, 3:33]], axis=-1
+        # )
+        obs = self._observation[:, :36]
         obs = torch.from_numpy(obs).to(self.device)
         return obs
 
@@ -95,6 +96,8 @@ class RaisimEnv:
         total_rewards = np.zeros(self.num_envs, dtype=np.float32)
         total_dones = np.zeros(self.num_envs, dtype=np.int64)
         self.images = []
+        skill = torch.zeros(self.num_envs, 2).to(self.device)
+        skill[:, 0] = 1
 
         for _ in range(self.eval_n_times):
             self.env.reset()
@@ -106,7 +109,7 @@ class RaisimEnv:
             # now run the agent for n steps
             action = self.nominal_joint_pos
             action = np.tile(action, (self.num_envs, 1))
-            for n in tqdm(range(10 * self.eval_n_steps)):
+            for n in tqdm(range(self.eval_n_steps)):
                 start = time.time()
 
                 if done.any():
@@ -116,13 +119,12 @@ class RaisimEnv:
                     total_dones += np.ones(done.shape, dtype="int64")
 
                 pred_action, pred_traj = agent.predict(
-                    {"obs": obs, "goal": self.goal},
+                    {"obs": obs, "skill": skill},
                     new_sampling_steps=n_inference_steps,
                 )
 
                 for i in range(self.T_action):
-                    obs, _, done = self.step(action)
-                    reward = (torch.exp(-(obs[:, 33] - 0.6) ** 2)).cpu().numpy()
+                    obs, reward, done = self.step(action)
                     total_rewards += reward
                     action = pred_action[:, i]
 
@@ -143,7 +145,7 @@ class RaisimEnv:
             "total_done": total_dones.mean(),
         }
         return return_dict
-
+    
     def plot_trajectory(self, pred_traj, goal):
         # Calculate yaw angles from quaternions
         quat = pred_traj[0, :, 2:6]

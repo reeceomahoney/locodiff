@@ -22,7 +22,7 @@ T_action: 1
 action_dim: 12
 obs_dim: 36
 pred_obs_dim: 0
-goal_dim: 3
+skill_dim: 2
 
 # policy model params
 hidden_dim: 256
@@ -42,8 +42,8 @@ use_ema: True
 decay: 0.999
 update_ema_every_n_steps: 1
 sigma_data: 0.2
-cond_mask_prob: 0.25
-cond_lambda: 1.5
+cond_mask_prob: 0
+cond_lambda: 1
 n_timesteps: 3
 
 env:
@@ -84,6 +84,6 @@ env:
 
   reward:
     base_linear_velocity_tracking:
-      coeff: 0.0
+      coeff: 1.0
     base_angular_velocity_tracking:
-      coeff: 0.0
+      coeff: 1.0

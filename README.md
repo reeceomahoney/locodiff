@@ -7,3 +7,4 @@
 - [ ] add type annotations
 - [ ] fix cmake stdout
 - [ ] Add setup to README
+- [ ] Make dims consistent everywhere

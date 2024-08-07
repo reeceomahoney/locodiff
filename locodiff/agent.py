@@ -94,9 +94,6 @@ class Agent:
             dataset_fn
         )
 
-        batch = next(iter(self.train_loader))
-        self.scaler.update_pos_scale(batch, T_cond)
-
         # misc
         self.device = device
         self.env = None
@@ -119,7 +116,6 @@ class Agent:
                     "total_mse": [],
                     "first_mse": [],
                     "last_mse": [],
-                    "state_mse": [],
                     "action_mse": [],
                 }
                 for batch in tqdm(
@@ -157,14 +153,14 @@ class Agent:
         log.info("Training done!")
 
     def train_step(self, batch: dict):
-        state_in, sa_out, cmd, returns = self.process_batch(batch)
+        data_dict = self.process_batch(batch)
 
         self.model.train()
         self.model.training = True
 
-        noise = torch.randn_like(sa_out)
-        sigma = self.make_sample_density(len(sa_out))
-        loss = self.model.loss(sa_out, state_in, noise, sigma, cmd=cmd, returns=returns)
+        noise = torch.randn_like(data_dict["action"])
+        sigma = self.make_sample_density(len(noise))
+        loss = self.model.loss(noise, sigma, data_dict)
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -178,12 +174,11 @@ class Agent:
         return loss.item()
 
     @torch.no_grad()
-    def evaluate(self, batch: dict, **kwargs):
+    def evaluate(self, batch: dict) -> dict:
         """
-        Evaluates the model using the provided batch of data and returns the mean squared error (MSE) loss.
+        Calculate model prediction error
         """
-        state_in, sa_out, cmd, returns = self.process_batch(batch)
-        kwargs["returns"] = returns
+        data_dict = self.process_batch(batch)
 
         if self.use_ema:
             self.ema_helper.store(self.model.parameters())
@@ -195,10 +190,10 @@ class Agent:
         sigmas = utils.get_sigmas_exponential(
             self.num_sampling_steps, self.sigma_min, self.sigma_max, self.device
         )
-        x = torch.randn_like(sa_out) * self.sigma_max
-        x_0, epsilon = self.sample_ddim(x, sigmas, state_in, cmd, **kwargs)
+        noise = torch.randn_like(data_dict["action"]) * self.sigma_max
+        x_0 = self.sample_ddim(noise, sigmas, data_dict, predict=False)
 
-        mse = nn.functional.mse_loss(x_0, sa_out, reduction="none")
+        mse = nn.functional.mse_loss(x_0, data_dict["action"], reduction="none")
         total_mse = mse.mean().item()
         self.total_mse = total_mse
 
@@ -226,23 +221,20 @@ class Agent:
             "last_mse": last_mse,
             "timestep_mse": timestep_mse,
             "prediction": prediction,
-            "cmd": cmd,
         }
-        if "num_steps" in kwargs:
-            info["inputs"] = (epsilon, state_in, cmd)
+
         return info
 
     def reset(self):
         self.obs_hist.fill_(0)
 
     @torch.no_grad()
-    def predict(self, batch: dict, new_sampling_steps=None, **kwargs) -> torch.Tensor:
+    def predict(self, batch: dict, new_sampling_steps=None):
         """
-        Predicts the output of the model based on the provided batch of data.
+        Inference method
         """
         batch["obs"] = self.stack_context(batch["obs"])
-        state_in, _, goal, returns = self.process_batch(batch)
-        kwargs["returns"] = returns
+        data_dict = self.process_batch(batch)
 
         if new_sampling_steps is not None:
             n_sampling_steps = new_sampling_steps
@@ -260,11 +252,10 @@ class Agent:
         )
 
         sa_dim = self.pred_obs_dim + self.action_dim
-        x = torch.randn((self.num_envs, self.T, sa_dim), device=self.device)
-        x *= self.sigma_max
+        noise = torch.randn((self.num_envs, self.T, sa_dim), device=self.device)
+        noise *= self.sigma_max
 
-        kwargs["predict"] = True
-        x_0, denoised = self.sample_ddim(x, sigmas, state_in, goal, **kwargs)
+        x_0 = self.sample_ddim(noise, sigmas, data_dict, predict=True)
 
         # get the action for the current timestep
         x_0 = self.scaler.clip(x_0)
@@ -285,46 +276,36 @@ class Agent:
         return self.obs_hist.clone()
 
     @torch.no_grad()
-    def sample_ddim(self, x_t, sigmas, cond, cmd, **kwargs):
+    def sample_ddim(
+        self, noise: torch.Tensor, sigmas: torch.Tensor, data_dict: dict, predict: bool
+    ):
         """
-        Sample from the model using the DDIM sampler
-
-        Args:
-            x_t (torch.Tensor): The initial state-action noise tensor.
-            goals (torch.Tensor): One-hot encoding of the goals.
-            sigmas (torch.Tensor): The sigma distribution for the sampling.
-            cond (torch.Tensor): The conditioning input for the model.
-        Returns:
-            torch.Tensor: The predicted output of the model.
+        Perform inference using the DDIM sampler
         """
+        x_t = noise
         s_in = x_t.new_ones([x_t.shape[0]])
         sigma_fn = lambda t: t.neg().exp()
         t_fn = lambda sigma: sigma.log().neg()
 
-        num_steps = kwargs.get("num_steps", len(sigmas) - 1)
-        kwargs["cmd"] = cmd
-        predict = kwargs.get("predict", False)
-
-        for i in trange(num_steps, disable=disable):
+        for i in range(len(sigmas) - 1):
             if predict:
-                denoised = self.cfg_forward(x_t, cond, sigmas[i] * s_in, **kwargs)
+                denoised = self.cfg_forward(x_t, sigmas[i] * s_in, data_dict)
             else:
-                denoised = self.model(x_t, cond, sigmas[i] * s_in, **kwargs)
+                denoised = self.model(x_t, sigmas[i] * s_in, data_dict)
             t, t_next = t_fn(sigmas[i]), t_fn(sigmas[i + 1])
             h = t_next - t
             x_t = (sigma_fn(t_next) / sigma_fn(t)) * x_t - (-h).expm1() * denoised
 
-        return x_t, denoised
+        return x_t
 
-    def cfg_forward(self, x_t, cond, sigma, **kwargs):
+    def cfg_forward(self, x_t: torch.Tensor, sigma: torch.Tensor, data_dict: dict):
         """
         Classifier-free guidance sample
         """
-        out = self.model(x_t, cond, sigma, **kwargs)
+        out = self.model(x_t, sigma, data_dict)
 
         if self.cond_mask_prob > 0:
-            kwargs["uncond"] = True
-            out_uncond = self.model(x_t, cond, sigma, **kwargs)
+            out_uncond = self.model(x_t, sigma, data_dict, uncond=True)
             out = out_uncond + self.cond_lambda * (out - out_uncond)
 
         return out
@@ -398,55 +379,31 @@ class Agent:
         return density
 
     @torch.no_grad()
-    def process_batch(self, batch: dict):
-        """
-        Processes a batch of data and returns the state, action and goal
-        """
-        state = self.get_to_device(batch, "obs")
-        action = self.get_to_device(batch, "action")
-        cmd = self.get_to_device(batch, "vel_cmd")
+    def process_batch(self, batch: dict) -> dict:
+        batch = self.dict_to_device(batch)
 
-        # Centre posisition around the current state
-        current_pos = state[:, self.T_cond - 1, :2]
-        state[:, :, :2] -= current_pos.unsqueeze(1)
-        state_in = self.scaler.scale_input(state[:, : self.T_cond])
+        raw_obs = batch["obs"]
+        raw_action = batch.get("action", None)
+        skill = batch["skill"]
 
-        # Action
-        if action is not None:
-            sa = torch.cat([state[..., : self.pred_obs_dim], action], dim=-1)
-            sa_out = self.scaler.scale_output(
-                sa[:, self.T_cond - 1 : self.T_cond + self.T - 1]
-            )
+        obs = self.scaler.scale_input(raw_obs[:, : self.T_cond])
+
+        if raw_action is None:
+            action = None
         else:
-            sa_out = None
+            action = torch.cat([raw_obs[..., : self.pred_obs_dim], raw_action], dim=-1)
+            action = self.scaler.scale_output(action[:, self.T_cond - 1 :])
 
-        if cmd is None:
-            goal_pos = self.get_to_device(batch, "goal")
-            cmd = self.calculate_vel_cmd(goal_pos, current_pos, state)
+        processed_batch = {
+            "obs": obs,
+            "action": action,
+            "skill": skill,
+        }
 
-        returns = None
+        return processed_batch
 
-        # indicator = self.get_to_device(batch, "indicator")
-        # indicator = indicator[:, : self.T_cond]
-        # cmd = self.scaler.scale_cmd(cmd)
-
-        #     cmd = 4 * torch.rand((state.shape[0], 2), device=self.device)
-        #     cmd -= current_pos
-        #     returns = self.calculate_returns(state, cmd)
-        # else:
-        #     cmd -= current_pos
-        #     returns = self.get_to_device(batch, "returns")
-
-        # cmd = self.scaler.scale_goal(cmd)
-
-        return state_in, sa_out, cmd, returns
-
-    def get_to_device(self, batch, key):
-        return (
-            batch.get(key).clone().to(self.device)
-            if batch.get(key) is not None
-            else None
-        )
+    def dict_to_device(self, batch):
+        return {k: v.clone().to(self.device) for k, v in batch.items()}
 
     def quat_to_rot_mat(self, quat):
         """

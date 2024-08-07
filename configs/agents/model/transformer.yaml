@@ -1,4 +1,4 @@
-_target_: locodiff.wrapper.GCDenoiser
+_target_: locodiff.wrapper.ScalingWrapper
 _recursive_: false
 
 sigma_data: ${sigma_data}
@@ -7,7 +7,7 @@ inner_model:
   _target_: locodiff.transformer.DiffusionTransformer
   obs_dim: ${obs_dim}
   pred_obs_dim: ${pred_obs_dim}
-  goal_dim: ${goal_dim}
+  skill_dim: ${skill_dim}
   act_dim: ${action_dim}
   d_model: ${hidden_dim}
   nhead: ${n_heads}

@@ -7,10 +7,6 @@ def load_data(data_path):
     return np.load(data_path, allow_pickle=True).item()
 
 
-def cat_zeros(x):
-    return np.concatenate((x, np.zeros_like(x[:, :, 0:2])), axis=-1)
-
-
 def cat(x1, x2):
     return {k: np.concatenate((x1[k], x2[k]), axis=0) for k in x1.keys()}
 
@@ -43,9 +39,9 @@ def split_by_vel_cmd(obs, terminals):
     return terminals
 
 
-current_dir = os.path.dirname(os.path.realpath(__file__))
-walk_data = load_data(f"{current_dir}/datasets/raw/walk.npy")
-crawl_data = load_data(current_dir + "/datasets/raw/crawl_trot.npy")
+data_dir = os.path.dirname(os.path.realpath(__file__)) + "/../../data/"
+walk_data = load_data(data_dir + "raw/walk.npy")
+crawl_data = load_data(data_dir + "raw/crawl.npy")
 
 # roll actions (only need this for pmtg)
 act = np.roll(walk_data["actions"], -1, axis=1)
@@ -53,7 +49,6 @@ act[:, -1] = act[:, -2].copy()
 walk_data["actions"] = act.copy()
 
 data = cat(walk_data, crawl_data)
-# data = walk_data
 
 obs = data["observations"]
 act = data["actions"]
@@ -76,7 +71,7 @@ processed_data = {
 
 # Save the data to a new file
 name = "walk_crawl"
-print(f"Saving data to {current_dir}/datasets/{name}.npy")
+print(f"Saving data to {data_dir}/{name}.npy")
 print(f"Observations shape: {obs.shape}, Actions shape: {act.shape}")
-np.save(f"{current_dir}/datasets/{name}.npy", processed_data)
+np.save(f"{data_dir}/{name}.npy", processed_data)
 print("done")

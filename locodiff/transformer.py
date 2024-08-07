@@ -8,7 +8,7 @@ class DiffusionTransformer(nn.Module):
         self,
         obs_dim,
         pred_obs_dim,
-        goal_dim,
+        skill_dim,
         act_dim,
         d_model,
         nhead,
@@ -35,8 +35,7 @@ class DiffusionTransformer(nn.Module):
         )
         self.cond_state_emb = nn.Linear(self.obs_dim, self.d_model)
         self.sigma_emb = nn.Linear(1, self.d_model)
-        self.cmd_emb = nn.Linear(goal_dim, self.d_model)
-        self.constraint_emb = nn.Linear(2, self.d_model)
+        self.skill_emb = nn.Linear(skill_dim, self.d_model)
 
         self.pos_emb = (
             SinusoidalPosEmb(d_model)(torch.arange(T)).unsqueeze(0).to(device)
@@ -165,30 +164,22 @@ class DiffusionTransformer(nn.Module):
         ]
         return optim_groups
 
-    def forward(self, x, cond, sigma, **kwargs):
-        """
-        x: [batch_size, T, pred_obs_dim + act_dim] noise vector
-        cond: [batch_size, T_cond, obs_dim] observation history
-        sigma: [batch_size] noise level
-        """
+    def forward(self, noised_action, sigma, data_dict, uncond=False):
         # constraint = kwargs["indicator"]
         # force_mask = kwargs.get("uncond", False)
         # constraint = self.mask_cond(constraint, force_mask=force_mask)
-
         # cond = torch.cat([cond, constraint], dim=-1)
 
-        cond_emb = self.cond_state_emb(cond)
-        input_emb = self.state_action_emb(x)
+        # embeddings
+        input_emb = self.state_action_emb(noised_action)
+        sigma_emb = self.sigma_emb(sigma.view(-1, 1, 1).log() / 4)
+        cond_emb = self.cond_state_emb(data_dict["obs"])
 
-        # diffusion timestep embedding
-        sigma = sigma.view(-1, 1, 1).log() / 4
-        sigma_emb = self.sigma_emb(sigma)
+        skill = data_dict["skill"]
+        skill = self.mask_cond(skill, uncond)
+        skill_emb = self.skill_emb(skill).unsqueeze(1)
 
-        # command embedding
-        cmd = kwargs["cmd"]
-        cmd_emb = self.cmd_emb(cmd).unsqueeze(1)
-
-        cond = torch.cat([sigma_emb, cmd_emb, cond_emb], dim=1)
+        cond = torch.cat([sigma_emb, skill_emb, cond_emb], dim=1)
         cond += self.cond_pos_emb
         cond = self.encoder(cond)
 
