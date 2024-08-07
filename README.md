@@ -6,3 +6,4 @@
 - [ ] simplify env
 - [ ] add type annotations
 - [ ] fix cmake stdout
+- [ ] Add setup to README

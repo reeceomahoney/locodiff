@@ -163,7 +163,7 @@ class Agent:
         self.model.training = True
 
         noise = torch.randn_like(sa_out)
-        sigma = self.make_sample_density()(shape=(len(sa_out),), device=self.device)
+        sigma = self.make_sample_density(len(sa_out))
         loss = self.model.loss(sa_out, state_in, noise, sigma, cmd=cmd, returns=returns)
 
         self.optimizer.zero_grad()
@@ -379,7 +379,7 @@ class Agent:
         )
 
     @torch.no_grad()
-    def make_sample_density(self):
+    def make_sample_density(self, size):
         """
         Generate a density function for training sigmas
         """
@@ -392,13 +392,10 @@ class Agent:
         max_value = (
             sd_config["max_value"] if "max_value" in sd_config else self.sigma_max
         )
-        return partial(
-            utils.rand_log_logistic,
-            loc=loc,
-            scale=scale,
-            min_value=min_value,
-            max_value=max_value,
+        density = utils.rand_log_logistic(
+            (size,), loc, scale, min_value, max_value, self.device
         )
+        return density
 
     @torch.no_grad()
     def process_batch(self, batch: dict):
@@ -426,7 +423,7 @@ class Agent:
         if cmd is None:
             goal_pos = self.get_to_device(batch, "goal")
             cmd = self.calculate_vel_cmd(goal_pos, current_pos, state)
-        
+
         returns = None
 
         # indicator = self.get_to_device(batch, "indicator")
@@ -495,11 +492,14 @@ class Agent:
                 dim=-1,
             )
         return cmd
+
     def calculate_returns(self, state, cmd):
         """
         Calculate the expected discounted return for each state.
         """
-        rewards = ((state[:, self.T_cond :, 33] > 0.5) & (state[:, self.T_cond :, 33] < 0.8)) * 1
+        rewards = (
+            (state[:, self.T_cond :, 33] > 0.5) & (state[:, self.T_cond :, 33] < 0.8)
+        ) * 1
 
         gammas = torch.ones(50, device=self.device) * 0.99
         gammas = gammas.cumprod(dim=0)
