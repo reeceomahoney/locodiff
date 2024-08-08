@@ -65,7 +65,7 @@ class RaisimEnv:
         # obs = np.concatenate(
         #     [base_pos, orientation, self._observation[:, 3:33]], axis=-1
         # )
-        obs = self._observation[:, :36]
+        obs = self._observation[:, :33]
         obs = torch.from_numpy(obs).to(self.device)
         return obs
 
@@ -106,6 +106,7 @@ class RaisimEnv:
             self.generate_goal()
             done = np.array([False])
             obs = self.observe()
+            vel_cmd = self.get_vel_cmd()
 
             # now run the agent for n steps
             action = self.nominal_joint_pos
@@ -120,12 +121,13 @@ class RaisimEnv:
                     total_dones += np.ones(done.shape, dtype="int64")
 
                 pred_action, pred_traj = agent.predict(
-                    {"obs": obs, "skill": skill},
+                    {"obs": obs, "skill": skill, "vel_cmd": vel_cmd},
                     new_sampling_steps=n_inference_steps,
                 )
 
                 for i in range(self.T_action):
                     obs, reward, done = self.step(action)
+                    vel_cmd = self.get_vel_cmd()
                     total_rewards += reward
                     action = pred_action[:, i]
 
@@ -186,6 +188,9 @@ class RaisimEnv:
         self.goal = np.random.uniform(-5, 5, (self.num_envs, 2)).astype(np.float32)
         self.set_goal(self.goal)
         self.goal = torch.from_numpy(self.goal).to(self.device)
+    
+    def get_vel_cmd(self):
+        return torch.from_numpy(self._observation[:, 33:36]).to(self.device)
 
     def get_base_position(self):
         self.env.getBasePosition(self._base_position)

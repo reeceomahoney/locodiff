@@ -41,6 +41,8 @@ class ExpertDataset(Dataset):
         vel_cmds = data["vel_cmd"]
         skills = data["skill"]
         terminals = data["terminal"]
+    
+        obs = obs[..., :33]
 
         # Find episode ends
         terminals_flat = terminals.reshape(-1)
