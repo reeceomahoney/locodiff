@@ -2,7 +2,6 @@ import os
 import logging
 import numpy as np
 import matplotlib.pyplot as plt
-import socket
 
 import hydra
 from omegaconf import DictConfig, OmegaConf
@@ -12,7 +11,6 @@ from scipy.spatial.transform import Rotation as R
 from sklearn.manifold import TSNE
 
 from env.raisim_env import RaisimEnv
-from locodiff.classifier import ClassifierGuidedSampleModel
 
 
 log = logging.getLogger(__name__)
@@ -52,12 +50,6 @@ def main(cfg: DictConfig) -> None:
     agent.sigma_max = cfg.sigma_max
     agent.sigma_min = cfg.sigma_min
     agent.cond_lambda = cfg.cond_lambda
-
-    # Classifier
-    # classifier_cfg = OmegaConf.load(f"{cfg.classifier_path}/.hydra/config.yaml")
-    # classifier = hydra.utils.instantiate(classifier_cfg.classifier)
-    # classifier.load_state_dict(torch.load(f"{cfg.classifier_path}/classifier.pth"))
-    # agent.model = ClassifierGuidedSampleModel(agent.model, classifier, cfg.cond_lambda)
 
     # Evaluate
     if cfg["test_rollout"]:
@@ -181,8 +173,6 @@ def main(cfg: DictConfig) -> None:
 
             # dataset = np.load("data/datasets/walk.npy", allow_pickle=True).item()
             # dataset_obs = dataset["observations"].reshape(-1, obs_dim)[:12450, 6:18]
-
-
 
             # tsne_1 = TSNE(n_components=2).fit_transform(obs)
             # tsne_2 = TSNE(n_components=2).fit_transform(dataset_obs)

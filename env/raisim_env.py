@@ -30,6 +30,7 @@ class RaisimEnv:
         # initialize environment
         self.env = RaisimWrapper(resource_dir, env_cfg)
         self.env.setSeed(seed)
+        self.env.turnOnVisualization()
 
         # get environment information
         self.num_obs = self.env.getObDim()
