@@ -11,7 +11,7 @@ name = "downloadpytorch"
 [packages]
 locodiff = {file = ".", editable = true}
 torch = {index="downloadpytorch", version="==2.2.1+cu118"}
-numpy = "*"
+numpy = "==1.24.1"
 matplotlib = "*"
 tqdm = "*"
 scipy = "*"
