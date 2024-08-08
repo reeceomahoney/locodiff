@@ -19,6 +19,7 @@ imageio = "*"
 hydra-core = "*"
 wandb = "*"
 scikit-learn = "*"
+pybind11 = {extras = ["global"], version = "*"}
 
 [dev-packages]
 
