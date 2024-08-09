@@ -198,7 +198,7 @@ class RaisimEnv:
         ang_vel = obs[:, 17:18]
         vel = torch.cat([lin_vel, ang_vel], dim=-1)
         reward = torch.exp(-(vel - vel_cmd).pow(2))
-        return reward.mean(dim=-1).item()
+        return reward.mean(dim=-1).cpu().numpy()
 
     def get_base_position(self):
         self.env.getBasePosition(self._base_position)
