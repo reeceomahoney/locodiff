@@ -11,6 +11,15 @@ def get_sigmas_exponential(n, sigma_min, sigma_max, device="cpu"):
     ).exp()
     return torch.cat([sigmas, sigmas.new_zeros([1])])
 
+def get_ancestral_step(sigma_from, sigma_to, eta=1.):
+    """Calculates the noise level (sigma_down) to step down to and the amount
+    of noise to add (sigma_up) when doing an ancestral sampling step."""
+    if not eta:
+        return sigma_to, 0.
+    sigma_up = min(sigma_to, eta * (sigma_to ** 2 * (sigma_from ** 2 - sigma_to ** 2) / sigma_from ** 2) ** 0.5)
+    sigma_down = (sigma_to ** 2 - sigma_up ** 2) ** 0.5
+    return sigma_down, sigma_up
+
 
 def rand_log_logistic(
     shape,
