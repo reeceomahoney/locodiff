@@ -126,7 +126,8 @@ class RaisimEnv:
                 )
 
                 for i in range(self.T_action):
-                    obs, reward, done = self.step(action)
+                    obs, _, done = self.step(action)
+                    reward = self.compute_reward(obs, vel_cmd)
                     vel_cmd = self.get_vel_cmd()
                     total_rewards += reward
                     action = pred_action[:, i]
@@ -191,6 +192,13 @@ class RaisimEnv:
     
     def get_vel_cmd(self):
         return torch.from_numpy(self._observation[:, 33:36]).to(self.device)
+    
+    def compute_reward(self, obs, vel_cmd):
+        lin_vel = obs[:, 30:32]
+        ang_vel = obs[:, 17:18]
+        vel = torch.cat([lin_vel, ang_vel], dim=-1)
+        reward = torch.exp(-(vel - vel_cmd).pow(2))
+        return reward.mean(dim=-1).item()
 
     def get_base_position(self):
         self.env.getBasePosition(self._base_position)
