@@ -189,7 +189,7 @@ class Agent:
             self.num_sampling_steps, self.sigma_min, self.sigma_max, self.device
         )
         noise = torch.randn_like(data_dict["action"]) * self.sigma_max
-        x_0 = self.sample_euler_ancestral(noise, sigmas, data_dict, predict=False)
+        x_0 = self.sample_ddim(noise, sigmas, data_dict, predict=False)
 
         mse = nn.functional.mse_loss(x_0, data_dict["action"], reduction="none")
         total_mse = mse.mean().item()
@@ -253,7 +253,7 @@ class Agent:
         noise = torch.randn((self.num_envs, self.T, sa_dim), device=self.device)
         noise *= self.sigma_max
 
-        x_0 = self.sample_euler_ancestral(noise, sigmas, data_dict, predict=True)
+        x_0 = self.sample_ddim(noise, sigmas, data_dict, predict=True)
 
         # get the action for the current timestep
         x_0 = self.scaler.clip(x_0)

@@ -97,8 +97,6 @@ class RaisimEnv:
         total_rewards = np.zeros(self.num_envs, dtype=np.float32)
         total_dones = np.zeros(self.num_envs, dtype=np.int64)
         self.images = []
-        skill = torch.zeros(self.num_envs, 2).to(self.device)
-        skill[:, 0] = 1
 
         for _ in range(self.eval_n_times):
             self.env.reset()
@@ -107,6 +105,9 @@ class RaisimEnv:
             done = np.array([False])
             obs = self.observe()
             vel_cmd = self.get_vel_cmd()
+
+            skill = torch.zeros(self.num_envs, 2).to(self.device)
+            skill[:, 0] = 1
 
             # now run the agent for n steps
             action = self.nominal_joint_pos
@@ -119,6 +120,10 @@ class RaisimEnv:
                     agent.reset()
                 if n == self.eval_n_steps - 1:
                     total_dones += np.ones(done.shape, dtype="int64")
+                
+                if n == 125:
+                    skill = torch.zeros(self.num_envs, 2).to(self.device)
+                    skill[:, 1] = 1
 
                 pred_action, pred_traj = agent.predict(
                     {"obs": obs, "skill": skill, "vel_cmd": vel_cmd},
