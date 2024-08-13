@@ -7,7 +7,6 @@ class DiffusionTransformer(nn.Module):
     def __init__(
         self,
         obs_dim,
-        pred_obs_dim,
         skill_dim,
         act_dim,
         d_model,
@@ -21,7 +20,6 @@ class DiffusionTransformer(nn.Module):
     ):
         super().__init__()
         self.obs_dim = obs_dim
-        self.pred_obs_dim = pred_obs_dim
         self.act_dim = act_dim
         self.input_dim = obs_dim + act_dim
         self.d_model = d_model
@@ -30,10 +28,8 @@ class DiffusionTransformer(nn.Module):
         self.device = device
         self.cond_mask_prob = cond_mask_prob
 
-        self.state_action_emb = nn.Linear(
-            self.pred_obs_dim + self.act_dim, self.d_model
-        )
-        self.cond_state_emb = nn.Linear(self.obs_dim + 2, self.d_model)
+        self.action_emb = nn.Linear(self.act_dim, self.d_model)
+        self.obs_emb = nn.Linear(self.obs_dim + 2, self.d_model)
         self.sigma_emb = nn.Linear(1, self.d_model)
         self.vel_cmd_emb = nn.Linear(3, self.d_model)
         self.skill_emb = nn.Linear(skill_dim, self.d_model)
@@ -65,7 +61,7 @@ class DiffusionTransformer(nn.Module):
         self.register_buffer("mask", mask)
 
         self.ln_f = nn.LayerNorm(self.d_model)
-        self.state_action_pred = nn.Linear(d_model, self.pred_obs_dim + self.act_dim)
+        self.action_pred = nn.Linear(d_model, self.act_dim)
 
         self.apply(self._init_weights)
         self.to(device)
@@ -169,12 +165,12 @@ class DiffusionTransformer(nn.Module):
         obs = data_dict["obs"]
         skill = data_dict["skill"].unsqueeze(1).expand(-1, obs.shape[1], -1).clone()
         skill = self.mask_cond(skill, uncond)
-        cond = torch.cat([obs, skill], dim=-1)
+        obs = torch.cat([obs, skill], dim=-1)
 
         # embeddings
-        input_emb = self.state_action_emb(noised_action)
+        action_emb = self.action_emb(noised_action)
         sigma_emb = self.sigma_emb(sigma.view(-1, 1, 1).log() / 4)
-        cond_emb = self.cond_state_emb(cond)
+        obs_emb = self.obs_emb(obs)
 
         vel_cmd = data_dict["vel_cmd"]
         vel_cmd_emb = self.vel_cmd_emb(vel_cmd).unsqueeze(1)
@@ -183,14 +179,14 @@ class DiffusionTransformer(nn.Module):
         # skill = self.mask_cond(skill, uncond)
         # skill_emb = self.skill_emb(skill).unsqueeze(1)
 
-        cond = torch.cat([sigma_emb, vel_cmd_emb, cond_emb], dim=1)
+        cond = torch.cat([sigma_emb, vel_cmd_emb, obs_emb], dim=1)
         cond += self.cond_pos_emb
         cond = self.encoder(cond)
 
-        input_emb += self.pos_emb
-        x = self.decoder(tgt=input_emb, memory=cond, tgt_mask=self.mask)
+        action_emb += self.pos_emb
+        x = self.decoder(tgt=action_emb, memory=cond, tgt_mask=self.mask)
         x = self.ln_f(x)
-        out = self.state_action_pred(x)
+        out = self.action_pred(x)
 
         return out
 

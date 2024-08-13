@@ -125,7 +125,7 @@ class RaisimEnv:
                     skill = torch.zeros(self.num_envs, 2).to(self.device)
                     skill[:, 1] = 1
 
-                pred_action, pred_traj = agent.predict(
+                pred_action = agent.predict(
                     {"obs": obs, "skill": skill, "vel_cmd": vel_cmd},
                     new_sampling_steps=n_inference_steps,
                 )

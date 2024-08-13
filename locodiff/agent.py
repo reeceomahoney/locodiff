@@ -5,9 +5,9 @@ import os
 import hydra
 import torch
 import torch.nn as nn
+import wandb
 from omegaconf import DictConfig
 from tqdm import tqdm
-import wandb
 
 import locodiff.utils as utils
 
@@ -37,7 +37,6 @@ class Agent:
         T_cond: int,
         T_action: int,
         obs_dim: int,
-        pred_obs_dim: int,
         action_dim: int,
         num_envs: int,
         sim_every_n_steps: int,
@@ -83,7 +82,6 @@ class Agent:
 
         # env
         self.obs_dim = obs_dim
-        self.pred_obs_dim = pred_obs_dim
         self.action_dim = action_dim
         self.num_envs = num_envs
         self.sim_every_n_steps = sim_every_n_steps
@@ -114,7 +112,6 @@ class Agent:
                     "total_mse": [],
                     "first_mse": [],
                     "last_mse": [],
-                    "action_mse": [],
                 }
                 for batch in tqdm(
                     self.test_loader, desc="Evaluating", position=0, leave=True
@@ -195,16 +192,10 @@ class Agent:
         total_mse = mse.mean().item()
         self.total_mse = total_mse
 
-        # state and action mse
-        state_mse = mse[:, :, : self.pred_obs_dim].mean().item()
-        action_mse = mse[:, :, self.pred_obs_dim :].mean().item()
-
         # mse of the first and last timestep
         first_mse = mse[:, 0, :].mean().item()
         last_mse = mse[:, -1, :].mean().item()
         timestep_mse = mse.mean(dim=(0, 2))
-
-        prediction = self.scaler.inverse_scale_output(x_0)[..., : self.pred_obs_dim]
 
         # restore the previous model parameters
         if self.use_ema:
@@ -213,12 +204,9 @@ class Agent:
         info = {
             "mse": mse,
             "total_mse": total_mse,
-            "state_mse": state_mse,
-            "action_mse": action_mse,
             "first_mse": first_mse,
             "last_mse": last_mse,
             "timestep_mse": timestep_mse,
-            "prediction": prediction,
         }
 
         return info
@@ -249,21 +237,22 @@ class Agent:
             n_sampling_steps, self.sigma_min, self.sigma_max, self.device
         )
 
-        sa_dim = self.pred_obs_dim + self.action_dim
-        noise = torch.randn((self.num_envs, self.T, sa_dim), device=self.device)
+        noise = torch.randn(
+            (self.num_envs, self.T, self.action_dim), device=self.device
+        )
         noise *= self.sigma_max
 
         x_0 = self.sample_ddim(noise, sigmas, data_dict, predict=True)
 
         # get the action for the current timestep
         x_0 = self.scaler.clip(x_0)
-        pred_traj = self.scaler.inverse_scale_output(x_0).cpu().numpy()
-        pred_action = pred_traj[:, : self.T_action, self.pred_obs_dim :].copy()
+        pred_action = self.scaler.inverse_scale_output(x_0).cpu().numpy()
+        pred_action = pred_action[:, : self.T_action].copy()
 
         if self.use_ema:
             self.ema_helper.restore(self.model.parameters())
 
-        return pred_action, pred_traj
+        return pred_action
 
     def stack_context(self, state):
         """
@@ -430,8 +419,7 @@ class Agent:
         if raw_action is None:
             action = None
         else:
-            action = torch.cat([raw_obs[..., : self.pred_obs_dim], raw_action], dim=-1)
-            action = self.scaler.scale_output(action[:, self.T_cond - 1 :])
+            action = self.scaler.scale_output(raw_action[:, self.T_cond - 1 :])
 
         processed_batch = {
             "obs": obs,

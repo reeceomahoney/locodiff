@@ -21,7 +21,6 @@ T_action: 1
 
 action_dim: 12
 obs_dim: 33
-pred_obs_dim: 0
 skill_dim: 2
 
 # policy model params

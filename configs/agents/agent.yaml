@@ -25,7 +25,6 @@ device: ${device}
 update_ema_every_n_steps: ${update_ema_every_n_steps}
 
 obs_dim: ${obs_dim}
-pred_obs_dim: ${pred_obs_dim}
 action_dim: ${action_dim}
 T: ${T}
 T_cond: ${T_cond}
