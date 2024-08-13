@@ -8,12 +8,12 @@
 #include <cstdlib>
 #include <set>
 
-#include "Common.hpp"
+#include "common.hpp"
 #include "Yaml.hpp"
 #include "actuation_dynamics/Actuation.hpp"
-#include "helpers/Command.hpp"
-#include "helpers/Observation.hpp"
-#include "helpers/Visualization.hpp"
+#include "helpers/command.hpp"
+#include "helpers/observation.hpp"
+#include "helpers/visualization.hpp"
 
 namespace raisim {
 
