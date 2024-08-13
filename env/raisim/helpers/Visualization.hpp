@@ -2,6 +2,8 @@
 #define _LFMC_GYM_VISUALIZATION_HPP
 
 #include "Utility.hpp"
+#include "raisim/RaisimServer.hpp"
+#include "raisim/World.hpp"
 
 
 class VisualizationHandler {

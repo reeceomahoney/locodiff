@@ -6,7 +6,6 @@
 #ifndef SRC_RAISIMGYMVECENV_HPP
 #define SRC_RAISIMGYMVECENV_HPP
 
-#include "RaisimGymEnv.hpp"
 #include "omp.h"
 #include "Yaml.hpp"
 
@@ -143,11 +142,6 @@ namespace raisim {
                 env->setSeed(seed_inc++);
         }
 
-        void close() {
-            for (auto *env: environments_)
-                env->close();
-        }
-
         void isTerminalState(Eigen::Ref<EigenBoolVec> &terminalState) {
             for (int i = 0; i < num_envs_; i++) {
                 if (earlyTerminationActive_) {
@@ -175,11 +169,6 @@ namespace raisim {
         int getNumOfEnvs() { return num_envs_; }
 
         ////// optional methods //////
-        void curriculumUpdate() {
-            for (auto *env: environments_)
-                env->curriculumUpdate();
-        };
-
         void setMaxEpisodeLength(const double &timeInSeconds) {
             for (auto *env: environments_)
                 env->setMaxEpisodeLength(timeInSeconds);

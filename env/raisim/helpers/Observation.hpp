@@ -1,6 +1,8 @@
 #ifndef _LFMC_GYM_AVC_OBSERVATION_HPP
 #define _LFMC_GYM_AVC_OBSERVATION_HPP
 
+#include "raisim/World.hpp"
+
 class ObservationHandler {
  private:
   Eigen::VectorXd observation_;

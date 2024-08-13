@@ -8,7 +8,8 @@
 #include <cstdlib>
 #include <set>
 
-#include "RaisimGymEnv.hpp"
+#include "Common.hpp"
+#include "Yaml.hpp"
 #include "actuation_dynamics/Actuation.hpp"
 #include "helpers/Command.hpp"
 #include "helpers/Observation.hpp"
@@ -16,11 +17,12 @@
 
 namespace raisim {
 
-class ENVIRONMENT : public RaisimGymEnv {
+class ENVIRONMENT {
  public:
   explicit ENVIRONMENT(const std::string &resourceDir, const Yaml::Node &cfg,
                        bool visualizable)
-      : RaisimGymEnv(resourceDir, cfg),
+      : resourceDir_(std::move(resourceDir)),
+        cfg_(cfg),
         visualizable_(visualizable),
         normalDistribution_(0, 1),
         uniformRealDistribution_(-1, 1),
@@ -138,9 +140,9 @@ class ENVIRONMENT : public RaisimGymEnv {
     }
   }
 
-  void init() final {}
+  void init() {}
 
-  void reset() final {
+  void reset() {
     Eigen::VectorXd gc = gc_init_, gv = gv_init_;
 
     if (enableDynamicsRandomization_) {
@@ -211,7 +213,7 @@ class ENVIRONMENT : public RaisimGymEnv {
     stepCount_ = 0;
   }
 
-  bool conditionalReset() final {
+  bool conditionalReset() {
     if (stepCount_ >= maxEpisodeLength_) {
       reset();
       return true;
@@ -220,7 +222,7 @@ class ENVIRONMENT : public RaisimGymEnv {
     return false;
   }
 
-  void step(const Eigen::Ref<EigenVec> &action) final {
+  void step(const Eigen::Ref<EigenVec> &action) {
     pTarget12_ = action.cast<double>();
     pTarget_.tail(nJoints_) = pTarget12_;
 
@@ -272,12 +274,12 @@ class ENVIRONMENT : public RaisimGymEnv {
     ++stepCount_;
   }
 
-  void observe(Eigen::Ref<EigenVec> ob) final {
+  void observe(Eigen::Ref<EigenVec> ob) {
     /// convert it to float
     ob = observationHandler_.getObservation().cast<float>();
   }
 
-  bool isTerminalState() final {
+  bool isTerminalState() {
     /// if the contact body is not feet
     for (auto &contact : robot_->getContacts()) {
       if ((contact.getCollisionBodyA()->material == "ground_material" &&
@@ -295,24 +297,24 @@ class ENVIRONMENT : public RaisimGymEnv {
     return false;
   }
 
-  void setMaxEpisodeLength(const double &timeInSeconds) final {
+  void setMaxEpisodeLength(const double &timeInSeconds) {
     maxEpisodeLength_ =
         std::floor(timeInSeconds / cfg_["control_dt"].template As<double>());
   }
 
-  void setSeed(int seed) final {
+  void setSeed(int seed) {
     gen_.seed(seed);
     srand(seed);
 
     velocityCommandHandler_.setSeed(seed);
   }
 
-  void turnOnVisualization() final {
+  void turnOnVisualization() {
     server_->wakeup();
     visualizing_ = true;
   }
 
-  void turnOffVisualization() final {
+  void turnOffVisualization() {
     server_->hibernate();
     visualizing_ = false;
   }
@@ -370,7 +372,38 @@ class ENVIRONMENT : public RaisimGymEnv {
             .cast<float>();
   }
 
+  void setSimulationTimeStep(double dt) {
+    simulation_dt_ = dt;
+    world_->setTimeStep(dt);
+  }
+
+  void setControlTimeStep(double dt) { control_dt_ = dt; }
+
+  int getObDim() { return obDim_; }
+
+  int getActionDim() { return actionDim_; }
+
+  double getControlTimeStep() { return control_dt_; }
+
+  double getSimulationTimeStep() { return simulation_dt_; }
+
+  raisim::World *getWorld() { return world_.get(); }
+
+  void startRecordingVideo(const std::string &videoName) {
+    server_->startRecordingVideo(videoName);
+  }
+
+  void stopRecordingVideo() { server_->stopRecordingVideo(); }
+
  private:
+  std::unique_ptr<raisim::World> world_;
+  double simulation_dt_ = 0.001;
+  double control_dt_ = 0.01;
+  std::string resourceDir_;
+  Yaml::Node cfg_;
+  int obDim_ = 0, actionDim_ = 0;
+  std::unique_ptr<raisim::RaisimServer> server_;
+
   int gcDim_, gvDim_, nJoints_;
   bool visualizable_ = false, visualizing_ = false;
   raisim::ArticulatedSystem *robot_;
