@@ -29,7 +29,7 @@ class DiffusionTransformer(nn.Module):
         self.cond_mask_prob = cond_mask_prob
 
         self.action_emb = nn.Linear(self.act_dim, self.d_model)
-        self.obs_emb = nn.Linear(self.obs_dim + 2, self.d_model)
+        self.obs_emb = nn.Linear(self.obs_dim + skill_dim, self.d_model)
         self.sigma_emb = nn.Linear(1, self.d_model)
         self.vel_cmd_emb = nn.Linear(3, self.d_model)
         self.skill_emb = nn.Linear(skill_dim, self.d_model)
