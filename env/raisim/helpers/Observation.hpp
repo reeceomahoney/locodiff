@@ -37,9 +37,11 @@ class ObservationHandler {
     jointNominalConfig_.setZero(nJoints_);
     jointNominalConfig_ << -0.14, 0.81, -0.96, 0.14, 0.81, -0.96, -0.14, -0.81,
         0.96, 0.14, -0.81, 0.96;
-    // jointNominalConfig_ << -0.17, 1.25, -1.56, 0.17, 1.25, -1.56, -0.17, -1.25,
+    // jointNominalConfig_ << -0.17, 1.25, -1.56, 0.17, 1.25, -1.56, -0.17,
+    // -1.25,
     //     1.56, 0.17, -1.25, 1.56;
-    // jointNominalConfig_ << -0.30, 1.90, -2.27, 0.30, 1.90, -2.27, -0.30, -1.90,
+    // jointNominalConfig_ << -0.30, 1.90, -2.27, 0.30, 1.90, -2.27, -0.30,
+    // -1.90,
     //     2.27, 0.30, -1.90, 2.27;
 
     feetNominalPositions_.setZero(12);
