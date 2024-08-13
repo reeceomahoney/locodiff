@@ -140,8 +140,6 @@ class ENVIRONMENT {
     }
   }
 
-  void init() {}
-
   void reset() {
     Eigen::VectorXd gc = gc_init_, gv = gv_init_;
 
@@ -297,11 +295,6 @@ class ENVIRONMENT {
     return false;
   }
 
-  void setMaxEpisodeLength(const double &timeInSeconds) {
-    maxEpisodeLength_ =
-        std::floor(timeInSeconds / cfg_["control_dt"].template As<double>());
-  }
-
   void setSeed(int seed) {
     gen_.seed(seed);
     srand(seed);
@@ -319,35 +312,6 @@ class ENVIRONMENT {
     visualizing_ = false;
   }
 
-  void getJointPositionErrorHistory(
-      Eigen::Ref<EigenVec> jointPositionErrorHistory) {
-    jointPositionErrorHistory =
-        observationHandler_.getJointPositionErrorHistory().cast<float>();
-  }
-
-  void getJointVelocityHistory(Eigen::Ref<EigenVec> jointVelocityHistory) {
-    jointVelocityHistory =
-        observationHandler_.getJointVelocityHistory().cast<float>();
-  }
-
-  void getContactStates(Eigen::Ref<EigenVec> contactStates) {
-    contacts_.setZero();
-    for (auto &contact : robot_->getContacts()) {
-      if (contact.getlocalBodyIndex() == robot_->getBodyIdx("LF_SHANK")) {
-        contacts_[0] = 1.;
-      } else if (contact.getlocalBodyIndex() ==
-                 robot_->getBodyIdx("RF_SHANK")) {
-        contacts_[1] = 1.;
-      } else if (contact.getlocalBodyIndex() ==
-                 robot_->getBodyIdx("LH_SHANK")) {
-        contacts_[2] = 1.;
-      } else if (contact.getlocalBodyIndex() ==
-                 robot_->getBodyIdx("RH_SHANK")) {
-        contacts_[3] = 1.;
-      }
-    }
-  }
-
   void getBasePosition(Eigen::Ref<EigenVec> basePosition) {
     basePosition = robot_->getBasePosition().e().cast<float>();
   }
@@ -357,8 +321,6 @@ class ENVIRONMENT {
                           .segment(3, 4)
                           .cast<float>();
   }
-
-  void killServer() { server_->killServer(); }
 
   void setGoal(const Eigen::Ref<EigenVec> &goal) {
     goalPosition_ << goal[0], goal[1], 0;
@@ -382,18 +344,6 @@ class ENVIRONMENT {
   int getObDim() { return obDim_; }
 
   int getActionDim() { return actionDim_; }
-
-  double getControlTimeStep() { return control_dt_; }
-
-  double getSimulationTimeStep() { return simulation_dt_; }
-
-  raisim::World *getWorld() { return world_.get(); }
-
-  void startRecordingVideo(const std::string &videoName) {
-    server_->startRecordingVideo(videoName);
-  }
-
-  void stopRecordingVideo() { server_->stopRecordingVideo(); }
 
  private:
   std::unique_ptr<raisim::World> world_;

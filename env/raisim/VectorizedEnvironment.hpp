@@ -66,8 +66,6 @@ class VectorizedEnvironment {
     setSeed(0);
 
     for (int i = 0; i < num_envs_; i++) {
-      // only the first environment is visualized
-      environments_[i]->init();
       environments_[i]->reset();
     }
 
@@ -116,49 +114,9 @@ class VectorizedEnvironment {
     if (render_) environments_[0]->turnOffVisualization();
   }
 
-  void startRecordingVideo(const std::string &videoName) {
-    if (render_) environments_[0]->startRecordingVideo(videoName);
-  }
-
-  void stopRecordingVideo() {
-    if (render_) environments_[0]->stopRecordingVideo();
-  }
-
-  void getObStatistics(Eigen::Ref<EigenVec> &mean, Eigen::Ref<EigenVec> &var,
-                       float &count) {
-    mean = obMean_;
-    var = obVar_;
-    count = obCount_;
-  }
-
-  void setObStatistics(Eigen::Ref<EigenVec> &mean, Eigen::Ref<EigenVec> &var,
-                       float count) {
-    obMean_ = mean;
-    obVar_ = var;
-    obCount_ = count;
-  }
-
   void setSeed(int seed) {
     int seed_inc = num_envs_ * seed;
     for (auto *env : environments_) env->setSeed(seed_inc++);
-  }
-
-  void isTerminalState(Eigen::Ref<EigenBoolVec> &terminalState) {
-    for (int i = 0; i < num_envs_; i++) {
-      if (earlyTerminationActive_) {
-        terminalState[i] = environments_[i]->isTerminalState();
-      } else {
-        terminalState[i] = false;
-      }
-    }
-  }
-
-  void setSimulationTimeStep(double dt) {
-    for (auto *env : environments_) env->setSimulationTimeStep(dt);
-  }
-
-  void setControlTimeStep(double dt) {
-    for (auto *env : environments_) env->setControlTimeStep(dt);
   }
 
   int getObDim() { return obDim_; }
@@ -168,42 +126,15 @@ class VectorizedEnvironment {
   int getNumOfEnvs() { return num_envs_; }
 
   ////// optional methods //////
-  void setMaxEpisodeLength(const double &timeInSeconds) {
-    for (auto *env : environments_) env->setMaxEpisodeLength(timeInSeconds);
-  };
-
   void conditionalReset() {
     for (int i = 0; i < num_envs_; i++) {
       conditionalResetPerformed_[i] = environments_[i]->conditionalReset();
     }
   };
 
-  void disableEarlyTermination() { earlyTerminationActive_ = false; }
-
-  void enableEarlyTermination() { earlyTerminationActive_ = true; }
-
   const std::vector<bool> &getConditionalResetFlags() {
     return conditionalResetPerformed_;
   }
-
-  void getJointPositionErrorHistory(
-      Eigen::Ref<EigenRowMajorMat> &jointPosErrorHistory) {
-    for (int i = 0; i < num_envs_; i++)
-      environments_[i]->getJointPositionErrorHistory(
-          jointPosErrorHistory.row(i));
-  }
-
-  void getJointVelocityHistory(Eigen::Ref<EigenRowMajorMat> &jointVelHistory) {
-    for (int i = 0; i < num_envs_; i++)
-      environments_[i]->getJointVelocityHistory(jointVelHistory.row(i));
-  }
-
-  void getContactStates(Eigen::Ref<EigenRowMajorMat> &contactStates) {
-    for (int i = 0; i < num_envs_; i++)
-      environments_[i]->getContactStates(contactStates.row(i));
-  }
-
-  void killServer() { environments_[0]->killServer(); }
 
   void getBasePosition(Eigen::Ref<EigenRowMajorMat> &position) {
     for (int i = 0; i < num_envs_; i++)

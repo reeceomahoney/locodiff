@@ -77,9 +77,6 @@ class RaisimEnv:
 
         return self.observe()
 
-    def close(self):
-        self.env.close()
-
     def simulate(
         self,
         agent,
@@ -136,7 +133,6 @@ class RaisimEnv:
                         time.sleep(0.04 - delta)
                     start = time.time()
 
-        self.close()
         total_rewards /= self.eval_n_times * self.eval_n_steps
         avrg_reward = total_rewards.mean()
         std_reward = total_rewards.std()
@@ -204,9 +200,6 @@ class RaisimEnv:
         self.env.getBaseOrientation(self._base_orientation)
         return self._base_orientation
 
-    def kill_server(self):
-        self.env.killServer()
-
     def set_goal(self, goal):
         self.env.setGoal(goal)
 
@@ -218,12 +211,6 @@ class RaisimEnv:
 
     def turn_off_visualization(self):
         self.env.turnOffVisualization()
-
-    def start_video_recording(self, file_name):
-        self.env.startRecordingVideo(file_name)
-
-    def stop_video_recording(self):
-        self.env.stopRecordingVideo()
 
     @property
     def num_envs(self):

@@ -18,17 +18,10 @@ PYBIND11_MODULE(raisim_env, m) {
   py::class_<VectorizedEnvironment<ENVIRONMENT>>(m, RSG_MAKE_STR(RaisimWrapper))
       .def(py::init<std::string, std::string>(), py::arg("resourceDir"),
            py::arg("cfg"))
-      .def("init", &VectorizedEnvironment<ENVIRONMENT>::init)
       .def("reset", &VectorizedEnvironment<ENVIRONMENT>::reset)
       .def("observe", &VectorizedEnvironment<ENVIRONMENT>::observe)
       .def("step", &VectorizedEnvironment<ENVIRONMENT>::step)
       .def("setSeed", &VectorizedEnvironment<ENVIRONMENT>::setSeed)
-      .def("isTerminalState",
-           &VectorizedEnvironment<ENVIRONMENT>::isTerminalState)
-      .def("setSimulationTimeStep",
-           &VectorizedEnvironment<ENVIRONMENT>::setSimulationTimeStep)
-      .def("setControlTimeStep",
-           &VectorizedEnvironment<ENVIRONMENT>::setControlTimeStep)
       .def("getObDim", &VectorizedEnvironment<ENVIRONMENT>::getObDim)
       .def("getActionDim", &VectorizedEnvironment<ENVIRONMENT>::getActionDim)
       .def("getNumOfEnvs", &VectorizedEnvironment<ENVIRONMENT>::getNumOfEnvs)
@@ -36,31 +29,10 @@ PYBIND11_MODULE(raisim_env, m) {
            &VectorizedEnvironment<ENVIRONMENT>::turnOnVisualization)
       .def("turnOffVisualization",
            &VectorizedEnvironment<ENVIRONMENT>::turnOffVisualization)
-      .def("stopRecordingVideo",
-           &VectorizedEnvironment<ENVIRONMENT>::stopRecordingVideo)
-      .def("startRecordingVideo",
-           &VectorizedEnvironment<ENVIRONMENT>::startRecordingVideo)
       .def("conditionalReset",
            &VectorizedEnvironment<ENVIRONMENT>::conditionalReset)
       .def("conditionalResetFlags",
            &VectorizedEnvironment<ENVIRONMENT>::getConditionalResetFlags)
-      .def("getObStatistics",
-           &VectorizedEnvironment<ENVIRONMENT>::getObStatistics)
-      .def("setObStatistics",
-           &VectorizedEnvironment<ENVIRONMENT>::setObStatistics)
-      .def("disableEarlyTermination",
-           &VectorizedEnvironment<ENVIRONMENT>::disableEarlyTermination)
-      .def("enableEarlyTermination",
-           &VectorizedEnvironment<ENVIRONMENT>::enableEarlyTermination)
-      .def("setMaxEpisodeLength",
-           &VectorizedEnvironment<ENVIRONMENT>::setMaxEpisodeLength)
-      .def("getJointPositionErrorHistory",
-           &VectorizedEnvironment<ENVIRONMENT>::getJointPositionErrorHistory)
-      .def("getJointVelocityHistory",
-           &VectorizedEnvironment<ENVIRONMENT>::getJointVelocityHistory)
-      .def("getContactStates",
-           &VectorizedEnvironment<ENVIRONMENT>::getContactStates)
-      .def("killServer", &VectorizedEnvironment<ENVIRONMENT>::killServer)
       .def("getBasePosition",
            &VectorizedEnvironment<ENVIRONMENT>::getBasePosition)
       .def("getBaseOrientation",
