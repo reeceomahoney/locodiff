@@ -30,7 +30,7 @@ def main(cfg: DictConfig) -> None:
     model_cfg.device = cfg.device
     model_cfg.agents["device"] = cfg["device"]
     model_cfg.env["num_envs"] = 1
-    model_cfg.env["server_port"] = 8081
+    model_cfg.env["server_port"] = cfg.server_port
     model_cfg.env["max_time"] = 100
     model_cfg["T_action"] = 1
     model_cfg["use_ema"] = False
