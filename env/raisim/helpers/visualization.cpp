@@ -1,9 +1,10 @@
 #ifndef _LFMC_GYM_VISUALIZATION_HPP
 #define _LFMC_GYM_VISUALIZATION_HPP
 
-#include "utility.hpp"
+#include "utility.cpp"
 #include "raisim/RaisimServer.hpp"
 #include "raisim/World.hpp"
+#include "observation.cpp"
 
 class VisualizationHandler {
  private:

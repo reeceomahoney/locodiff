@@ -8,19 +8,19 @@
 #include <cstdlib>
 #include <set>
 
-#include "common.hpp"
 #include "Yaml.hpp"
 #include "actuation_dynamics/Actuation.hpp"
-#include "helpers/command.hpp"
-#include "helpers/observation.hpp"
-#include "helpers/visualization.hpp"
+#include "common.cpp"
+#include "helpers/command.cpp"
+#include "helpers/observation.cpp"
+#include "helpers/visualization.cpp"
 
 namespace raisim {
 
 class Env {
  public:
   explicit Env(const std::string &resourceDir, const Yaml::Node &cfg,
-                       bool visualizable)
+               bool visualizable)
       : resourceDir_(std::move(resourceDir)),
         cfg_(cfg),
         visualizable_(visualizable),
