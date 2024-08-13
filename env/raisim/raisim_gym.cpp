@@ -15,33 +15,33 @@ using namespace raisim;
 int THREAD_COUNT = 1;
 
 PYBIND11_MODULE(raisim_env, m) {
-  py::class_<VectorizedEnvironment<ENVIRONMENT>>(m, RSG_MAKE_STR(RaisimWrapper))
+  py::class_<VectorizedEnvironment<Environment>>(m, RSG_MAKE_STR(RaisimWrapper))
       .def(py::init<std::string, std::string>(), py::arg("resourceDir"),
            py::arg("cfg"))
-      .def("reset", &VectorizedEnvironment<ENVIRONMENT>::reset)
-      .def("observe", &VectorizedEnvironment<ENVIRONMENT>::observe)
-      .def("step", &VectorizedEnvironment<ENVIRONMENT>::step)
-      .def("setSeed", &VectorizedEnvironment<ENVIRONMENT>::setSeed)
-      .def("getObDim", &VectorizedEnvironment<ENVIRONMENT>::getObDim)
-      .def("getActionDim", &VectorizedEnvironment<ENVIRONMENT>::getActionDim)
-      .def("getNumOfEnvs", &VectorizedEnvironment<ENVIRONMENT>::getNumOfEnvs)
+      .def("reset", &VectorizedEnvironment<Environment>::reset)
+      .def("observe", &VectorizedEnvironment<Environment>::observe)
+      .def("step", &VectorizedEnvironment<Environment>::step)
+      .def("setSeed", &VectorizedEnvironment<Environment>::setSeed)
+      .def("getObDim", &VectorizedEnvironment<Environment>::getObDim)
+      .def("getActionDim", &VectorizedEnvironment<Environment>::getActionDim)
+      .def("getNumOfEnvs", &VectorizedEnvironment<Environment>::getNumOfEnvs)
       .def("turnOnVisualization",
-           &VectorizedEnvironment<ENVIRONMENT>::turnOnVisualization)
+           &VectorizedEnvironment<Environment>::turnOnVisualization)
       .def("turnOffVisualization",
-           &VectorizedEnvironment<ENVIRONMENT>::turnOffVisualization)
+           &VectorizedEnvironment<Environment>::turnOffVisualization)
       .def("conditionalReset",
-           &VectorizedEnvironment<ENVIRONMENT>::conditionalReset)
+           &VectorizedEnvironment<Environment>::conditionalReset)
       .def("conditionalResetFlags",
-           &VectorizedEnvironment<ENVIRONMENT>::getConditionalResetFlags)
+           &VectorizedEnvironment<Environment>::getConditionalResetFlags)
       .def("getBasePosition",
-           &VectorizedEnvironment<ENVIRONMENT>::getBasePosition)
+           &VectorizedEnvironment<Environment>::getBasePosition)
       .def("getBaseOrientation",
-           &VectorizedEnvironment<ENVIRONMENT>::getBaseOrientation)
-      .def("setGoal", &VectorizedEnvironment<ENVIRONMENT>::setGoal)
+           &VectorizedEnvironment<Environment>::getBaseOrientation)
+      .def("setGoal", &VectorizedEnvironment<Environment>::setGoal)
       .def("getNominalJointPositions",
-           &VectorizedEnvironment<ENVIRONMENT>::getNominalJointPositions)
+           &VectorizedEnvironment<Environment>::getNominalJointPositions)
       .def(py::pickle(
-          [](const VectorizedEnvironment<ENVIRONMENT>&
+          [](const VectorizedEnvironment<Environment>&
                  p) {  // __getstate__ --> Pickling to Python
             /* Return a tuple that fully encodes the state of the object */
             return py::make_tuple(p.getResourceDir(), p.getCfgString());
@@ -52,7 +52,7 @@ PYBIND11_MODULE(raisim_env, m) {
             }
 
             /* Create a new C++ instance */
-            VectorizedEnvironment<ENVIRONMENT> p(t[0].cast<std::string>(),
+            VectorizedEnvironment<Environment> p(t[0].cast<std::string>(),
                                                  t[1].cast<std::string>());
 
             return p;

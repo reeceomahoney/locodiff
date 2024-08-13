@@ -17,9 +17,9 @@
 
 namespace raisim {
 
-class ENVIRONMENT {
+class Environment {
  public:
-  explicit ENVIRONMENT(const std::string &resourceDir, const Yaml::Node &cfg,
+  explicit Environment(const std::string &resourceDir, const Yaml::Node &cfg,
                        bool visualizable)
       : resourceDir_(std::move(resourceDir)),
         cfg_(cfg),
@@ -390,5 +390,5 @@ class ENVIRONMENT {
   VisualizationHandler visualizationHandler_;
 };
 
-thread_local std::mt19937 raisim::ENVIRONMENT::gen_;
+thread_local std::mt19937 raisim::Environment::gen_;
 }  // namespace raisim
