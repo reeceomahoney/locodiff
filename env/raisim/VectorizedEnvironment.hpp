@@ -52,27 +52,17 @@ namespace raisim {
                 environments_.clear();
             }
 
-            if (!rewardInformation_.empty()) {
-                for (auto &reward: rewardInformation_) {
-                    reward.clear();
-                }
-
-                rewardInformation_.clear();
-            }
-
             if (!conditionalResetPerformed_.empty()) {
                 conditionalResetPerformed_.clear();
             }
 
             environments_.reserve(num_envs_);
-            rewardInformation_.reserve(num_envs_);
             conditionalResetPerformed_.reserve(num_envs_);
 
             for (int i = 0; i < num_envs_; i++) {
                 environments_.push_back(new ChildEnvironment(resourceDir_, cfg_, render_ && i == 0));
                 environments_.back()->setSimulationTimeStep(cfg_["simulation_dt"].template As<double>());
                 environments_.back()->setControlTimeStep(cfg_["control_dt"].template As<double>());
-                rewardInformation_.push_back(environments_.back()->getRewards().getStdMap());
                 conditionalResetPerformed_.push_back(true);
             }
 
@@ -118,11 +108,10 @@ namespace raisim {
 
 
         void step(Eigen::Ref<EigenRowMajorMat> &action,
-                  Eigen::Ref<EigenVec> &reward,
                   Eigen::Ref<EigenBoolVec> &done) {
 #pragma omp parallel for schedule(auto)
             for (int i = 0; i < num_envs_; i++)
-                perAgentStep(i, action, reward, done);
+                perAgentStep(i, action, done);
         }
 
         void turnOnVisualization() { if (render_) environments_[0]->turnOnVisualization(); }
@@ -161,13 +150,10 @@ namespace raisim {
 
         void isTerminalState(Eigen::Ref<EigenBoolVec> &terminalState) {
             for (int i = 0; i < num_envs_; i++) {
-                float terminalReward;
-
                 if (earlyTerminationActive_) {
-                    terminalState[i] = environments_[i]->isTerminalState(terminalReward);
+                    terminalState[i] = environments_[i]->isTerminalState();
                 } else {
                     terminalState[i] = false;
-                    terminalReward = 0.f;
                 }
             }
         }
@@ -212,8 +198,6 @@ namespace raisim {
         void enableEarlyTermination() {
             earlyTerminationActive_ = true;
         }
-
-        const std::vector<std::map<std::string, float>> &getRewardInfo() { return rewardInformation_; }
 
         const std::vector<bool> &getConditionalResetFlags() { return conditionalResetPerformed_; }
 
@@ -281,24 +265,19 @@ namespace raisim {
 
         inline void perAgentStep(int agentId,
                                  Eigen::Ref<EigenRowMajorMat> &action,
-                                 Eigen::Ref<EigenVec> &reward,
                                  Eigen::Ref<EigenBoolVec> &done) {
-            reward[agentId] = environments_[agentId]->step(action.row(agentId));
-            rewardInformation_[agentId] = environments_[agentId]->getRewards().getStdMap();
+            environments_[agentId]->step(action.row(agentId));
 
-            float terminalReward = 0;
-            done[agentId] = environments_[agentId]->isTerminalState(terminalReward);
+            done[agentId] = environments_[agentId]->isTerminalState();
 
             if (done[agentId] && earlyTerminationActive_) {
                 environments_[agentId]->reset();
-                reward[agentId] += terminalReward;
             } else {
                 done[agentId] = false;
             }
         }
 
         std::vector<ChildEnvironment *> environments_;
-        std::vector<std::map<std::string, float>> rewardInformation_;
 
         std::vector<bool> conditionalResetPerformed_;
 

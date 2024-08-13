@@ -13,7 +13,6 @@
 #include "raisim/World.hpp"
 #include "raisim/RaisimServer.hpp"
 #include "Yaml.hpp"
-#include "Reward.hpp"
 
 namespace raisim {
 
@@ -33,9 +32,9 @@ namespace raisim {
 
         virtual void observe(Eigen::Ref<EigenVec> ob) = 0;
 
-        virtual float step(const Eigen::Ref<EigenVec> &action) = 0;
+        virtual void step(const Eigen::Ref<EigenVec> &action) = 0;
 
-        virtual bool isTerminalState(float &terminalReward) = 0;
+        virtual bool isTerminalState() = 0;
         ////////////////////////////////////////
 
         /////// optional methods ///////
@@ -75,8 +74,6 @@ namespace raisim {
 
         void stopRecordingVideo() { server_->stopRecordingVideo(); }
 
-        raisim::Reward &getRewards() { return rewards_; }
-
     protected:
         std::unique_ptr<raisim::World> world_;
         double simulation_dt_ = 0.001;
@@ -85,7 +82,6 @@ namespace raisim {
         Yaml::Node cfg_;
         int obDim_ = 0, actionDim_ = 0;
         std::unique_ptr<raisim::RaisimServer> server_;
-        raisim::Reward rewards_;
     };
 }
 

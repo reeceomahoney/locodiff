@@ -45,7 +45,6 @@ class RaisimEnv:
         self._observation = np.zeros([self.num_envs, self.num_obs], dtype=np.float32)
         self._base_position = np.zeros([self.num_envs, 3], dtype=np.float32)
         self._base_orientation = np.zeros([self.num_envs, 4], dtype=np.float32)
-        self._reward = np.zeros(self.num_envs, dtype=np.float32)
         self._done = np.zeros(self.num_envs, dtype=bool)
 
         self.nominal_joint_pos = np.zeros([self.num_envs, 12], dtype=np.float32)
@@ -54,20 +53,18 @@ class RaisimEnv:
         self.goal = None
 
     def step(self, action):
-        self.env.step(action, self._reward, self._done)
-        return self.observe(), self._reward.copy(), self._done.copy()
+        self.env.step(action, self._done)
+        obs, vel_cmd = self.observe()
+        reward = self.compute_reward(obs, vel_cmd)
+        return obs, vel_cmd, reward, self._done.copy()
 
     def observe(self, update_statistics=False):
         self.env.observe(self._observation, update_statistics)
-
-        # base_pos = self.get_base_position()[:, :2]
-        # orientation = self.get_base_orientation()
-        # obs = np.concatenate(
-        #     [base_pos, orientation, self._observation[:, 3:33]], axis=-1
-        # )
-        obs = self._observation[:, :33]
-        obs = torch.from_numpy(obs).to(self.device)
-        return obs
+        obs_and_cmd = self._observation[:, :36]
+        obs_and_cmd = torch.from_numpy(obs_and_cmd).to(self.device)
+        obs = obs_and_cmd[:, :33]
+        vel_cmd = obs_and_cmd[:, 33:36]
+        return obs, vel_cmd
 
     def reset(self, conditional_reset=False):
         self._reward = np.zeros(self.num_envs, dtype=np.float32)
@@ -103,8 +100,7 @@ class RaisimEnv:
             agent.reset()
             self.generate_goal()
             done = np.array([False])
-            obs = self.observe()
-            vel_cmd = self.get_vel_cmd()
+            obs, vel_cmd = self.observe()
 
             skill = torch.zeros(self.num_envs, 2).to(self.device)
             skill[:, 0] = 1
@@ -120,7 +116,7 @@ class RaisimEnv:
                     agent.reset()
                 if n == self.eval_n_steps - 1:
                     total_dones += np.ones(done.shape, dtype="int64")
-                
+
                 if n == 125:
                     skill = torch.zeros(self.num_envs, 2).to(self.device)
                     skill[:, 1] = 1
@@ -131,9 +127,7 @@ class RaisimEnv:
                 )
 
                 for i in range(self.T_action):
-                    obs, _, done = self.step(action)
-                    reward = self.compute_reward(obs, vel_cmd)
-                    vel_cmd = self.get_vel_cmd()
+                    obs, vel_cmd, reward, done = self.step(action)
                     total_rewards += reward
                     action = pred_action[:, i]
 
@@ -154,7 +148,7 @@ class RaisimEnv:
             "total_done": total_dones.mean(),
         }
         return return_dict
-    
+
     def plot_trajectory(self, pred_traj, goal):
         # Calculate yaw angles from quaternions
         quat = pred_traj[0, :, 2:6]
@@ -194,10 +188,7 @@ class RaisimEnv:
         self.goal = np.random.uniform(-5, 5, (self.num_envs, 2)).astype(np.float32)
         self.set_goal(self.goal)
         self.goal = torch.from_numpy(self.goal).to(self.device)
-    
-    def get_vel_cmd(self):
-        return torch.from_numpy(self._observation[:, 33:36]).to(self.device)
-    
+
     def compute_reward(self, obs, vel_cmd):
         lin_vel = obs[:, 30:32]
         ang_vel = obs[:, 17:18]

@@ -12,7 +12,6 @@
 #include "actuation_dynamics/Actuation.hpp"
 #include "helpers/Command.hpp"
 #include "helpers/Observation.hpp"
-#include "helpers/Reward.hpp"
 #include "helpers/Visualization.hpp"
 
 namespace raisim {
@@ -29,8 +28,6 @@ class ENVIRONMENT : public RaisimGymEnv {
                    Eigen::Vector2d{1., 0.1}, 100., 12),
         velocityCommandHandler_(cfg["velocity_command"],
                                 cfg["control_dt"].template As<double>()),
-        rewardHandler_(cfg["control_dt"].template As<float>(),
-                       cfg["simulation_dt"].template As<float>()),
         visualizationHandler_(visualizable) {
     /// create world
     world_ = std::make_unique<raisim::World>();
@@ -93,16 +90,6 @@ class ENVIRONMENT : public RaisimGymEnv {
     /// action scaling
     actionMean_ = gc_init_.tail(nJoints_);
     actionStd_.setConstant(cfg["action_scaling"].template As<double>());
-
-    /// Reward coefficients
-    rewards_.initializeFromConfigurationFile(cfg["reward"]);
-    rewards_.setLimits(-100.f, 100.f);
-
-    Yaml::Node cfgCurriculum = cfg["curriculum"];
-    rewardCurriculumFactor_ =
-        cfgCurriculum["reward_factor"].template As<float>();
-    rewardAdvanceRate_ =
-        cfgCurriculum["reward_advance_rate"].template As<float>();
 
     /// Set the material property for each of the collision bodies of the robot
     for (auto &collisionBody : robot_->getCollisionBodies()) {
@@ -214,8 +201,6 @@ class ENVIRONMENT : public RaisimGymEnv {
       }
     }
 
-    rewardHandler_.reset();
-
     velocityCommandHandler_.reset(robot_->getBaseOrientation().e());
     prevPTarget12_ = actionMean_;
 
@@ -235,7 +220,7 @@ class ENVIRONMENT : public RaisimGymEnv {
     return false;
   }
 
-  float step(const Eigen::Ref<EigenVec> &action) final {
+  void step(const Eigen::Ref<EigenVec> &action) final {
     pTarget12_ = action.cast<double>();
     pTarget_.tail(nJoints_) = pTarget12_;
 
@@ -270,8 +255,6 @@ class ENVIRONMENT : public RaisimGymEnv {
       jointTorqueSquaredNorm = robot_->getGeneralizedForce().squaredNorm();
 
       observationHandler_.updateObservation(robot_, pTarget12_);
-      rewardHandler_.simStep(robot_, observationHandler_,
-                             velocityCommandHandler_, jointTorqueSquaredNorm);
 
       if (visualizing_ && visualizable_) {
         visualizationHandler_.updateVelocityVisual(robot_, observationHandler_,
@@ -286,10 +269,7 @@ class ENVIRONMENT : public RaisimGymEnv {
         velocityCommandHandler_.getVelocityCommand());
     observationHandler_.updateJointHistory(pTarget12_);
 
-    recordRewards();
-
     ++stepCount_;
-    return std::fmax(rewards_.sum() * static_cast<float>(control_dt_), 0.f);
   }
 
   void observe(Eigen::Ref<EigenVec> ob) final {
@@ -297,18 +277,7 @@ class ENVIRONMENT : public RaisimGymEnv {
     ob = observationHandler_.getObservation().cast<float>();
   }
 
-  void recordRewards() {
-    rewardHandler_.computeRewards(observationHandler_);
-    rewards_.record("base_linear_velocity_tracking",
-                    rewardHandler_.getBaseLinearVelocityTrackingReward());
-    rewards_.record("base_angular_velocity_tracking",
-                    rewardHandler_.getBaseAngularVelocityTrackingReward());
-    rewardHandler_.clearBuffers();
-  }
-
-  bool isTerminalState(float &terminalReward) final {
-    terminalReward = terminalRewardCoeff_;
-
+  bool isTerminalState() final {
     /// if the contact body is not feet
     for (auto &contact : robot_->getContacts()) {
       if ((contact.getCollisionBodyA()->material == "ground_material" &&
@@ -320,17 +289,10 @@ class ENVIRONMENT : public RaisimGymEnv {
     }
 
     if (stepCount_ >= maxEpisodeLength_) {
-      terminalReward = 0.f;
       return true;
     }
 
-    terminalReward = 0.f;
     return false;
-  }
-
-  void curriculumUpdate() final {
-    rewardCurriculumFactor_ =
-        std::pow(rewardCurriculumFactor_, rewardAdvanceRate_);
   }
 
   void setMaxEpisodeLength(const double &timeInSeconds) final {
@@ -414,7 +376,6 @@ class ENVIRONMENT : public RaisimGymEnv {
   raisim::ArticulatedSystem *robot_;
   Eigen::VectorXd gc_init_, gv_init_, gc_, gv_, pTarget_, pTarget12_, vTarget_,
       prevPTarget12_;
-  float terminalRewardCoeff_ = 0.f;
   Eigen::VectorXd actionMean_, actionStd_, obDouble_, contacts_, frameIdxs_;
   Eigen::Vector3d bodyLinearVel_, bodyAngularVel_, goalPosition_;
 
@@ -443,11 +404,7 @@ class ENVIRONMENT : public RaisimGymEnv {
   // Helper Classes
   VelocityCommand velocityCommandHandler_;
   ObservationHandler observationHandler_;
-  RewardHandler rewardHandler_;
   VisualizationHandler visualizationHandler_;
-
-  // Curriculum Factors
-  float rewardCurriculumFactor_ = 1.f, rewardAdvanceRate_ = 1.f;
 };
 
 thread_local std::mt19937 raisim::ENVIRONMENT::gen_;
