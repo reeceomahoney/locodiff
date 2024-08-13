@@ -167,7 +167,8 @@ class DiffusionTransformer(nn.Module):
 
     def forward(self, noised_action, sigma, data_dict, uncond=False):
         obs = data_dict["obs"]
-        skill = data_dict["skill"].unsqueeze(1).expand(-1, obs.shape[1], -1)
+        skill = data_dict["skill"].unsqueeze(1).expand(-1, obs.shape[1], -1).clone()
+        skill = self.mask_cond(skill, uncond)
         cond = torch.cat([obs, skill], dim=-1)
 
         # embeddings
