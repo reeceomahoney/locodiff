@@ -14,9 +14,9 @@ namespace raisim {
 int THREAD_COUNT;
 
 template <class ChildEnvironment>
-class VectorizedEnvironment {
+class VecEnv {
  public:
-  explicit VectorizedEnvironment(std::string resourceDir, std::string cfg)
+  explicit VecEnv(std::string resourceDir, std::string cfg)
       : resourceDir_(resourceDir), cfgString_(cfg) {
     Yaml::Parse(cfg_, cfg);
     if (&cfg_["render"]) render_ = cfg_["render"].template As<bool>();
@@ -25,7 +25,7 @@ class VectorizedEnvironment {
     normalizeObservation_ = cfg_["normalize_observation"].template As<bool>();
   }
 
-  ~VectorizedEnvironment() {
+  ~VecEnv() {
     for (auto *ptr : environments_) delete ptr;
   }
 
