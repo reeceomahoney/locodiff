@@ -79,9 +79,3 @@ env:
     # Time range in seconds when the next command is sampled
     command_sampling_time_min: 3.0
     command_sampling_time_max: 4.0
-
-  reward:
-    base_linear_velocity_tracking:
-      coeff: 1.0
-    base_angular_velocity_tracking:
-      coeff: 1.0
