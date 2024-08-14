@@ -128,8 +128,6 @@ class RaisimEnv:
                     height_rewards += rewards[1]
                     action = pred_action[:, i]
 
-                    base_poses.append(float(self.get_base_position()[:, -1]))
-
                     delta = time.time() - start
                     if delta < 0.04 and real_time:
                         time.sleep(0.04 - delta)
