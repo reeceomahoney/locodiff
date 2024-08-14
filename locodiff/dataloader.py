@@ -41,7 +41,7 @@ class ExpertDataset(Dataset):
         vel_cmds = data["vel_cmd"]
         skills = data["skill"]
         terminals = data["terminal"]
-    
+
         obs = obs[..., :33]
 
         # Find episode ends
@@ -59,7 +59,9 @@ class ExpertDataset(Dataset):
         obs = self.add_padding(obs_splits, max_len, temporal=True)
         actions = self.add_padding(actions_splits, max_len, temporal=True)
         vel_cmds = self.add_padding(vel_cmds_splits, max_len, temporal=False)
-        skills = self.add_padding(skills_splits, max_len, temporal=False)
+        skills = self.add_padding(skills_splits, max_len, temporal=True)
+
+        # NB: skill initial pad is the same as unconditional mask. This might be a problem.
 
         masks = self.create_masks(obs_splits, max_len)
 

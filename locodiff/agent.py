@@ -50,6 +50,7 @@ class Agent:
         self.T_cond = T_cond
         self.T_action = T_action
         self.obs_hist = torch.zeros((num_envs, T_cond, obs_dim), device=device)
+        self.skill_hist = torch.zeros((num_envs, T_cond, 2), device=device)
 
         total_params = sum(p.numel() for p in self.model.get_params())
         log.info("Parameter count: {:e}".format(total_params))
@@ -213,13 +214,14 @@ class Agent:
 
     def reset(self):
         self.obs_hist.fill_(0)
+        self.skill_hist.fill_(0)
 
     @torch.no_grad()
     def predict(self, batch: dict, new_sampling_steps=None):
         """
         Inference method
         """
-        batch["obs"] = self.stack_context(batch["obs"])
+        batch = self.stack_context(batch)
         data_dict = self.process_batch(batch)
 
         if new_sampling_steps is not None:
@@ -254,13 +256,16 @@ class Agent:
 
         return pred_action
 
-    def stack_context(self, state):
-        """
-        Helper function to handle obs history
-        """
+    def stack_context(self, batch):
         self.obs_hist[:, :-1] = self.obs_hist[:, 1:].clone()
-        self.obs_hist[:, -1] = state
-        return self.obs_hist.clone()
+        self.obs_hist[:, -1] = batch["obs"]
+        batch["obs"] = self.obs_hist.clone()
+
+        self.skill_hist[:, :-1] = self.skill_hist[:, 1:].clone()
+        self.skill_hist[:, -1] = batch["skill"]
+        batch["skill"] = self.skill_hist.clone()
+
+        return batch
 
     @torch.no_grad()
     def sample_ddim(
@@ -412,9 +417,10 @@ class Agent:
         raw_obs = batch["obs"]
         raw_action = batch.get("action", None)
         vel_cmd = batch["vel_cmd"]
-        skill = batch["skill"]
+        raw_skill = batch["skill"]
 
         obs = self.scaler.scale_input(raw_obs[:, : self.T_cond])
+        skill = raw_skill[:, : self.T_cond]
 
         if raw_action is None:
             action = None

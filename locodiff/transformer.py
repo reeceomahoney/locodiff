@@ -29,7 +29,7 @@ class DiffusionTransformer(nn.Module):
         self.cond_mask_prob = cond_mask_prob
 
         self.action_emb = nn.Linear(self.act_dim, self.d_model)
-        self.obs_emb = nn.Linear(self.obs_dim + skill_dim, self.d_model)
+        self.obs_emb = nn.Linear(self.obs_dim, self.d_model)
         self.sigma_emb = nn.Linear(1, self.d_model)
         self.vel_cmd_emb = nn.Linear(3, self.d_model)
         self.skill_emb = nn.Linear(skill_dim, self.d_model)
@@ -38,7 +38,9 @@ class DiffusionTransformer(nn.Module):
             SinusoidalPosEmb(d_model)(torch.arange(T)).unsqueeze(0).to(device)
         )
         self.cond_pos_emb = (
-            SinusoidalPosEmb(d_model)(torch.arange(T_cond + 2)).unsqueeze(0).to(device)
+            SinusoidalPosEmb(d_model)(torch.arange(2 * T_cond + 2))
+            .unsqueeze(0)
+            .to(device)
         )
 
         self.encoder = nn.Sequential(
@@ -162,24 +164,16 @@ class DiffusionTransformer(nn.Module):
         return optim_groups
 
     def forward(self, noised_action, sigma, data_dict, uncond=False):
-        obs = data_dict["obs"]
-        skill = data_dict["skill"].unsqueeze(1).expand(-1, obs.shape[1], -1).clone()
-        skill = self.mask_cond(skill, uncond)
-        obs = torch.cat([obs, skill], dim=-1)
-
         # embeddings
         action_emb = self.action_emb(noised_action)
         sigma_emb = self.sigma_emb(sigma.view(-1, 1, 1).log() / 4)
-        obs_emb = self.obs_emb(obs)
+        obs_emb = self.obs_emb(data_dict["obs"])
+        vel_cmd_emb = self.vel_cmd_emb(data_dict["vel_cmd"]).unsqueeze(1)
 
-        vel_cmd = data_dict["vel_cmd"]
-        vel_cmd_emb = self.vel_cmd_emb(vel_cmd).unsqueeze(1)
+        skill = self.mask_cond(data_dict["skill"], uncond)
+        skill_emb = self.skill_emb(skill)
 
-        # skill = data_dict["skill"]
-        # skill = self.mask_cond(skill, uncond)
-        # skill_emb = self.skill_emb(skill).unsqueeze(1)
-
-        cond = torch.cat([sigma_emb, vel_cmd_emb, obs_emb], dim=1)
+        cond = torch.cat([sigma_emb, vel_cmd_emb, skill_emb, obs_emb], dim=1)
         cond += self.cond_pos_emb
         cond = self.encoder(cond)
 
