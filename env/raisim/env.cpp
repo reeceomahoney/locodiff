@@ -10,10 +10,11 @@
 
 #include "Yaml.hpp"
 #include "actuation_dynamics/Actuation.hpp"
-#include "common.cpp"
 #include "helpers/command.cpp"
 #include "helpers/observation.cpp"
 #include "helpers/visualization.cpp"
+
+using EigenVec = Eigen::Matrix<float, -1, 1>;
 
 namespace raisim {
 

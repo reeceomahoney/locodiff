@@ -6,9 +6,14 @@
 #ifndef SRC_RAISIMGYMVECENV_HPP
 #define SRC_RAISIMGYMVECENV_HPP
 
+#include <Eigen/Core>
+
 #include "Yaml.hpp"
 #include "omp.h"
-#include "common.cpp"
+
+using EigenRowMajorMat = Eigen::Matrix<float, -1, -1, Eigen::RowMajor>;
+using EigenVec = Eigen::Matrix<float, -1, 1>;
+using EigenBoolVec = Eigen::Matrix<bool, -1, 1>;
 
 namespace raisim {
 
@@ -217,57 +222,6 @@ class VecEnv {
   float obCount_ = 1e-4;
   EigenVec recentMean_, recentVar_, delta_;
   EigenVec epsilon;
-};
-
-class NormalDistribution {
- public:
-  NormalDistribution() : normDist_(0.f, 1.f) {}
-
-  float sample() { return normDist_(gen_); }
-
-  void seed(int i) { gen_.seed(i); }
-
- private:
-  std::normal_distribution<float> normDist_;
-  static thread_local std::mt19937 gen_;
-};
-
-thread_local std::mt19937 raisim::NormalDistribution::gen_;
-
-class NormalSampler {
- public:
-  NormalSampler(int dim) {
-    dim_ = dim;
-    normal_.resize(THREAD_COUNT);
-    seed(0);
-  }
-
-  void seed(int seed) {
-    // this ensures that every thread gets a different seed
-#pragma omp parallel for schedule(static, 1)
-    for (int i = 0; i < THREAD_COUNT; i++) normal_[0].seed(i + seed);
-  }
-
-  inline void sample(Eigen::Ref<EigenRowMajorMat> &mean,
-                     Eigen::Ref<EigenVec> &std,
-                     Eigen::Ref<EigenRowMajorMat> &samples,
-                     Eigen::Ref<EigenVec> &log_prob) {
-    int agentNumber = log_prob.rows();
-
-#pragma omp parallel for schedule(auto)
-    for (int agentId = 0; agentId < agentNumber; agentId++) {
-      log_prob(agentId) = 0;
-      for (int i = 0; i < dim_; i++) {
-        const float noise = normal_[omp_get_thread_num()].sample();
-        samples(agentId, i) = mean(agentId, i) + noise * std(i);
-        log_prob(agentId) -= noise * noise * 0.5 + std::log(std(i));
-      }
-      log_prob(agentId) -= float(dim_) * 0.9189385332f;
-    }
-  }
-
-  int dim_;
-  std::vector<NormalDistribution> normal_;
 };
 
 }  // namespace raisim
