@@ -8,11 +8,11 @@
 #include <cstdlib>
 #include <set>
 
-#include "Yaml.hpp"
+#include "yaml/Yaml.hpp"
 #include "actuation_dynamics/Actuation.hpp"
-#include "helpers/command.cpp"
-#include "helpers/observation.cpp"
-#include "helpers/visualization.cpp"
+#include "command.cpp"
+#include "observation.cpp"
+#include "visualization.cpp"
 
 using EigenVec = Eigen::Matrix<float, -1, 1>;
 

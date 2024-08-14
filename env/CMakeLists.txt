@@ -27,7 +27,7 @@ include_directories(${EIGEN3_INCLUDE_DIRS})
 # build
 # ##############################################################################
 
-pybind11_add_module(${PROJECT_NAME} raisim/pybind_module.cpp raisim/Yaml.cpp)
+pybind11_add_module(${PROJECT_NAME} raisim/pybind_module.cpp dependencies/yaml/Yaml.cpp)
 target_compile_definitions(
   ${PROJECT_NAME}
   PRIVATE "$<$<CONFIG:Release>:EIGEN_NO_DEBUG>" EIGEN_DONT_PARALLELIZE)
@@ -38,5 +38,8 @@ target_compile_options(${PROJECT_NAME} PRIVATE -fPIC -O3 -flto -mno-avx2)
 target_link_libraries(${PROJECT_NAME} PRIVATE raisim::raisim)
 target_include_directories(
   ${PROJECT_NAME}
-  PUBLIC dependencies/networks_minimal/include
-         dependencies/actuation_dynamics/include ${EIGEN3_INCLUDE_DIRS})
+  PUBLIC 
+  dependencies
+  dependencies/networks_minimal/include
+  dependencies/actuation_dynamics/include
+  ${EIGEN3_INCLUDE_DIRS})

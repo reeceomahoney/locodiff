@@ -8,7 +8,7 @@
 
 #include <Eigen/Core>
 
-#include "Yaml.hpp"
+#include "yaml/Yaml.hpp"
 #include "omp.h"
 
 using EigenRowMajorMat = Eigen::Matrix<float, -1, -1, Eigen::RowMajor>;
