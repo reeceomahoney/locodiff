@@ -146,7 +146,6 @@ class RaisimEnv:
             "avrg_reward": avrg_reward,
             "std_reward": std_reward,
             "avrg_height_reward": avrg_height_reward,
-            "std_height_reward": std_height_reward,
             "total_done": total_dones.mean(),
         }
         return return_dict
