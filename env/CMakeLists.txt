@@ -27,7 +27,7 @@ include_directories(${EIGEN3_INCLUDE_DIRS})
 # build
 # ##############################################################################
 
-pybind11_add_module(${PROJECT_NAME} raisim/pybind_module.cpp dependencies/yaml/Yaml.cpp)
+pybind11_add_module(${PROJECT_NAME} src/pybind_module.cpp dependencies/yaml/Yaml.cpp)
 target_compile_definitions(
   ${PROJECT_NAME}
   PRIVATE "$<$<CONFIG:Release>:EIGEN_NO_DEBUG>" EIGEN_DONT_PARALLELIZE)
