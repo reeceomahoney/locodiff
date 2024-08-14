@@ -8,11 +8,11 @@
 #include <cstdlib>
 #include <set>
 
-#include "yaml/Yaml.hpp"
 #include "actuation_dynamics/Actuation.hpp"
 #include "command.cpp"
 #include "observation.cpp"
 #include "visualization.cpp"
+#include "yaml/Yaml.hpp"
 
 using EigenVec = Eigen::Matrix<float, -1, 1>;
 
@@ -32,45 +32,50 @@ class Env {
         velocityCommandHandler_(cfg["velocity_command"],
                                 cfg["control_dt"].template As<double>()),
         visualizationHandler_(visualizable) {
-    /// create world
+    initWorld();
+    initRobot();
+    initContainers();
+    initGains();
+    initMaterials();
+    initServer();
+  }
+
+  void initWorld() {
     world_ = std::make_unique<raisim::World>();
+    setControlTimeStep(cfg_["control_dt"].template As<double>());
+    setSimulationTimeStep(cfg_["simulation_dt"].template As<double>());
+    maxEpisodeLength_ = std::floor(cfg_["max_time"].template As<double>() /
+                                   cfg_["control_dt"].template As<double>());
+    enableDynamicsRandomization_ =
+        cfg_["enable_dynamics_randomization"].template As<bool>();
+  }
 
-    setControlTimeStep(cfg["control_dt"].template As<double>());
-    setSimulationTimeStep(cfg["simulation_dt"].template As<double>());
-
-    /// add objects
+  void initRobot() {
     robot_ = world_->addArticulatedSystem(
         resourceDir_ + "/models/anymal_d/urdf/anymal_d.urdf");
-    robot_->setName("anymal_c");
+    robot_->setName("anymal_d");
     robot_->setControlMode(raisim::ControlMode::PD_PLUS_FEEDFORWARD_TORQUE);
+  }
 
-    baseMassMean_ = robot_->getMass(0);
-
-    auto ground = world_->addGround(0., "ground_material");
-
-    /// get robot data
+  void initContainers() {
+    obDim_ = 48;
     gcDim_ = static_cast<int>(robot_->getGeneralizedCoordinateDim());
     gvDim_ = static_cast<int>(robot_->getDOF());
     nJoints_ = gvDim_ - 6;
+    baseMassMean_ = robot_->getMass(0);
 
-    /// initialize containers
     gc_.setZero(gcDim_);
-    gc_init_.setZero(gcDim_);
     gv_.setZero(gvDim_);
+    gc_init_.setZero(gcDim_);
     gv_init_.setZero(gvDim_);
     pTarget_.setZero(gcDim_);
-    vTarget_.setZero(gvDim_);
     pTarget12_.setZero(nJoints_);
-    prevPTarget12_.setZero(nJoints_);
-    contacts_.setZero(4);
-
-    /// this is nominal configuration of anymal_c
     gc_init_ = observationHandler_.getNominalGeneralizedCoordinates();
+  }
 
-    useActuatorNetwork_ = cfg["use_actuator_network"].template As<bool>();
-
-    /// set pd gains
+  void initGains() {
     Eigen::VectorXd jointPgain(gvDim_), jointDgain(gvDim_);
+    useActuatorNetwork_ = cfg_["use_actuator_network"].template As<bool>();
     jointPgain.setZero();
     jointDgain.setZero();
 
@@ -81,63 +86,34 @@ class Env {
 
     robot_->setPdGains(jointPgain, jointDgain);
     robot_->setGeneralizedForce(Eigen::VectorXd::Zero(gvDim_));
+  }
 
-    /// MUST BE DONE FOR ALL ENVIRONMENTS
-    obDim_ = 48;
-    actionDim_ = nJoints_;
-    actionMean_.setZero(actionDim_);
-    actionStd_.setZero(actionDim_);
-    obDouble_.setZero(obDim_);
-    prevPTarget12_ = actionMean_;
+  void initMaterials() {
+    world_->addGround(0., "ground");
 
-    /// action scaling
-    actionMean_ = gc_init_.tail(nJoints_);
-    actionStd_.setConstant(cfg["action_scaling"].template As<double>());
-
-    /// Set the material property for each of the collision bodies of the robot
     for (auto &collisionBody : robot_->getCollisionBodies()) {
       if (collisionBody.colObj->name.find("FOOT") != std::string::npos) {
-        collisionBody.setMaterial("foot_material");
+        collisionBody.setMaterial("foot");
       } else {
-        collisionBody.setMaterial("robot_material");
+        collisionBody.setMaterial("body");
       }
     }
 
-    auto materialPairGroundFootProperties =
-        world_->getMaterialPairProperties("ground_material", "foot_material");
-    world_->setMaterialPairProp("ground_material", "foot_material", 0.6,
-                                materialPairGroundFootProperties.c_r,
-                                materialPairGroundFootProperties.r_th);
+    // set friction properties
+    auto groundFootProps = world_->getMaterialPairProperties("ground", "foot");
+    world_->setMaterialPairProp("ground", "foot", 0.6, groundFootProps.c_r,
+                                groundFootProps.r_th);
+    auto groundRobotProbs = world_->getMaterialPairProperties("ground", "body");
+    world_->setMaterialPairProp("ground", "body", 0.4, groundRobotProbs.c_r,
+                                groundRobotProbs.r_th);
+  }
 
-    auto materialPairGroundRobotProperties =
-        world_->getMaterialPairProperties("ground_material", "robot_material");
-    world_->setMaterialPairProp("ground_material", "robot_material", 0.4,
-                                materialPairGroundRobotProperties.c_r,
-                                materialPairGroundRobotProperties.r_th);
-
-    /// Episode Length
-    maxEpisodeLength_ = std::floor(cfg_["max_time"].template As<double>() /
-                                   cfg_["control_dt"].template As<double>());
-
-    /// Dynamics Randomization
-    enableDynamicsRandomization_ =
-        cfg["enable_dynamics_randomization"].template As<bool>();
-
-    /// Frame Indices
-    frameIdxs_.setZero(5);
-    frameIdxs_ << robot_->getFrameIdxByName("ROOT"),
-        robot_->getFrameIdxByName("LF_shank_fixed_LF_FOOT"),
-        robot_->getFrameIdxByName("RF_shank_fixed_RF_FOOT"),
-        robot_->getFrameIdxByName("LH_shank_fixed_LH_FOOT"),
-        robot_->getFrameIdxByName("RH_shank_fixed_RH_FOOT");
-
-    /// visualize if it is the first environment
+  void initServer() {
     if (visualizable_) {
       server_ = std::make_unique<raisim::RaisimServer>(world_.get());
-      server_->launchServer(cfg["server_port"].template As<int>());
+      server_->launchServer(cfg_["server_port"].template As<int>());
       server_->focusOn(robot_);
       visualizationHandler_.setServer(server_);
-      server_->addVisualSphere("goal", 0.1, 1, 0, 0, 1);
     }
   }
 
@@ -203,12 +179,9 @@ class Env {
     }
 
     velocityCommandHandler_.reset(robot_->getBaseOrientation().e());
-    prevPTarget12_ = actionMean_;
-
     observationHandler_.reset(robot_,
                               velocityCommandHandler_.getVelocityCommand());
     actuation_.reset();
-
     stepCount_ = 0;
   }
 
@@ -344,48 +317,48 @@ class Env {
 
   int getObDim() { return obDim_; }
 
-  int getActionDim() { return actionDim_; }
+  int getActionDim() { return nJoints_; }
 
  private:
+  // world and simulation
   std::unique_ptr<raisim::World> world_;
   double simulation_dt_ = 0.001;
   double control_dt_ = 0.01;
   std::string resourceDir_;
   Yaml::Node cfg_;
-  int obDim_ = 0, actionDim_ = 0;
-  std::unique_ptr<raisim::RaisimServer> server_;
 
+  // dimensions
+  int obDim_ = 0;
   int gcDim_, gvDim_, nJoints_;
-  bool visualizable_ = false, visualizing_ = false;
+  Eigen::VectorXd gc_init_, gv_init_, gc_, gv_, pTarget_, pTarget12_;
+  Eigen::Vector3d goalPosition_;
+
+  // robot and server
   raisim::ArticulatedSystem *robot_;
-  Eigen::VectorXd gc_init_, gv_init_, gc_, gv_, pTarget_, pTarget12_, vTarget_,
-      prevPTarget12_;
-  Eigen::VectorXd actionMean_, actionStd_, obDouble_, contacts_, frameIdxs_;
-  Eigen::Vector3d bodyLinearVel_, bodyAngularVel_, goalPosition_;
+  std::unique_ptr<raisim::RaisimServer> server_;
+  bool visualizable_ = false, visualizing_ = false;
 
-  // Actuator network
+  // Actuation
   Actuation actuation_;
-
-  // Conditional Reset
-  int maxEpisodeLength_;
-  int stepCount_ = 0;
-
-  /// Dynamics Randomization Parameters
-  bool enableDynamicsRandomization_ = false;
-  double baseMassMean_;
-
-  bool useActuatorNetwork_ = true;
-
   double actuationPositionErrorInputScaling_ = 1.;
   double actuationVelocityInputScaling_ = 1.;
   double actuationOutputTorqueScaling_ = 1.;
+  bool useActuatorNetwork_ = true;
 
-  // Randomization engine
+  // episode
+  int maxEpisodeLength_;
+  int stepCount_ = 0;
+
+  // dynamics dandomization
+  bool enableDynamicsRandomization_ = false;
+  double baseMassMean_;
+
+  // randomization engine
   std::normal_distribution<double> normalDistribution_;
   std::uniform_real_distribution<double> uniformRealDistribution_;
   thread_local static std::mt19937 gen_;
 
-  // Helper Classes
+  // helpers
   VelocityCommand velocityCommandHandler_;
   ObservationHandler observationHandler_;
   VisualizationHandler visualizationHandler_;

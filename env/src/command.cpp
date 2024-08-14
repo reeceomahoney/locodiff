@@ -2,6 +2,7 @@
 #define _LFMC_GYM_AVC_COMMAND_HPP
 
 #include "raisim/World.hpp"
+#include "yaml/Yaml.hpp"
 
 enum VelocityCommandMode { Zero, Heading, Lateral, Yaw, Direction, Constant };
 

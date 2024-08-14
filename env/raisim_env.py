@@ -94,7 +94,6 @@ class RaisimEnv:
         for _ in range(self.eval_n_times):
             self.env.reset()
             agent.reset()
-            self.generate_goal()
             done = np.array([False])
             obs, vel_cmd = self.observe()
 
