@@ -8,6 +8,7 @@
 
 #include "Yaml.hpp"
 #include "omp.h"
+#include "common.cpp"
 
 namespace raisim {
 

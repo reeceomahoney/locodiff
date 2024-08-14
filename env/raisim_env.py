@@ -55,8 +55,8 @@ class RaisimEnv:
     def step(self, action):
         self.env.step(action, self._done)
         obs, vel_cmd = self.observe()
-        reward = self.compute_reward(obs, vel_cmd)
-        return obs, vel_cmd, reward, self._done.copy()
+        rewards = self.compute_reward(obs, vel_cmd)
+        return obs, vel_cmd, rewards, self._done.copy()
 
     def observe(self, update_statistics=False):
         self.env.observe(self._observation, update_statistics)
@@ -67,8 +67,6 @@ class RaisimEnv:
         return obs, vel_cmd
 
     def reset(self, conditional_reset=False):
-        self._reward = np.zeros(self.num_envs, dtype=np.float32)
-
         if not conditional_reset:
             self.env.reset()
         else:
@@ -89,6 +87,7 @@ class RaisimEnv:
         log.info("Starting trained model evaluation")
 
         total_rewards = np.zeros(self.num_envs, dtype=np.float32)
+        height_rewards = np.zeros(self.num_envs, dtype=np.float32)
         total_dones = np.zeros(self.num_envs, dtype=np.int64)
         self.images = []
 
@@ -99,8 +98,8 @@ class RaisimEnv:
             done = np.array([False])
             obs, vel_cmd = self.observe()
 
-            skill = torch.zeros(self.num_envs, 2).to(self.device)
-            skill[:, 0] = 1
+            self.skill = torch.zeros(self.num_envs, 2).to(self.device)
+            self.skill[:, 0] = 1
 
             # now run the agent for n steps
             action = self.nominal_joint_pos
@@ -115,18 +114,21 @@ class RaisimEnv:
                     total_dones += np.ones(done.shape, dtype="int64")
 
                 if n == 125:
-                    skill = torch.zeros(self.num_envs, 2).to(self.device)
-                    skill[:, 1] = 1
+                    self.skill = torch.zeros(self.num_envs, 2).to(self.device)
+                    self.skill[:, 1] = 1
 
                 pred_action = agent.predict(
-                    {"obs": obs, "skill": skill, "vel_cmd": vel_cmd},
+                    {"obs": obs, "skill": self.skill, "vel_cmd": vel_cmd},
                     new_sampling_steps=n_inference_steps,
                 )
 
                 for i in range(self.T_action):
-                    obs, vel_cmd, reward, done = self.step(action)
-                    total_rewards += reward
+                    obs, vel_cmd, rewards, done = self.step(action)
+                    total_rewards += rewards[0]
+                    height_rewards += rewards[1]
                     action = pred_action[:, i]
+
+                    base_poses.append(float(self.get_base_position()[:, -1]))
 
                     delta = time.time() - start
                     if delta < 0.04 and real_time:
@@ -137,10 +139,16 @@ class RaisimEnv:
         avrg_reward = total_rewards.mean()
         std_reward = total_rewards.std()
 
+        height_rewards /= self.eval_n_times * self.eval_n_steps
+        avrg_height_reward = height_rewards.mean()
+        std_height_reward = height_rewards
+
         log.info("... finished trained model evaluation")
         return_dict = {
             "avrg_reward": avrg_reward,
             "std_reward": std_reward,
+            "avrg_height_reward": avrg_height_reward,
+            "std_height_reward": std_height_reward,
             "total_done": total_dones.mean(),
         }
         return return_dict
@@ -186,11 +194,22 @@ class RaisimEnv:
         self.goal = torch.from_numpy(self.goal).to(self.device)
 
     def compute_reward(self, obs, vel_cmd):
+        # velocity reward
         lin_vel = obs[:, 30:32]
         ang_vel = obs[:, 17:18]
         vel = torch.cat([lin_vel, ang_vel], dim=-1)
         reward = torch.exp(-(vel - vel_cmd).pow(2))
-        return reward.mean(dim=-1).cpu().numpy()
+        reward.mean(dim=-1).cpu().numpy()
+
+        # height reward
+        height = float(self.get_base_position()[:, -1])
+        if self.skill[0, 0] == 1:
+            height_reward = torch.exp(-(height - 0.6).pow(2))
+        elif self.skill[0, 1] == 1:
+            height_reward = torch.exp(-(height - 0.5).pow(2))
+        height_reward = height_reward.cpu().numpy()
+
+        return reward, height_reward
 
     def get_base_position(self):
         self.env.getBasePosition(self._base_position)
