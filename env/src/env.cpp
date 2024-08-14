@@ -254,10 +254,10 @@ class Env {
   bool isTerminalState() {
     /// if the contact body is not feet
     for (auto &contact : robot_->getContacts()) {
-      if ((contact.getCollisionBodyA()->material == "ground_material" &&
-           contact.getCollisionBodyB()->material != "foot_material") ||
-          (contact.getCollisionBodyA()->material == "foot_material" &&
-           contact.getCollisionBodyB()->material != "ground_material")) {
+      if ((contact.getCollisionBodyA()->material == "ground" &&
+           contact.getCollisionBodyB()->material != "foot") ||
+          (contact.getCollisionBodyA()->material == "foot" &&
+           contact.getCollisionBodyB()->material != "ground")) {
         return true;
       }
     }

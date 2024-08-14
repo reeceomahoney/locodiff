@@ -75,15 +75,7 @@ class RaisimEnv:
 
         return self.observe()
 
-    def simulate(
-        self,
-        agent,
-        n_inference_steps=None,
-        real_time=False,
-    ):
-        """
-        Test the agent on the environment with the given goal function
-        """
+    def simulate(self, agent, n_inference_steps=None, real_time=False):
         log.info("Starting trained model evaluation")
 
         total_rewards = np.zeros(self.num_envs, dtype=np.float32)
@@ -200,9 +192,9 @@ class RaisimEnv:
         # height reward
         height = torch.from_numpy(self.get_base_position()[:, -1])
         if self.skill[0, 0] == 1:
-            height_reward = torch.exp(-100*(height - 0.6).pow(2))
+            height_reward = torch.exp(-100 * (height - 0.6).pow(2))
         elif self.skill[0, 1] == 1:
-            height_reward = torch.exp(-100*(height - 0.5).pow(2))
+            height_reward = torch.exp(-100 * (height - 0.5).pow(2))
         height_reward = height_reward.cpu().numpy()
 
         return reward, height_reward
