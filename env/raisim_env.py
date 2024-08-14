@@ -197,10 +197,10 @@ class RaisimEnv:
         ang_vel = obs[:, 17:18]
         vel = torch.cat([lin_vel, ang_vel], dim=-1)
         reward = torch.exp(-(vel - vel_cmd).pow(2))
-        reward.mean(dim=-1).cpu().numpy()
+        reward = reward.mean(dim=-1).cpu().numpy()
 
         # height reward
-        height = float(self.get_base_position()[:, -1])
+        height = torch.from_numpy(self.get_base_position()[:, -1])
         if self.skill[0, 0] == 1:
             height_reward = torch.exp(-(height - 0.6).pow(2))
         elif self.skill[0, 1] == 1:
