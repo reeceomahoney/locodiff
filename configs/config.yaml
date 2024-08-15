@@ -2,7 +2,7 @@ defaults:
   - agents: agent
   - _self_
 
-data_path: walk_mid
+data_path: walk_mid_crawl
 
 hydra:
   run:
@@ -21,7 +21,7 @@ T_action: 1
 
 action_dim: 12
 obs_dim: 33
-skill_dim: 2
+skill_dim: 3
 
 # policy model params
 hidden_dim: 256

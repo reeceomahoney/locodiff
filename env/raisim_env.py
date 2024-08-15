@@ -36,6 +36,7 @@ class RaisimEnv:
         self.num_obs = self.env.getObDim()
         self.num_acts = self.env.getActionDim()
         self.T_action = cfg.T_action
+        self.skill_dim = cfg.skill_dim
         self.eval_n_times = cfg.env.eval_n_times
         self.eval_n_steps = cfg.env.eval_n_steps
         self.device = cfg.device
@@ -89,7 +90,7 @@ class RaisimEnv:
             done = np.array([False])
             obs, vel_cmd = self.observe()
 
-            self.skill = torch.zeros(self.num_envs, 2).to(self.device)
+            self.skill = torch.zeros(self.num_envs, self.skill_dim).to(self.device)
             self.skill[:, 0] = 1
 
             # now run the agent for n steps
@@ -105,7 +106,7 @@ class RaisimEnv:
                     total_dones += np.ones(done.shape, dtype="int64")
 
                 if n == 125:
-                    self.skill = torch.zeros(self.num_envs, 2).to(self.device)
+                    self.skill = torch.zeros(self.num_envs, self.skill_dim).to(self.device)
                     self.skill[:, 1] = 1
 
                 pred_action = agent.predict(

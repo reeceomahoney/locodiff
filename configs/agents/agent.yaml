@@ -26,6 +26,7 @@ update_ema_every_n_steps: ${update_ema_every_n_steps}
 
 obs_dim: ${obs_dim}
 action_dim: ${action_dim}
+skill_dim: ${skill_dim}
 T: ${T}
 T_cond: ${T_cond}
 T_action: ${T_action}

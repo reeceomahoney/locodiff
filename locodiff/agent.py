@@ -38,6 +38,7 @@ class Agent:
         T_action: int,
         obs_dim: int,
         action_dim: int,
+        skill_dim: int,
         num_envs: int,
         sim_every_n_steps: int,
         weight_decay: float,
@@ -50,7 +51,7 @@ class Agent:
         self.T_cond = T_cond
         self.T_action = T_action
         self.obs_hist = torch.zeros((num_envs, T_cond, obs_dim), device=device)
-        self.skill_hist = torch.zeros((num_envs, T_cond, 2), device=device)
+        self.skill_hist = torch.zeros((num_envs, T_cond, skill_dim), device=device)
 
         total_params = sum(p.numel() for p in self.model.get_params())
         log.info("Parameter count: {:e}".format(total_params))
