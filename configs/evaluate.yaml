@@ -18,7 +18,7 @@ sigma_min: 0.001
 sigma_max: 80
 cond_lambda: 1
 device: cuda
-server_port: 8082
+server_port: 8080
 
 # chose what to evaluate
 test_rollout: True
