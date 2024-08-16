@@ -44,6 +44,7 @@ class Agent:
         weight_decay: float,
         cond_lambda: int,
         cond_mask_prob: float,
+        noise_scheduler: DictConfig,
     ):
         # model
         self.model = hydra.utils.instantiate(model).to(device)
@@ -81,6 +82,7 @@ class Agent:
         self.sigma_max = sigma_max
         self.cond_lambda = cond_lambda
         self.cond_mask_prob = cond_mask_prob
+        self.noise_scheduler = hydra.utils.instantiate(noise_scheduler)
 
         # env
         self.obs_dim = obs_dim
@@ -155,9 +157,14 @@ class Agent:
         self.model.train()
         self.model.training = True
 
-        noise = torch.randn_like(data_dict["action"])
-        sigma = self.make_sample_density(len(noise))
-        loss = self.model.loss(noise, sigma, data_dict)
+        action = data_dict["action"]
+        noise = torch.randn_like(action)
+        timesteps = torch.randint(0, self.num_sampling_steps, (noise.shape[0],))
+        noise_trajectory = self.noise_scheduler.add_noise(
+            action, noise, timesteps)
+        pred = self.model.loss(noise_trajectory, timesteps, data_dict)
+
+        loss = torch.functional.mse_loss(pred, noise)
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -184,11 +191,9 @@ class Agent:
         self.model.training = False
 
         # get the sigma distribution for sampling based on Karras et al. 2022
-        sigmas = utils.get_sigmas_exponential(
-            self.num_sampling_steps, self.sigma_min, self.sigma_max, self.device
-        )
         noise = torch.randn_like(data_dict["action"]) * self.sigma_max
-        x_0 = self.sample_ddim(noise, sigmas, data_dict, predict=False)
+        self.noise_scheduler.set_timesteps(self.num_sampling_steps)
+        x_0 = self.sample_ddpm(noise, data_dict)
 
         mse = nn.functional.mse_loss(x_0, data_dict["action"], reduction="none")
         total_mse = mse.mean().item()
@@ -245,7 +250,7 @@ class Agent:
         )
         noise *= self.sigma_max
 
-        x_0 = self.sample_ddim(noise, sigmas, data_dict, predict=True)
+        x_0 = self.sample_ddpm(noise, data_dict)
 
         # get the action for the current timestep
         x_0 = self.scaler.clip(x_0)
@@ -269,79 +274,17 @@ class Agent:
         return batch
 
     @torch.no_grad()
-    def sample_ddim(
-        self, noise: torch.Tensor, sigmas: torch.Tensor, data_dict: dict, predict: bool
-    ):
+    def sample_ddpm( self, noise: torch.Tensor, data_dict: dict):
         """
         Perform inference using the DDIM sampler
         """
         x_t = noise
-        s_in = x_t.new_ones([x_t.shape[0]])
-        sigma_fn = lambda t: t.neg().exp()
-        t_fn = lambda sigma: sigma.log().neg()
-
-        for i in range(len(sigmas) - 1):
-            if predict:
-                denoised = self.cfg_forward(x_t, sigmas[i] * s_in, data_dict)
-            else:
-                denoised = self.model(x_t, sigmas[i] * s_in, data_dict)
-            t, t_next = t_fn(sigmas[i]), t_fn(sigmas[i + 1])
-            h = t_next - t
-            x_t = (sigma_fn(t_next) / sigma_fn(t)) * x_t - (-h).expm1() * denoised
+        
+        for t in self.noise_scheduler.timesteps:
+            output = self.model(x_t, t, data_dict)
+            x_t = self.noise_scheduler.step(output, t, x_t).prev_sample
 
         return x_t
-
-    def sample_euler_ancestral(
-        self,
-        noise,
-        sigmas,
-        data_dict,
-        predict,
-        eta=1.0,
-    ):
-        """
-        Ancestral sampling with Euler method steps.
-
-        1. compute dx_{i}/dt at the current timestep
-        2. get \sigma_{up} and \sigma_{down} from ancestral method
-        3. compute x_{t-1} = x_{t} + dx_{t}/dt * \sigma_{down}
-        4. Add additional noise after the update step x_{t-1} =x_{t-1} + z * \sigma_{up}
-        """
-        x_t = noise
-        s_in = x_t.new_ones([x_t.shape[0]])
-
-        for i in range(len(sigmas) - 1):
-            # compute x_{t-1}
-            if predict:
-                denoised = self.cfg_forward(x_t, sigmas[i] * s_in, data_dict)
-            else:
-                denoised = self.model(x_t, sigmas[i] * s_in, data_dict)
-            # get ancestral steps
-            sigma_down, sigma_up = utils.get_ancestral_step(
-                sigmas[i], sigmas[i + 1], eta=eta
-            )
-            # compute dx/dt
-            d = (x_t - denoised) / sigmas[i]
-            # compute dt based on sigma_down value
-            dt = sigma_down - sigmas[i]
-            # update current action
-            x_t = x_t + d * dt
-            if sigma_down > 0:
-                x_t = x_t + torch.randn_like(x_t) * sigma_up
-
-        return x_t
-
-    def cfg_forward(self, x_t: torch.Tensor, sigma: torch.Tensor, data_dict: dict):
-        """
-        Classifier-free guidance sample
-        """
-        out = self.model(x_t, sigma, data_dict)
-
-        if self.cond_mask_prob > 0:
-            out_uncond = self.model(x_t, sigma, data_dict, uncond=True)
-            out = out_uncond + self.cond_lambda * (out - out_uncond)
-
-        return out
 
     def load_pretrained_model(self, weights_path: str, **kwargs) -> None:
         self.model.load_state_dict(

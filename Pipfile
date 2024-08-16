@@ -20,6 +20,7 @@ hydra-core = "*"
 wandb = "*"
 scikit-learn = "*"
 pybind11 = {extras = ["global"], version = "*"}
+diffusers = "*"
 
 [dev-packages]
 
