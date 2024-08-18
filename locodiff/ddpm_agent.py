@@ -58,7 +58,7 @@ class Agent:
         log.info("Parameter count: {:e}".format(total_params))
 
         # training
-        optim_groups = self.model.inner_model.get_optim_groups(weight_decay)
+        optim_groups = self.model.get_optim_groups(weight_decay)
         self.optimizer = hydra.utils.instantiate(optimization, optim_groups)
         self.lr_scheduler = hydra.utils.instantiate(
             lr_scheduler, optimizer=self.optimizer
@@ -160,11 +160,10 @@ class Agent:
         action = data_dict["action"]
         noise = torch.randn_like(action)
         timesteps = torch.randint(0, self.num_sampling_steps, (noise.shape[0],))
-        noise_trajectory = self.noise_scheduler.add_noise(
-            action, noise, timesteps)
-        pred = self.model.loss(noise_trajectory, timesteps, data_dict)
+        noise_trajectory = self.noise_scheduler.add_noise(action, noise, timesteps)
+        pred = self.model(noise_trajectory, timesteps, data_dict)
 
-        loss = torch.functional.mse_loss(pred, noise)
+        loss = torch.nn.functional.mse_loss(pred, noise)
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -241,14 +240,9 @@ class Agent:
         self.model.eval()
 
         # get the sigma distribution for the desired sampling method
-        sigmas = utils.get_sigmas_exponential(
-            n_sampling_steps, self.sigma_min, self.sigma_max, self.device
-        )
-
         noise = torch.randn(
             (self.num_envs, self.T, self.action_dim), device=self.device
         )
-        noise *= self.sigma_max
 
         x_0 = self.sample_ddpm(noise, data_dict)
 
@@ -274,14 +268,14 @@ class Agent:
         return batch
 
     @torch.no_grad()
-    def sample_ddpm( self, noise: torch.Tensor, data_dict: dict):
+    def sample_ddpm(self, noise: torch.Tensor, data_dict: dict):
         """
         Perform inference using the DDIM sampler
         """
         x_t = noise
-        
+
         for t in self.noise_scheduler.timesteps:
-            output = self.model(x_t, t, data_dict)
+            output = self.model(x_t, t.expand(x_t.shape[0]), data_dict)
             x_t = self.noise_scheduler.step(output, t, x_t).prev_sample
 
         return x_t

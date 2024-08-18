@@ -166,7 +166,7 @@ class DiffusionTransformer(nn.Module):
     def forward(self, noised_action, t, data_dict, uncond=False):
         # embeddings
         action_emb = self.action_emb(noised_action)
-        t_emb = self.t_emb(t.view(-1, 1, 1))
+        t_emb = self.t_emb(t.view(-1, 1, 1).float().to(self.device))
         obs_emb = self.obs_emb(data_dict["obs"])
         vel_cmd_emb = self.vel_cmd_emb(data_dict["vel_cmd"]).unsqueeze(1)
 

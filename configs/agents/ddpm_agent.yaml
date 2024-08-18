@@ -1,4 +1,4 @@
-_target_: locodiff.agent.Agent
+_target_: locodiff.ddpm_agent.Agent
 _recursive_: false
 
 optimization:
@@ -46,7 +46,7 @@ dataset_fn:
   num_workers: 4
 
 model:
-  _target_: locodiff.transformer.DiffusionTransformer
+  _target_: locodiff.ddpm_transformer.DiffusionTransformer
   obs_dim: ${obs_dim}
   skill_dim: ${skill_dim}
   act_dim: ${action_dim}
