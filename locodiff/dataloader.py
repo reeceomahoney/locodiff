@@ -13,11 +13,13 @@ class ExpertDataset(Dataset):
         data_directory: str,
         obs_dim: int,
         T_cond: int,
+        return_horizon: int,
         device="cpu",
     ):
         self.data_directory = data_directory
         self.obs_dim = obs_dim
         self.T_cond = T_cond
+        self.return_horizon = return_horizon
         self.device = device
 
         current_dir = os.path.dirname(os.path.realpath(__file__))
@@ -36,13 +38,12 @@ class ExpertDataset(Dataset):
     def load_and_process_data(self, dataset_path):
         data = np.load(dataset_path, allow_pickle=True).item()
 
-        obs = data["obs"]
+        obs = data["obs"][..., :33]
         actions = data["action"]
         vel_cmds = data["vel_cmd"]
         skills = data["skill"]
         terminals = data["terminal"]
-
-        obs = obs[..., :33]
+        torques = data["torque"]
 
         # Find episode ends
         terminals_flat = terminals.reshape(-1)
@@ -53,6 +54,7 @@ class ExpertDataset(Dataset):
         actions_splits = self.split_eps(actions, split_indices)
         vel_cmds_splits = self.split_eps(vel_cmds, split_indices)
         skills_splits = self.split_eps(skills, split_indices)
+        torques_splits = self.split_eps(torques, split_indices)
 
         max_len = max(split.shape[0] for split in obs_splits)
 
@@ -60,16 +62,30 @@ class ExpertDataset(Dataset):
         actions = self.add_padding(actions_splits, max_len, temporal=True)
         vel_cmds = self.add_padding(vel_cmds_splits, max_len, temporal=False)
         skills = self.add_padding(skills_splits, max_len, temporal=True)
+        torques = self.add_padding(torques_splits, max_len, temporal=True)
 
-        # NB: skill initial pad is the same as unconditional mask. This might be a problem.
+        # nb: skill initial pad is the same as unconditional mask. this might be a problem.
 
         masks = self.create_masks(obs_splits, max_len)
+
+        # Compute returns
+        returns = None
+        if self.return_horizon > 0:
+            returns = self.compute_returns(obs, torques, masks)
+
+            # Remove last steps if return horizon is set
+            obs = obs[:, : -self.return_horizon]
+            actions = actions[:, : -self.return_horizon]
+            skills = skills[:, : -self.return_horizon]
+            terminals = terminals[:, : -self.return_horizon]
+            masks = masks[:, : -self.return_horizon]
 
         processed_data = {
             "obs": obs,
             "action": actions,
             "vel_cmd": vel_cmds,
             "skill": skills,
+            "return": returns,
             "mask": masks,
         }
 
@@ -119,7 +135,7 @@ class ExpertDataset(Dataset):
             pad = np.pad(split, ((0, max_len - split.shape[0]), (0, 0)))
             reshaped_split = pad.reshape(-1, max_len, split.shape[1])
             x.append(reshaped_split)
-        x = np.stack(x).squeeze()
+        x = np.stack(x).squeeze(axis=1)
 
         if temporal:
             # Add initial padding to handle episode starts
@@ -147,6 +163,27 @@ class ExpertDataset(Dataset):
         masks = np.concatenate([masks_pad, masks], axis=1)
 
         return torch.from_numpy(masks).to(self.device).float()
+
+    def compute_returns(self, obs, torques, masks):
+        joint_vel = obs[..., 18:30]
+        energy = (joint_vel.abs() * torques.abs()).mean(dim=-1)
+        energy_mean = energy.mean()
+        energy_std = energy.std()
+        energy = torch.clip(
+            energy, energy_mean - 3 * energy_std, energy_mean + 3 * energy_std
+        )
+
+        horizon = self.return_horizon
+        gammas = torch.tensor([0.99**i for i in range(horizon)]).to(self.device)
+        returns = torch.zeros_like(energy[:, :-horizon])
+
+        for i in range(masks.shape[0]):
+            T = int(masks[i].sum().item())
+            for t in range(T - horizon):
+                returns[i, t] = (energy[i, t : t + horizon] * gammas).sum()
+
+        returns = torch.exp(-returns / returns.std())
+        return returns.unsqueeze(-1)
 
 
 class SlicerWrapper(Dataset):
@@ -197,9 +234,10 @@ def get_dataloaders_and_scaler(
     train_batch_size: int,
     test_batch_size: int,
     num_workers: int,
+    return_horizon: int,
 ):
     # Build the datasets
-    dataset = ExpertDataset(data_directory, obs_dim, T_cond)
+    dataset = ExpertDataset(data_directory, obs_dim, T_cond, return_horizon)
     train, val = random_split(dataset, [train_fraction, 1 - train_fraction])
     train_set = SlicerWrapper(train, T_cond, T)
     test_set = SlicerWrapper(val, T_cond, T)

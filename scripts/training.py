@@ -13,7 +13,7 @@ from env.raisim_env import RaisimEnv
 log = logging.getLogger(__name__)
 
 
-@hydra.main(config_path="../configs", config_name="ddpm_config.yaml", version_base=None)
+@hydra.main(config_path="../configs", config_name="config.yaml", version_base=None)
 def main(cfg: DictConfig) -> None:
 
     # set seeds

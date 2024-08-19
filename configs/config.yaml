@@ -2,7 +2,7 @@ defaults:
   - agents: agent
   - _self_
 
-data_path: walk_mid
+data_path: walk_torque
 
 hydra:
   run:

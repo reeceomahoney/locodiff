@@ -419,6 +419,7 @@ class Agent:
         raw_action = batch.get("action", None)
         vel_cmd = batch["vel_cmd"]
         raw_skill = batch["skill"]
+        returns = batch["return"]
 
         obs = self.scaler.scale_input(raw_obs[:, : self.T_cond])
         skill = raw_skill[:, : self.T_cond]
@@ -433,6 +434,7 @@ class Agent:
             "action": action,
             "vel_cmd": vel_cmd,
             "skill": skill,
+            "return": returns[:, self.T_cond - 1],
         }
 
         return processed_batch

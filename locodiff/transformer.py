@@ -32,13 +32,13 @@ class DiffusionTransformer(nn.Module):
         self.obs_emb = nn.Linear(self.obs_dim, self.d_model)
         self.sigma_emb = nn.Linear(1, self.d_model)
         self.vel_cmd_emb = nn.Linear(3, self.d_model)
-        self.skill_emb = nn.Linear(skill_dim, self.d_model)
+        self.return_emb = nn.Linear(1, self.d_model)
 
         self.pos_emb = (
             SinusoidalPosEmb(d_model)(torch.arange(T)).unsqueeze(0).to(device)
         )
         self.cond_pos_emb = (
-            SinusoidalPosEmb(d_model)(torch.arange(2 * T_cond + 2))
+            SinusoidalPosEmb(d_model)(torch.arange(T_cond + 3))
             .unsqueeze(0)
             .to(device)
         )
@@ -170,10 +170,10 @@ class DiffusionTransformer(nn.Module):
         obs_emb = self.obs_emb(data_dict["obs"])
         vel_cmd_emb = self.vel_cmd_emb(data_dict["vel_cmd"]).unsqueeze(1)
 
-        skill = self.mask_cond(data_dict["skill"], uncond)
-        skill_emb = self.skill_emb(skill)
+        returns = self.mask_cond(data_dict["return"], uncond)
+        return_emb = self.return_emb(returns).unsqueeze(1)
 
-        cond = torch.cat([sigma_emb, vel_cmd_emb, skill_emb, obs_emb], dim=1)
+        cond = torch.cat([sigma_emb, vel_cmd_emb, return_emb, obs_emb], dim=1)
         cond += self.cond_pos_emb
         cond = self.encoder(cond)
 
@@ -198,7 +198,7 @@ class DiffusionTransformer(nn.Module):
             cond[...] = 0
             return cond
         elif self.training and self.cond_mask_prob > 0:
-            mask = (torch.rand(cond.shape[0], 1, 1) > self.cond_mask_prob).float()
+            mask = (torch.rand(cond.shape[0], 1) > self.cond_mask_prob).float()
             mask = mask.expand_as(cond)
             cond[mask == 0] = 0
             return cond

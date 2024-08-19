@@ -37,6 +37,7 @@ class RaisimEnv:
         self.num_acts = self.env.getActionDim()
         self.T_action = cfg.T_action
         self.skill_dim = cfg.skill_dim
+        self.window = cfg.T_cond + cfg.T - 1
         self.eval_n_times = cfg.env.eval_n_times
         self.eval_n_steps = cfg.env.eval_n_steps
         self.device = cfg.device
@@ -82,6 +83,7 @@ class RaisimEnv:
         total_rewards = np.zeros(self.num_envs, dtype=np.float32)
         height_rewards = np.zeros(self.num_envs, dtype=np.float32)
         total_dones = np.zeros(self.num_envs, dtype=np.int64)
+        returns = torch.ones((self.num_envs, self.window, 1)).to(self.device)
         self.images = []
 
         for _ in range(self.eval_n_times):
@@ -106,11 +108,18 @@ class RaisimEnv:
                     total_dones += np.ones(done.shape, dtype="int64")
 
                 if n == 125:
-                    self.skill = torch.zeros(self.num_envs, self.skill_dim).to(self.device)
+                    self.skill = torch.zeros(self.num_envs, self.skill_dim).to(
+                        self.device
+                    )
                     self.skill[:, 1] = 1
 
                 pred_action = agent.predict(
-                    {"obs": obs, "skill": self.skill, "vel_cmd": vel_cmd},
+                    {
+                        "obs": obs,
+                        "skill": self.skill,
+                        "vel_cmd": vel_cmd,
+                        "return": returns,
+                    },
                     new_sampling_steps=n_inference_steps,
                 )
 
