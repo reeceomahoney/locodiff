@@ -243,6 +243,7 @@ class Agent:
         noise = torch.randn(
             (self.num_envs, self.T, self.action_dim), device=self.device
         )
+        self.noise_scheduler.set_timesteps(n_sampling_steps)
 
         x_0 = self.sample_ddpm(noise, data_dict)
 
