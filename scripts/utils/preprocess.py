@@ -40,26 +40,32 @@ def split_by_vel_cmd(obs, terminals):
 
 
 data_dir = os.path.dirname(os.path.realpath(__file__)) + "/../../data/"
-walk_data = load_data(data_dir + "raw/walk.npy")
-crawl_data = load_data(data_dir + "raw/crawl.npy")
+walk_data = load_data(data_dir + "raw/walk_torque.npy")
+# crawl_data = load_data(data_dir + "raw/crawl.npy")
 
 # roll actions (only need this for pmtg)
 act = np.roll(walk_data["actions"], -1, axis=1)
 act[:, -1] = act[:, -2].copy()
 walk_data["actions"] = act.copy()
 
-data = cat(walk_data, crawl_data)
+torque = np.roll(walk_data["torques"], -1, axis=1)
+torque[:, -1] = torque[:, -2].copy()
+walk_data["torques"] = torque.copy()
+
+# data = cat(walk_data, crawl_data)
+data = walk_data
 
 obs = data["observations"]
 act = data["actions"]
 terminals = data["terminals"]
 vel_cmds = data["vel_cmds"]
+torque = data["torques"]
 
 terminals = shift_terminals(terminals)
 
 skill = np.zeros_like(vel_cmds[..., :2])
 skill[:1000, :, 0] = 1
-skill[1000:, :, 1] = 1
+# skill[1000:, :, 1] = 1
 
 processed_data = {
     "obs": obs,
@@ -67,10 +73,11 @@ processed_data = {
     "vel_cmd": vel_cmds,
     "skill": skill,
     "terminal": terminals,
+    "torque": torque,
 }
 
 # Save the data to a new file
-name = "walk_crawl"
+name = "walk_torque"
 print(f"Saving data to {data_dir}/{name}.npy")
 print(f"Observations shape: {obs.shape}, Actions shape: {act.shape}")
 np.save(f"{data_dir}/{name}.npy", processed_data)
