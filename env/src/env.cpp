@@ -70,6 +70,7 @@ class Env {
     gv_init_.setZero(gvDim_);
     pTarget_.setZero(gcDim_);
     pTarget12_.setZero(nJoints_);
+    gf_.setZero(gvDim_);
     gc_init_ = observationHandler_.getNominalGeneralizedCoordinates();
   }
 
@@ -155,11 +156,11 @@ class Env {
           materialPairGroundFootProperties.r_th);
 
       if (useActuatorNetwork_) {
-        actuationPositionErrorInputScaling_ =
+        actPosErrScaling_ =
             std::clamp(1. + normalDistribution_(gen_) * 0.05, 0.975, 1.025);
-        actuationVelocityInputScaling_ =
+        actVelScaling_ =
             std::clamp(1. + normalDistribution_(gen_) * 0.025, 0.975, 1.025);
-        actuationOutputTorqueScaling_ =
+        actOutScaling_ =
             std::clamp(1. + normalDistribution_(gen_) * 0.05, 0.95, 1.05);
       } else {
         Eigen::VectorXd jointPgain(gvDim_), jointDgain(gvDim_);
@@ -206,20 +207,15 @@ class Env {
       /// Use the actuation network to compute torques
       if (i % int(0.005 / simulation_dt_ + 1e-10) == 0 && useActuatorNetwork_) {
         robot_->getState(gc_, gv_);
+        gf_.setZero();
 
-        Eigen::VectorXd gf(gvDim_);
-        gf.setZero();
+        auto actPosErr = actPosErrScaling_ * (pTarget12_ - gc_.tail(12));
+        auto actVel = actVelScaling_ * gv_.tail(12);
+        gf_.tail(12) =
+            actOutScaling_ * actuation_.getActuationTorques(actPosErr, actVel);
+        gf_ = gf_.cwiseMax(-80.).cwiseMin(80.);
 
-        gf.tail(12) = actuationOutputTorqueScaling_ *
-                      actuation_
-                          .getActuationTorques(
-                              actuationPositionErrorInputScaling_ *
-                                  (pTarget12_ - gc_.tail(12)),
-                              actuationVelocityInputScaling_ * gv_.tail(12))
-                          .cwiseMax(-80.)
-                          .cwiseMin(80.);
-
-        robot_->setGeneralizedForce(gf);
+        robot_->setGeneralizedForce(gf_);
       } else if (!useActuatorNetwork_) {
         robot_->setPdTarget(pTarget_, Eigen::VectorXd::Zero(gvDim_));
       }
@@ -308,6 +304,10 @@ class Env {
             .cast<float>();
   }
 
+  void getTorques(Eigen::Ref<EigenVec> torques) {
+    torques = gf_.tail(nJoints_).cast<float>();
+  }
+
   void setSimulationTimeStep(double dt) {
     simulation_dt_ = dt;
     world_->setTimeStep(dt);
@@ -330,7 +330,7 @@ class Env {
   // dimensions
   int obDim_ = 0;
   int gcDim_, gvDim_, nJoints_;
-  Eigen::VectorXd gc_init_, gv_init_, gc_, gv_, pTarget_, pTarget12_;
+  Eigen::VectorXd gc_init_, gv_init_, gc_, gv_, pTarget_, pTarget12_, gf_;
   Eigen::Vector3d goalPosition_;
 
   // robot and server
@@ -340,9 +340,9 @@ class Env {
 
   // Actuation
   Actuation actuation_;
-  double actuationPositionErrorInputScaling_ = 1.;
-  double actuationVelocityInputScaling_ = 1.;
-  double actuationOutputTorqueScaling_ = 1.;
+  double actPosErrScaling_ = 1.;
+  double actVelScaling_ = 1.;
+  double actOutScaling_ = 1.;
   bool useActuatorNetwork_ = true;
 
   // episode
