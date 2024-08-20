@@ -48,6 +48,7 @@ class RaisimEnv:
         self._base_position = np.zeros([self.num_envs, 3], dtype=np.float32)
         self._base_orientation = np.zeros([self.num_envs, 4], dtype=np.float32)
         self._done = np.zeros(self.num_envs, dtype=bool)
+        self._torques = np.zeros([self.num_envs, 12], dtype=np.float32)
 
         self.nominal_joint_pos = np.zeros([self.num_envs, 12], dtype=np.float32)
         self.env.getNominalJointPositions(self.nominal_joint_pos)
@@ -77,7 +78,7 @@ class RaisimEnv:
 
         return self.observe()
 
-    def simulate(self, agent, n_inference_steps=None, real_time=False):
+    def simulate(self, agent, real_time=False):
         log.info("Starting trained model evaluation")
 
         total_rewards = np.zeros(self.num_envs, dtype=np.float32)
@@ -120,7 +121,6 @@ class RaisimEnv:
                         "vel_cmd": vel_cmd,
                         "return": returns,
                     },
-                    new_sampling_steps=n_inference_steps,
                 )
 
                 for i in range(self.T_action):
@@ -129,10 +129,11 @@ class RaisimEnv:
                     height_rewards += rewards[1]
                     action = pred_action[:, i]
 
-                    delta = time.time() - start
-                    if delta < 0.04 and real_time:
-                        time.sleep(0.04 - delta)
-                    start = time.time()
+                    if real_time:
+                        delta = time.time() - start
+                        if delta < 0.04 and real_time:
+                            time.sleep(0.04 - delta)
+                        start = time.time()
 
         total_rewards /= self.eval_n_times * self.eval_n_steps
         avrg_reward = total_rewards.mean()
@@ -140,7 +141,6 @@ class RaisimEnv:
 
         height_rewards /= self.eval_n_times * self.eval_n_steps
         avrg_height_reward = height_rewards.mean()
-        std_height_reward = height_rewards
 
         log.info("... finished trained model evaluation")
         return_dict = {
@@ -199,6 +199,12 @@ class RaisimEnv:
         reward = torch.exp(-(vel - vel_cmd).pow(2))
         reward = reward.mean(dim=-1).cpu().numpy()
 
+        # energy reward
+        # torques = self.get_torques()
+        # joint_vel = obs[..., 18:30]
+        # energy = (joint_vel.abs() * torques.abs()).mean(dim=-1)
+        # reward = energy.cpu().numpy()
+
         # height reward
         height = torch.from_numpy(self.get_base_position()[:, -1])
         if self.skill[0, 0] == 1:
@@ -219,6 +225,10 @@ class RaisimEnv:
 
     def set_goal(self, goal):
         self.env.setGoal(goal)
+
+    def get_torques(self):
+        self.env.getTorques(self._torques)
+        return torch.from_numpy(self._torques).to(self.device)
 
     def seed(self, seed=None):
         self.env.setSeed(seed)

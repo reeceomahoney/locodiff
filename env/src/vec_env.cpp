@@ -8,8 +8,8 @@
 
 #include <Eigen/Core>
 
-#include "yaml/Yaml.hpp"
 #include "omp.h"
+#include "yaml/Yaml.hpp"
 
 using EigenRowMajorMat = Eigen::Matrix<float, -1, -1, Eigen::RowMajor>;
 using EigenVec = Eigen::Matrix<float, -1, 1>;
@@ -159,6 +159,11 @@ class VecEnv {
   void getNominalJointPositions(Eigen::Ref<EigenRowMajorMat> &nominalJointPos) {
     for (int i = 0; i < num_envs_; i++)
       environments_[i]->getNominalJointPositions(nominalJointPos.row(i));
+  }
+
+  void getTorques(Eigen::Ref<EigenRowMajorMat> &torques) {
+    for (int i = 0; i < num_envs_; i++)
+      environments_[i]->getTorques(torques.row(i));
   }
 
  private:

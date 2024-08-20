@@ -32,8 +32,8 @@ PYBIND11_MODULE(raisim_env, m) {
       .def("getBasePosition", &VecEnv<Env>::getBasePosition)
       .def("getBaseOrientation", &VecEnv<Env>::getBaseOrientation)
       .def("setGoal", &VecEnv<Env>::setGoal)
-      .def("getNominalJointPositions",
-           &VecEnv<Env>::getNominalJointPositions)
+      .def("getNominalJointPositions", &VecEnv<Env>::getNominalJointPositions)
+      .def("getTorques", &VecEnv<Env>::getTorques)
       .def(py::pickle(
           [](const VecEnv<Env>& p) {  // __getstate__ --> Pickling to Python
             /* Return a tuple that fully encodes the state of the object */
