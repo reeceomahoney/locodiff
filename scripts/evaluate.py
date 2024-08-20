@@ -34,6 +34,7 @@ def main(cfg: DictConfig) -> None:
     model_cfg.env["max_time"] = 100
     model_cfg["T_action"] = 1
     model_cfg["use_ema"] = False
+    model_cfg["evaluating"] = True
 
     # set seeds
     np.random.seed(model_cfg.seed)
