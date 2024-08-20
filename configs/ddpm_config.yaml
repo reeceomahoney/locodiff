@@ -2,7 +2,7 @@ defaults:
   - agents: ddpm_agent
   - _self_
 
-data_path: walk_mid
+data_path: walk_noise
 
 hydra:
   run:
@@ -32,6 +32,7 @@ max_train_steps: 1e6
 max_epochs: 100
 eval_every_n_steps: 1000
 sim_every_n_steps: 5000
+evaluating: False
 
 # BESO hyperparameters
 dropout: 0.0
@@ -40,7 +41,7 @@ use_ema: True
 decay: 0.999
 update_ema_every_n_steps: 1
 sigma_data: 0.2
-cond_mask_prob: 0.0
+cond_mask_prob: 0.1
 cond_lambda: 1
 n_timesteps: 10
 

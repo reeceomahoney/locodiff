@@ -45,6 +45,7 @@ class Agent:
         cond_lambda: int,
         cond_mask_prob: float,
         noise_scheduler: DictConfig,
+        evaluating: bool,
     ):
         # model
         self.model = hydra.utils.instantiate(model).to(device)
@@ -90,9 +91,16 @@ class Agent:
         self.num_envs = num_envs
         self.sim_every_n_steps = sim_every_n_steps
 
-        self.train_loader, self.test_loader, self.scaler = hydra.utils.instantiate(
-            dataset_fn
-        )
+        if evaluating:
+            # Load a dummy scaler for evaluation
+            x_data = torch.zeros((1, obs_dim), device=device)
+            y_data = torch.zeros((1, action_dim), device=device)
+            cmd_data = torch.zeros((1, 3), device=device)
+            self.scaler = utils.MinMaxScaler(x_data, y_data, cmd_data, device)
+        else:
+            self.train_loader, self.test_loader, self.scaler = hydra.utils.instantiate(
+                dataset_fn
+            )
 
         # misc
         self.device = device
@@ -357,6 +365,7 @@ class Agent:
         raw_action = batch.get("action", None)
         vel_cmd = batch["vel_cmd"]
         raw_skill = batch["skill"]
+        returns = batch["return"]
 
         obs = self.scaler.scale_input(raw_obs[:, : self.T_cond])
         skill = raw_skill[:, : self.T_cond]
@@ -371,6 +380,7 @@ class Agent:
             "action": action,
             "vel_cmd": vel_cmd,
             "skill": skill,
+            "return": returns[:, self.T_cond - 1],
         }
 
         return processed_batch

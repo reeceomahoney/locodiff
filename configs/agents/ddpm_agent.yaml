@@ -32,6 +32,7 @@ sim_every_n_steps: ${sim_every_n_steps}
 weight_decay: ${weight_decay}
 cond_lambda: ${cond_lambda}
 cond_mask_prob: ${cond_mask_prob}
+evaluating: ${evaluating}
 
 dataset_fn:
   _target_: locodiff.dataloader.get_dataloaders_and_scaler
@@ -44,6 +45,7 @@ dataset_fn:
   train_batch_size: 1024
   test_batch_size: 1024
   num_workers: 4
+  return_horizon: 50
 
 model:
   _target_: locodiff.ddpm_transformer.DiffusionTransformer
