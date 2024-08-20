@@ -199,8 +199,6 @@ class Env {
     pTarget12_ = action.cast<double>();
     pTarget_.tail(nJoints_) = pTarget12_;
 
-    float jointTorqueSquaredNorm = 0.f;
-
     for (int i = 0; i < int(control_dt_ / simulation_dt_ + 1e-10); i++) {
       if (server_) server_->lockVisualizationServerMutex();
 
@@ -221,8 +219,6 @@ class Env {
       }
 
       world_->integrate();
-
-      jointTorqueSquaredNorm = robot_->getGeneralizedForce().squaredNorm();
 
       observationHandler_.updateObservation(robot_, pTarget12_);
 
