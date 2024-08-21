@@ -43,7 +43,7 @@ class ExpertDataset(Dataset):
         vel_cmds = data["vel_cmd"]
         skills = data["skill"]
         terminals = data["terminal"]
-        torques = data["torque"]
+        # torques = data["torque"]
 
         # Find episode ends
         terminals_flat = terminals.reshape(-1)
@@ -54,7 +54,7 @@ class ExpertDataset(Dataset):
         actions_splits = self.split_eps(actions, split_indices)
         vel_cmds_splits = self.split_eps(vel_cmds, split_indices)
         skills_splits = self.split_eps(skills, split_indices)
-        torques_splits = self.split_eps(torques, split_indices)
+        # torques_splits = self.split_eps(torques, split_indices)
 
         max_len = max(split.shape[0] for split in obs_splits)
 
@@ -62,7 +62,7 @@ class ExpertDataset(Dataset):
         actions = self.add_padding(actions_splits, max_len, temporal=True)
         vel_cmds = self.add_padding(vel_cmds_splits, max_len, temporal=False)
         skills = self.add_padding(skills_splits, max_len, temporal=True)
-        torques = self.add_padding(torques_splits, max_len, temporal=True)
+        # torques = self.add_padding(torques_splits, max_len, temporal=True)
 
         # nb: skill initial pad is the same as unconditional mask. this might be a problem.
 
@@ -71,7 +71,7 @@ class ExpertDataset(Dataset):
         # Compute returns
         returns = None
         if self.return_horizon > 0:
-            returns = self.compute_returns(obs, torques, masks)
+            # returns = self.compute_returns(obs, vel_cmds, masks)
 
             # Remove last steps if return horizon is set
             obs = obs[:, : -self.return_horizon]
@@ -85,7 +85,7 @@ class ExpertDataset(Dataset):
             "action": actions,
             "vel_cmd": vel_cmds,
             "skill": skills,
-            "return": returns,
+            # "return": returns,
             "mask": masks,
         }
 
@@ -164,25 +164,23 @@ class ExpertDataset(Dataset):
 
         return torch.from_numpy(masks).to(self.device).float()
 
-    def compute_returns(self, obs, torques, masks):
-        joint_vel = obs[..., 18:30]
-        energy = (joint_vel.abs() * torques.abs()).mean(dim=-1)
-        energy_mean = energy.mean()
-        energy_std = energy.std()
-        energy = torch.clip(
-            energy, energy_mean - 3 * energy_std, energy_mean + 3 * energy_std
-        )
+    def compute_returns(self, obs, vel_cmds, masks):
+        lin_vel = obs[..., 30:32]
+        ang_vel = obs[..., 17:18]
+        vel = torch.cat([lin_vel, ang_vel], dim=-1)
+        vel_cmds = vel_cmds.unsqueeze(1)
+        rewards = torch.exp(-(vel - vel_cmds).pow(2) / vel.std()).mean(dim=-1) - 1
 
         horizon = self.return_horizon
         gammas = torch.tensor([0.99**i for i in range(horizon)]).to(self.device)
-        returns = torch.zeros_like(energy[:, :-horizon])
+        returns = torch.zeros_like(rewards[:, :-horizon])
 
         for i in range(masks.shape[0]):
             T = int(masks[i].sum().item())
             for t in range(T - horizon):
-                returns[i, t] = (energy[i, t : t + horizon] * gammas).sum()
+                returns[i, t] = (rewards[i, t : t + horizon] * gammas).sum()
 
-        returns = torch.exp(-returns / returns.std())
+        returns = torch.exp(returns / returns.std())
         return returns.unsqueeze(-1)
 
 
@@ -195,7 +193,7 @@ class SlicerWrapper(Dataset):
 
     def _create_slices(self, T_cond, T):
         slices = []
-        window = T_cond + T - 1
+        window = T_cond + 50 - 1
         for i in range(len(self.dataset)):
             length = len(self.dataset[i]["obs"])
             if length >= window:

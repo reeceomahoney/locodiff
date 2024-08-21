@@ -2,7 +2,7 @@ defaults:
   - agents: ddpm_agent
   - _self_
 
-data_path: walk_noise
+data_path: walk_half_noise
 
 hydra:
   run:

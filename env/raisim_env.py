@@ -84,7 +84,7 @@ class RaisimEnv:
         total_rewards = np.zeros(self.num_envs, dtype=np.float32)
         height_rewards = np.zeros(self.num_envs, dtype=np.float32)
         total_dones = np.zeros(self.num_envs, dtype=np.int64)
-        returns = torch.ones((self.num_envs, self.window, 1)).to(self.device)
+        returns = torch.ones((self.num_envs, 1)).to(self.device)
         self.images = []
 
         for _ in range(self.eval_n_times):
