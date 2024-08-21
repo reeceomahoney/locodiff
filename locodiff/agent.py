@@ -93,8 +93,7 @@ class Agent:
             # Load a dummy scaler for evaluation
             x_data = torch.zeros((1, obs_dim), device=device)
             y_data = torch.zeros((1, action_dim), device=device)
-            cmd_data = torch.zeros((1, 3), device=device)
-            self.scaler = utils.MinMaxScaler(x_data, y_data, cmd_data, device)
+            self.scaler = utils.MinMaxScaler(x_data, y_data, device)
         else:
             self.train_loader, self.test_loader, self.scaler = hydra.utils.instantiate(
                 dataset_fn
@@ -368,8 +367,6 @@ class Agent:
         self.scaler.x_min = scaler_state["x_min"]
         self.scaler.y_max = scaler_state["y_max"]
         self.scaler.y_min = scaler_state["y_min"]
-        self.scaler.cmd_max = scaler_state["cmd_max"]
-        self.scaler.cmd_min = scaler_state["cmd_min"]
 
         log.info("Loaded pre-trained model parameters and scaler")
 
@@ -394,8 +391,6 @@ class Agent:
                 "x_min": self.scaler.x_min,
                 "y_max": self.scaler.y_max,
                 "y_min": self.scaler.y_min,
-                "cmd_max": self.scaler.cmd_max,
-                "cmd_min": self.scaler.cmd_min,
             },
             os.path.join(store_path, "scaler.pth"),
         )

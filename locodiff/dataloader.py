@@ -83,7 +83,7 @@ class ExpertDataset(Dataset):
         processed_data = {
             "obs": obs,
             "action": actions,
-            "vel_cmd": vel_cmds,
+            # "vel_cmd": vel_cmds,
             "skill": skills,
             # "return": returns,
             "mask": masks,
@@ -243,8 +243,7 @@ def get_dataloaders_and_scaler(
     # Build the scaler
     x_data = train_set.get_all_obs()
     y_data = train_set.get_all_actions()
-    cmd_data = train_set.get_all_vel_cmds()
-    scaler = MinMaxScaler(x_data, y_data, cmd_data, device)
+    scaler = MinMaxScaler(x_data, y_data, device)
 
     # Build the dataloaders
     train_dataloader = DataLoader(

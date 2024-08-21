@@ -160,7 +160,7 @@ class MinMaxScaler:
     Min Max scaler, that scales the output data between -1 and 1 and the input to a uniform Gaussian.
     """
 
-    def __init__(self, x_data: np.ndarray, y_data: np.ndarray, cmd_data: np.ndarray, device: str):
+    def __init__(self, x_data: np.ndarray, y_data: np.ndarray, device: str):
         self.device = device
 
         x_data = x_data.detach()
@@ -171,9 +171,6 @@ class MinMaxScaler:
 
         self.y_max = y_data.max(0).values.to(device)
         self.y_min = y_data.min(0).values.to(device)
-
-        self.cmd_max = cmd_data.max(0).values.to(device)
-        self.cmd_min = cmd_data.min(0).values.to(device)
 
         self.y_bounds = torch.zeros((2, y_data.shape[-1])).to(device)
         self.y_bounds[0, :] = -1.1
