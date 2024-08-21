@@ -95,7 +95,6 @@ class RaisimEnv:
             done = np.array([False])
             obs, vel_cmd = self.observe()
 
-
             # now run the agent for n steps
             action = self.nominal_joint_pos
             action = np.tile(action, (self.num_envs, 1))
@@ -190,7 +189,7 @@ class RaisimEnv:
         lin_vel = obs[:, 30:32]
         ang_vel = obs[:, 17:18]
         vel = torch.cat([lin_vel, ang_vel], dim=-1)
-        reward = torch.exp(-(vel - vel_cmd).pow(2))
+        reward = torch.exp(-3 * (vel - vel_cmd).pow(2))
         reward = reward.mean(dim=-1).cpu().numpy()
 
         # energy reward
