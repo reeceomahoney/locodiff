@@ -252,7 +252,7 @@ class Agent:
         )
         self.noise_scheduler.set_timesteps(n_sampling_steps)
 
-        x_0 = self.sample_ddpm(noise, data_dict)
+        x_0 = self.sample_ddpm(noise, data_dict, predict=True)
 
         # get the action for the current timestep
         x_0 = self.scaler.clip(x_0)
@@ -276,17 +276,32 @@ class Agent:
         return batch
 
     @torch.no_grad()
-    def sample_ddpm(self, noise: torch.Tensor, data_dict: dict):
+    def sample_ddpm(self, noise: torch.Tensor, data_dict: dict, predict: bool = False):
         """
         Perform inference using the DDIM sampler
         """
         x_t = noise
 
         for t in self.noise_scheduler.timesteps:
-            output = self.model(x_t, t.expand(x_t.shape[0]), data_dict)
+            if predict:
+                output = self.cfg_forward(x_t, t.expand(x_t.shape[0]), data_dict)
+            else:
+                output = self.model(x_t, t.expand(x_t.shape[0]), data_dict)
             x_t = self.noise_scheduler.step(output, t, x_t).prev_sample
 
         return x_t
+
+    def cfg_forward(self, x_t: torch.Tensor, t, data_dict: dict):
+        """
+        Classifier-free guidance sample
+        """
+        out = self.model(x_t, t, data_dict)
+
+        if self.cond_mask_prob > 0:
+            out_uncond = self.model(x_t, t, data_dict, uncond=True)
+            out = out_uncond + self.cond_lambda * (out - out_uncond)
+
+        return out
 
     def load_pretrained_model(self, weights_path: str, **kwargs) -> None:
         self.model.load_state_dict(

@@ -28,8 +28,8 @@ def main(cfg: DictConfig) -> None:
     )
     model_cfg = OmegaConf.load(cfg_store_path)
     model_cfg.device = cfg.device
-    model_cfg.agents["device"] = cfg["device"]
-    model_cfg.env["num_envs"] = 1
+    model_cfg.agents["device"] = cfg.device
+    model_cfg.env["num_envs"] = cfg.num_envs
     model_cfg.env["server_port"] = cfg.server_port
     model_cfg.env["max_time"] = 100
     model_cfg["T_action"] = 1
@@ -60,7 +60,7 @@ def main(cfg: DictConfig) -> None:
     if cfg["test_reward_lambda"]:
         env.eval_n_times = 1
         env.eval_n_steps = 250
-        lambda_values = [-5, -2, 0, 1, 2, 5]
+        lambda_values = [0, 1, 1.2, 1.5, 1.8, 2, 5, 10]
         rewards = []
 
         for i, lam in enumerate(lambda_values):
@@ -71,7 +71,7 @@ def main(cfg: DictConfig) -> None:
         plt.bar(range(len(rewards)), rewards)
         plt.xticks(range(len(lambda_values)), lambda_values)
         plt.xlabel("Lambda")
-        plt.ylabel("Mean energy")
+        plt.ylabel("Velocity tracking reward")
         plt.show()
     else:
         dataloader = agent.test_loader
