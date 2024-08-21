@@ -95,8 +95,7 @@ class Agent:
             # Load a dummy scaler for evaluation
             x_data = torch.zeros((1, obs_dim), device=device)
             y_data = torch.zeros((1, action_dim), device=device)
-            cmd_data = torch.zeros((1, 3), device=device)
-            self.scaler = utils.MinMaxScaler(x_data, y_data, cmd_data, device)
+            self.scaler = utils.MinMaxScaler(x_data, y_data, device)
         else:
             self.train_loader, self.test_loader, self.scaler = hydra.utils.instantiate(
                 dataset_fn
@@ -306,8 +305,6 @@ class Agent:
         self.scaler.x_min = scaler_state["x_min"]
         self.scaler.y_max = scaler_state["y_max"]
         self.scaler.y_min = scaler_state["y_min"]
-        self.scaler.cmd_max = scaler_state["cmd_max"]
-        self.scaler.cmd_min = scaler_state["cmd_min"]
 
         log.info("Loaded pre-trained model parameters and scaler")
 
@@ -332,8 +329,6 @@ class Agent:
                 "x_min": self.scaler.x_min,
                 "y_max": self.scaler.y_max,
                 "y_min": self.scaler.y_min,
-                "cmd_max": self.scaler.cmd_max,
-                "cmd_min": self.scaler.cmd_min,
             },
             os.path.join(store_path, "scaler.pth"),
         )
@@ -363,9 +358,15 @@ class Agent:
 
         raw_obs = batch["obs"]
         raw_action = batch.get("action", None)
-        vel_cmd = batch["vel_cmd"]
         raw_skill = batch["skill"]
-        returns = batch["return"]
+
+        vel_cmd = batch.get("vel_cmd", None)
+        if vel_cmd is None:
+            vel_cmd = self.sample_vel_cmd(raw_obs.shape[0])
+
+        returns = batch.get("return", None)
+        if returns is None:
+            returns = self.calculate_returns(raw_obs, vel_cmd)
 
         obs = self.scaler.scale_input(raw_obs[:, : self.T_cond])
         skill = raw_skill[:, : self.T_cond]
@@ -373,14 +374,14 @@ class Agent:
         if raw_action is None:
             action = None
         else:
-            action = self.scaler.scale_output(raw_action[:, self.T_cond - 1 :])
+            action = self.scaler.scale_output(raw_action[:, self.T_cond - 1 : self.T_cond + self.T - 1])
 
         processed_batch = {
             "obs": obs,
             "action": action,
             "vel_cmd": vel_cmd,
             "skill": skill,
-            "return": returns[:, self.T_cond - 1],
+            "return": returns,
         }
 
         return processed_batch
@@ -388,64 +389,25 @@ class Agent:
     def dict_to_device(self, batch):
         return {k: v.clone().to(self.device) for k, v in batch.items()}
 
-    def quat_to_rot_mat(self, quat):
-        """
-        Convert a tensor of w,x,y,z quaternions into a tensor of rotation matrices.
-        """
-        w, x, y, z = torch.unbind(quat, -1)
+    def sample_vel_cmd(self, batch_size):
+        limits = [0.8, 0.5, 1.0]
+        cmd = torch.rand((batch_size, 3), device=self.device)
 
-        rotation_matrix = torch.stack(
-            [
-                1 - 2 * (y**2 + z**2),
-                2 * (x * y - w * z),
-                2 * (x * z + w * y),
-                2 * (x * y + w * z),
-                1 - 2 * (x**2 + z**2),
-                2 * (y * z - w * x),
-                2 * (x * z - w * y),
-                2 * (y * z + w * x),
-                1 - 2 * (x**2 + y**2),
-            ],
-            dim=-1,
-        )
-        rotation_matrix = rotation_matrix.reshape(quat.shape[:-1] + (3, 3))
+        for i in range(3):
+            cmd[:, i] = (cmd[:, i] - 0.5) * 2 * limits[i]
 
-        return rotation_matrix
-
-    def calculate_vel_cmd(self, goal_pos, current_pos, state):
-        dist = goal_pos - current_pos
-
-        if dist.norm(dim=-1).mean() < 0.3:
-            cmd = torch.zeros((len(state), 3), device=self.device)
-        else:
-            angle = torch.atan2(dist[:, 1], dist[:, 0])
-            rot_mat = self.quat_to_rot_mat(state[:, self.T_cond - 1, 2:6])
-            robot_angle = torch.atan2(rot_mat[:, 1, 0], rot_mat[:, 0, 0])
-            angle_delta = angle - robot_angle
-
-            cmd = torch.stack(
-                [
-                    0.8 * torch.cos(angle_delta),
-                    0.5 * torch.sin(angle_delta),
-                    1.0 * angle_delta,
-                ],
-                dim=-1,
-            )
         return cmd
 
-    def calculate_returns(self, state, cmd):
-        """
-        Calculate the expected discounted return for each state.
-        """
-        rewards = (
-            (state[:, self.T_cond :, 33] > 0.5) & (state[:, self.T_cond :, 33] < 0.8)
-        ) * 1
+    def calculate_returns(self, obs, vel_cmd):
+        lin_vel = obs[:, self.T_cond - 1 :, 30:32]
+        ang_vel = obs[:, self.T_cond - 1 :, 17:18]
+        vel = torch.cat([lin_vel, ang_vel], dim=-1)
+        vel_cmd = vel_cmd.unsqueeze(1)
+        rewards = torch.exp(-3 * (vel - vel_cmd).pow(2)).mean(dim=-1) - 1
 
-        gammas = torch.ones(50, device=self.device) * 0.99
-        gammas = gammas.cumprod(dim=0)
+        horizon = 50
+        gammas = torch.tensor([0.99**i for i in range(horizon)]).to(self.device)
 
-        returns = (rewards * gammas).sum(dim=-1, keepdim=True)
-        returns /= returns.max()
-        returns = returns.repeat(1, self.T_cond).unsqueeze(-1)
-
-        return returns
+        returns = (rewards * gammas).sum(dim=-1)
+        returns = torch.exp(returns / 15)
+        return returns.unsqueeze(-1)

@@ -45,7 +45,7 @@ dataset_fn:
   train_batch_size: 1024
   test_batch_size: 1024
   num_workers: 4
-  return_horizon: 50
+  return_horizon: 0
 
 model:
   _target_: locodiff.ddpm_transformer.DiffusionTransformer

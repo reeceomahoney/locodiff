@@ -2,7 +2,7 @@ defaults:
   - agents: ddpm_agent
   - _self_
 
-data_path: walk_half_noise
+data_path: walk
 
 hydra:
   run:
@@ -41,7 +41,7 @@ use_ema: True
 decay: 0.999
 update_ema_every_n_steps: 1
 sigma_data: 0.2
-cond_mask_prob: 0.1
+cond_mask_prob: 0.25
 cond_lambda: 1
 n_timesteps: 10
 
