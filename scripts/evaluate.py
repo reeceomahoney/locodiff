@@ -60,7 +60,7 @@ def main(cfg: DictConfig) -> None:
     if cfg["test_reward_lambda"]:
         env.eval_n_times = 1
         env.eval_n_steps = 250
-        lambda_values = [0, 1, 1.2, 1.5, 1.8, 2, 5, 10]
+        lambda_values = [0, 1, 2, 5, 10]
         rewards = []
 
         for i, lam in enumerate(lambda_values):

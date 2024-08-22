@@ -248,7 +248,7 @@ def get_dataloaders_and_scaler(
 
     # Build the scaler
     x_data = train_set.get_all_obs()
-    y_data = torch.cat([train_set.get_all_obs(), train_set.get_all_actions()], dim=-1)
+    y_data = train_set.get_all_actions()
     scaler = MinMaxScaler(x_data, y_data, device)
 
     # Build the dataloaders

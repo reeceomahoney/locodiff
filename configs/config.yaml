@@ -15,7 +15,7 @@ wandb:
 # general params
 device: cuda
 seed: 6
-T: 20
+T: 4
 T_cond: 8
 T_action: 1
 

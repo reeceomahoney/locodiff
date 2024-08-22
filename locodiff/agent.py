@@ -248,7 +248,7 @@ class Agent:
         )
 
         noise = torch.randn(
-            (self.num_envs, self.T, self.obs_dim + self.action_dim), device=self.device
+            (self.num_envs, self.T, self.action_dim), device=self.device
         )
         noise *= self.sigma_max
 
@@ -257,7 +257,7 @@ class Agent:
         # get the action for the current timestep
         x_0 = self.scaler.clip(x_0)
         pred_action = self.scaler.inverse_scale_output(x_0).cpu().numpy()
-        pred_action = pred_action[:, : self.T_action, self.obs_dim :].copy()
+        pred_action = pred_action[:, : self.T_action].copy()
 
         if self.use_ema:
             self.ema_helper.restore(self.model.parameters())
@@ -437,13 +437,7 @@ class Agent:
             action = None
         else:
             action = self.scaler.scale_output(
-                torch.cat(
-                    [
-                        raw_obs[:, self.T_cond - 1 : self.T_cond + self.T - 1],
-                        raw_action[:, self.T_cond - 1 : self.T_cond + self.T - 1],
-                    ],
-                    dim=-1,
-                )
+                raw_action[:, self.T_cond - 1 : self.T_cond + self.T - 1],
             )
 
         processed_batch = {
