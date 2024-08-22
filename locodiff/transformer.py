@@ -28,19 +28,17 @@ class DiffusionTransformer(nn.Module):
         self.device = device
         self.cond_mask_prob = cond_mask_prob
 
-        self.action_emb = nn.Linear(self.act_dim, self.d_model)
+        self.action_emb = nn.Linear(self.obs_dim + self.act_dim, self.d_model)
         self.obs_emb = nn.Linear(self.obs_dim, self.d_model)
         self.sigma_emb = nn.Linear(1, self.d_model)
-        self.vel_cmd_emb = nn.Linear(3, self.d_model)
+        self.vel_cmd_emb = nn.Linear(1, self.d_model)
         self.return_emb = nn.Linear(1, self.d_model)
 
         self.pos_emb = (
             SinusoidalPosEmb(d_model)(torch.arange(T)).unsqueeze(0).to(device)
         )
         self.cond_pos_emb = (
-            SinusoidalPosEmb(d_model)(torch.arange(T_cond + 3))
-            .unsqueeze(0)
-            .to(device)
+            SinusoidalPosEmb(d_model)(torch.arange(T_cond + 3)).unsqueeze(0).to(device)
         )
 
         self.encoder = nn.Sequential(
@@ -63,7 +61,7 @@ class DiffusionTransformer(nn.Module):
         self.register_buffer("mask", mask)
 
         self.ln_f = nn.LayerNorm(self.d_model)
-        self.action_pred = nn.Linear(d_model, self.act_dim)
+        self.action_pred = nn.Linear(d_model, self.obs_dim + self.act_dim)
 
         self.apply(self._init_weights)
         self.to(device)

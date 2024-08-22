@@ -67,6 +67,10 @@ class RaisimEnv:
         obs_and_cmd = torch.from_numpy(obs_and_cmd).to(self.device)
         obs = obs_and_cmd[:, :33]
         vel_cmd = obs_and_cmd[:, 33:36]
+
+        vel_cmd = torch.randint(0, 2, (self.num_envs, 1)).to(self.device)
+        vel_cmd = vel_cmd.float() * 2 - 1
+
         return obs, vel_cmd
 
     def reset(self, conditional_reset=False):
@@ -189,14 +193,28 @@ class RaisimEnv:
         lin_vel = obs[:, 30:32]
         ang_vel = obs[:, 17:18]
         vel = torch.cat([lin_vel, ang_vel], dim=-1)
-        reward = torch.exp(-3 * (vel - vel_cmd).pow(2))
-        reward = reward.mean(dim=-1).cpu().numpy()
+        # reward = torch.exp(-3 * (vel - vel_cmd).pow(2))
+        # reward = reward.mean(dim=-1).cpu().numpy()
 
-        # energy reward
-        # torques = self.get_torques()
-        # joint_vel = obs[..., 18:30]
-        # energy = (joint_vel.abs() * torques.abs()).mean(dim=-1)
-        # reward = energy.cpu().numpy()
+        vel = vel[:, 0]
+        vel_cmd = vel_cmd.squeeze()
+
+        rewards = torch.zeros_like(vel)
+        # Correct
+        rewards = torch.where(
+            (vel_cmd == 1) & (vel > 0), torch.zeros_like(rewards), rewards
+        )
+        rewards = torch.where(
+            (vel_cmd == -1) & (vel < 0), torch.zeros_like(rewards), rewards
+        )
+        # Incorrect
+        rewards = torch.where(
+            (vel_cmd == 1) & (vel <= 0), -torch.ones_like(rewards), rewards
+        )
+        rewards = torch.where(
+            (vel_cmd == -1) & (vel >= 0), -torch.ones_like(rewards), rewards
+        )
+        rewards = rewards.cpu().numpy()
 
         # height reward
         height = torch.from_numpy(self.get_base_position()[:, -1])
@@ -206,7 +224,7 @@ class RaisimEnv:
             height_reward = torch.exp(-100 * (height - 0.5).pow(2))
         height_reward = height_reward.cpu().numpy()
 
-        return reward, height_reward
+        return rewards, height_reward
 
     def get_base_position(self):
         self.env.getBasePosition(self._base_position)

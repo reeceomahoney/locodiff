@@ -92,7 +92,7 @@ class Agent:
         if evaluating:
             # Load a dummy scaler for evaluation
             x_data = torch.zeros((1, obs_dim), device=device)
-            y_data = torch.zeros((1, action_dim), device=device)
+            y_data = torch.zeros((1, obs_dim + action_dim), device=device)
             self.scaler = utils.MinMaxScaler(x_data, y_data, device)
         else:
             self.train_loader, self.test_loader, self.scaler = hydra.utils.instantiate(
@@ -248,7 +248,7 @@ class Agent:
         )
 
         noise = torch.randn(
-            (self.num_envs, self.T, self.action_dim), device=self.device
+            (self.num_envs, self.T, self.obs_dim + self.action_dim), device=self.device
         )
         noise *= self.sigma_max
 
@@ -257,7 +257,7 @@ class Agent:
         # get the action for the current timestep
         x_0 = self.scaler.clip(x_0)
         pred_action = self.scaler.inverse_scale_output(x_0).cpu().numpy()
-        pred_action = pred_action[:, : self.T_action].copy()
+        pred_action = pred_action[:, : self.T_action, self.obs_dim :].copy()
 
         if self.use_ema:
             self.ema_helper.restore(self.model.parameters())
@@ -436,7 +436,15 @@ class Agent:
         if raw_action is None:
             action = None
         else:
-            action = self.scaler.scale_output(raw_action[:, self.T_cond - 1 : self.T_cond + self.T - 1])
+            action = self.scaler.scale_output(
+                torch.cat(
+                    [
+                        raw_obs[:, self.T_cond - 1 : self.T_cond + self.T - 1],
+                        raw_action[:, self.T_cond - 1 : self.T_cond + self.T - 1],
+                    ],
+                    dim=-1,
+                )
+            )
 
         processed_batch = {
             "obs": obs,
@@ -452,24 +460,38 @@ class Agent:
         return {k: v.clone().to(self.device) for k, v in batch.items()}
 
     def sample_vel_cmd(self, batch_size):
-        limits = [0.8, 0.5, 1.0]
-        cmd = torch.rand((batch_size, 3), device=self.device)
+        vel_cmd = torch.randint(0, 2, (batch_size, 1), device=self.device)
+        vel_cmd = vel_cmd.float() * 2 - 1
 
-        for i in range(3):
-            cmd[:, i] = (cmd[:, i] - 0.5) * 2 * limits[i]
-
-        return cmd
+        return vel_cmd
 
     def calculate_returns(self, obs, vel_cmd):
         lin_vel = obs[:, self.T_cond - 1 :, 30:32]
         ang_vel = obs[:, self.T_cond - 1 :, 17:18]
         vel = torch.cat([lin_vel, ang_vel], dim=-1)
-        vel_cmd = vel_cmd.unsqueeze(1)
-        rewards = torch.exp(-3 * (vel - vel_cmd).pow(2)).mean(dim=-1) - 1
+
+        vel = vel[:, :, 0]
+        vel_cmd = vel_cmd.expand(-1, vel.shape[1])
+
+        rewards = torch.zeros_like(vel)
+        # Correct
+        rewards = torch.where(
+            (vel_cmd == 1) & (vel > 0), torch.zeros_like(rewards), rewards
+        )
+        rewards = torch.where(
+            (vel_cmd == -1) & (vel < 0), torch.zeros_like(rewards), rewards
+        )
+        # Incorrect
+        rewards = torch.where(
+            (vel_cmd == 1) & (vel <= 0), -torch.ones_like(rewards), rewards
+        )
+        rewards = torch.where(
+            (vel_cmd == -1) & (vel >= 0), -torch.ones_like(rewards), rewards
+        )
 
         horizon = 50
         gammas = torch.tensor([0.99**i for i in range(horizon)]).to(self.device)
 
         returns = (rewards * gammas).sum(dim=-1)
-        returns = torch.exp(returns / 15)
+        returns = torch.exp(returns)
         return returns.unsqueeze(-1)

@@ -64,14 +64,20 @@ class ExpertDataset(Dataset):
         skills = self.add_padding(skills_splits, max_len, temporal=True)
         # torques = self.add_padding(torques_splits, max_len, temporal=True)
 
-        # nb: skill initial pad is the same as unconditional mask. this might be a problem.
+        # NB: skill initial pad is the same as unconditional mask. this might be a problem.
 
         masks = self.create_masks(obs_splits, max_len)
 
         # Compute returns
         returns = None
         if self.return_horizon > 0:
-            # returns = self.compute_returns(obs, vel_cmds, masks)
+            limits = [0.8, 0.5, 1.0]
+            vel_cmds = torch.rand_like(vel_cmds)
+
+            for i in range(3):
+                vel_cmds[:, i] = (vel_cmds[:, i] - 0.5) * 2 * limits[i]
+
+            returns = self.compute_returns(obs, vel_cmds, masks)
 
             # Remove last steps if return horizon is set
             obs = obs[:, : -self.return_horizon]
@@ -169,7 +175,7 @@ class ExpertDataset(Dataset):
         ang_vel = obs[..., 17:18]
         vel = torch.cat([lin_vel, ang_vel], dim=-1)
         vel_cmds = vel_cmds.unsqueeze(1)
-        rewards = torch.exp(-(vel - vel_cmds).pow(2) / vel.std()).mean(dim=-1) - 1
+        rewards = torch.exp(-3 * (vel - vel_cmds).pow(2) / vel.std()).mean(dim=-1) - 1
 
         horizon = self.return_horizon
         gammas = torch.tensor([0.99**i for i in range(horizon)]).to(self.device)
@@ -180,7 +186,7 @@ class ExpertDataset(Dataset):
             for t in range(T - horizon):
                 returns[i, t] = (rewards[i, t : t + horizon] * gammas).sum()
 
-        returns = torch.exp(returns / returns.std())
+        returns = torch.exp(returns)
         return returns.unsqueeze(-1)
 
 
@@ -242,7 +248,7 @@ def get_dataloaders_and_scaler(
 
     # Build the scaler
     x_data = train_set.get_all_obs()
-    y_data = train_set.get_all_actions()
+    y_data = torch.cat([train_set.get_all_obs(), train_set.get_all_actions()], dim=-1)
     scaler = MinMaxScaler(x_data, y_data, device)
 
     # Build the dataloaders
