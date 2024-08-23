@@ -79,13 +79,10 @@ class RaisimEnv:
 
         return self.observe()
 
-    def simulate(self, agent, real_time=False):
+    def simulate(self, agent, real_time=False, lambda_values=None):
         log.info("Starting trained model evaluation")
 
-        total_rewards = np.zeros(self.num_envs, dtype=np.float32)
-        height_rewards = np.zeros(self.num_envs, dtype=np.float32)
-        total_dones = np.zeros(self.num_envs, dtype=np.int64)
-        returns = torch.ones((self.num_envs, 1)).to(self.device)
+        returns = torch.ones((self.num_envs, self.window, 1)).to(self.device)
         self.skill = torch.zeros(self.num_envs, self.skill_dim).to(self.device)
         self.skill[:, 0] = 1
         self.images = []
@@ -93,7 +90,17 @@ class RaisimEnv:
         self.vel_cmd = torch.randint(0, 2, (self.num_envs, 1)).to(self.device)
         self.vel_cmd = self.vel_cmd.float() * 2 - 1
 
-        for _ in range(self.eval_n_times):
+        if lambda_values is None:
+            cond_lambdas = [0, 5, 10]
+        else:
+            cond_lambdas = lambda_values
+        return_dict = {}
+
+        for lam in cond_lambdas:
+            total_rewards = np.zeros(self.num_envs, dtype=np.float32)
+            total_dones = np.zeros(self.num_envs, dtype=np.int64)
+            agent.cond_lambda = lam
+
             self.env.reset()
             agent.reset()
             done = np.array([False])
@@ -122,8 +129,7 @@ class RaisimEnv:
 
                 for i in range(self.T_action):
                     obs, vel_cmd, rewards, done = self.step(action)
-                    total_rewards += rewards[0]
-                    height_rewards += rewards[1]
+                    total_rewards += rewards
                     action = pred_action[:, i]
 
                     if real_time:
@@ -132,99 +138,31 @@ class RaisimEnv:
                             time.sleep(0.04 - delta)
                         start = time.time()
 
-        total_rewards /= self.eval_n_times * self.eval_n_steps
-        avrg_reward = total_rewards.mean()
-        std_reward = total_rewards.std()
+            total_rewards /= self.eval_n_steps
+            avrg_reward = total_rewards.mean()
+            std_reward = total_rewards.std()
 
-        height_rewards /= self.eval_n_times * self.eval_n_steps
-        avrg_height_reward = height_rewards.mean()
+            return_dict[f"lamda_{lam}/reward_mean"] = avrg_reward
+            return_dict[f"lamda_{lam}/reward_std"] = std_reward
+            return_dict[f"lamda_{lam}/terminals_mean"] = total_dones.mean()
 
-        log.info("... finished trained model evaluation")
-        return_dict = {
-            "avrg_reward": avrg_reward,
-            "std_reward": std_reward,
-            "avrg_height_reward": avrg_height_reward,
-            "total_done": total_dones.mean(),
-        }
         return return_dict
 
-    def plot_trajectory(self, pred_traj, goal):
-        # Calculate yaw angles from quaternions
-        quat = pred_traj[0, :, 2:6]
-        quat = np.roll(quat, shift=-1, axis=1)  # w, x, y, z -> x, y, z, w
-        yaw = R.from_quat(quat).as_euler("xyz")[:, 2]
-
-        goal = goal.cpu().numpy()
-
-        # plot the trajectory
-        fig = Figure()
-        canvas = FigureCanvas(fig)
-        ax = fig.gca()
-        ax.plot(pred_traj[0, :, 0], pred_traj[0, :, 1], "r")
-        ax.plot(goal[0, 0], goal[0, 1], "go")
-        ax.set_xlim(-4, 4)
-        ax.set_ylim(-4, 4)
-
-        # plot orientation using yaw angles
-        for i in range(0, pred_traj.shape[1], 10):
-            ax.quiver(
-                pred_traj[0, i, 0],
-                pred_traj[0, i, 1],
-                pred_traj[0, i, 33],
-                pred_traj[0, i, 34],
-                color="b",
-                scale=10,
-                width=0.005,
-            )
-
-        # Convert plot to image array
-        canvas.draw()
-        s, (width, height) = canvas.print_to_buffer()
-        image = np.frombuffer(s, np.uint8).reshape((height, width, 4))
-        self.images.append(image)
-
-    def generate_goal(self):
-        self.goal = np.random.uniform(-5, 5, (self.num_envs, 2)).astype(np.float32)
-        self.set_goal(self.goal)
-        self.goal = torch.from_numpy(self.goal).to(self.device)
-
-    def compute_reward(self, obs, vel_cmd):
+    def compute_reward(self, obs, vel_cmds):
         # velocity reward
         lin_vel = obs[:, 30:32]
         ang_vel = obs[:, 17:18]
         vel = torch.cat([lin_vel, ang_vel], dim=-1)
-        # reward = torch.exp(-3 * (vel - vel_cmd).pow(2))
-        # reward = reward.mean(dim=-1).cpu().numpy()
 
         vel = vel[:, 0]
-        vel_cmd = vel_cmd.squeeze()
+        vel_cmds = vel_cmds.squeeze()
 
         rewards = torch.zeros_like(vel)
-        # Correct
-        rewards = torch.where(
-            (vel_cmd == 1) & (vel > 0), torch.zeros_like(rewards), rewards
-        )
-        rewards = torch.where(
-            (vel_cmd == -1) & (vel < 0), torch.zeros_like(rewards), rewards
-        )
-        # Incorrect
-        rewards = torch.where(
-            (vel_cmd == 1) & (vel <= 0), -torch.ones_like(rewards), rewards
-        )
-        rewards = torch.where(
-            (vel_cmd == -1) & (vel >= 0), -torch.ones_like(rewards), rewards
-        )
+        rewards = torch.where(vel_cmds == 1, vel, rewards)
+        rewards = torch.where(vel_cmds == -1, -vel, rewards)
         rewards = rewards.cpu().numpy()
 
-        # height reward
-        height = torch.from_numpy(self.get_base_position()[:, -1])
-        if self.skill[0, 0] == 1:
-            height_reward = torch.exp(-100 * (height - 0.6).pow(2))
-        elif self.skill[0, 1] == 1:
-            height_reward = torch.exp(-100 * (height - 0.5).pow(2))
-        height_reward = height_reward.cpu().numpy()
-
-        return rewards, height_reward
+        return rewards
 
     def get_base_position(self):
         self.env.getBasePosition(self._base_position)

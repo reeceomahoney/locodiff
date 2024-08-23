@@ -58,21 +58,17 @@ def main(cfg: DictConfig) -> None:
         results_dict = env.simulate(agent, real_time=True)
         print(results_dict)
     if cfg["test_reward_lambda"]:
-        env.eval_n_times = 1
-        env.eval_n_steps = 250
         lambda_values = [0, 1, 2, 5, 10]
-        rewards = []
 
-        for i, lam in enumerate(lambda_values):
-            agent.cond_lambda = lam
-            results_dict = env.simulate(agent, real_time=False)
-            rewards.append(results_dict["avrg_reward"])
+        results_dict = env.simulate(agent, real_time=False, lambda_values=lambda_values)
+        rewards = [v for k, v in results_dict.items() if k.endswith("/reward_mean")]
 
+        print(rewards)
         plt.bar(range(len(rewards)), rewards)
         plt.xticks(range(len(lambda_values)), lambda_values)
         plt.xlabel("Lambda")
         plt.ylabel("Velocity tracking reward")
-        plt.show()
+        plt.savefig("results.png")
     else:
         dataloader = agent.test_loader
         batch = next(iter(dataloader))

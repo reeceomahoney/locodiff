@@ -69,15 +69,9 @@ class ExpertDataset(Dataset):
         masks = self.create_masks(obs_splits, max_len)
 
         # Compute returns
-        returns = None
         if self.return_horizon > 0:
-            limits = [0.8, 0.5, 1.0]
-            vel_cmds = torch.rand_like(vel_cmds)
-
-            for i in range(3):
-                vel_cmds[:, i] = (vel_cmds[:, i] - 0.5) * 2 * limits[i]
-
-            returns = self.compute_returns(obs, vel_cmds, masks)
+            vel_cmds = self.sample_vel_cmd(obs.shape[0])
+            returns, rewards = self.compute_returns(obs, vel_cmds, masks)
 
             # Remove last steps if return horizon is set
             obs = obs[:, : -self.return_horizon]
@@ -89,9 +83,10 @@ class ExpertDataset(Dataset):
         processed_data = {
             "obs": obs,
             "action": actions,
-            # "vel_cmd": vel_cmds,
+            "vel_cmd": vel_cmds,
             "skill": skills,
-            # "return": returns,
+            "return": returns,
+            # "reward": rewards,
             "mask": masks,
         }
 
@@ -170,12 +165,25 @@ class ExpertDataset(Dataset):
 
         return torch.from_numpy(masks).to(self.device).float()
 
+    def sample_vel_cmd(self, batch_size):
+        vel_cmd = torch.randint(0, 2, (batch_size, 1), device=self.device)
+        vel_cmd = vel_cmd.float() * 2 - 1
+
+        return vel_cmd
+
     def compute_returns(self, obs, vel_cmds, masks):
         lin_vel = obs[..., 30:32]
         ang_vel = obs[..., 17:18]
         vel = torch.cat([lin_vel, ang_vel], dim=-1)
-        vel_cmds = vel_cmds.unsqueeze(1)
-        rewards = torch.exp(-3 * (vel - vel_cmds).pow(2) / vel.std()).mean(dim=-1) - 1
+
+        vel = vel[:, :, 0]
+        vel_cmds = vel_cmds.expand(-1, vel.shape[1])
+
+        rewards = torch.zeros_like(vel)
+        rewards = torch.where(vel_cmds == 1, vel, rewards)
+        rewards = torch.where(vel_cmds == -1, -vel, rewards)
+        rewards = torch.clamp(rewards, -0.6, 0.6)
+        rewards -= rewards.max()
 
         horizon = self.return_horizon
         gammas = torch.tensor([0.99**i for i in range(horizon)]).to(self.device)
@@ -186,8 +194,8 @@ class ExpertDataset(Dataset):
             for t in range(T - horizon):
                 returns[i, t] = (rewards[i, t : t + horizon] * gammas).sum()
 
-        returns = torch.exp(returns)
-        return returns.unsqueeze(-1)
+        returns = torch.exp(returns/20)
+        return returns.unsqueeze(-1), rewards
 
 
 class SlicerWrapper(Dataset):
@@ -199,7 +207,7 @@ class SlicerWrapper(Dataset):
 
     def _create_slices(self, T_cond, T):
         slices = []
-        window = T_cond + 50 - 1
+        window = T_cond + T - 1
         for i in range(len(self.dataset)):
             length = len(self.dataset[i]["obs"])
             if length >= window:
