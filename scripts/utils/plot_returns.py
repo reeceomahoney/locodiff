@@ -7,7 +7,7 @@ T_cond = 8
 return_horizon = 50
 
 dataset = ExpertDataset(data_directory, obs_dim, T_cond, return_horizon)
-rewards = dataset.data["reward"]
+rewards = dataset.rewards
 returns = dataset.data["return"]
 
 # Plot histogram for rewards
