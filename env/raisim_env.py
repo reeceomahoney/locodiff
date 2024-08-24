@@ -3,15 +3,10 @@ import os
 import platform
 import time
 
-import imageio
 import numpy as np
 import torch
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-from matplotlib.figure import Figure
 from omegaconf import OmegaConf
-from scipy.spatial.transform import Rotation as R
 from tqdm import tqdm
-import matplotlib.pyplot as plt
 
 from env.lib.raisim_env import RaisimWrapper
 
@@ -85,21 +80,29 @@ class RaisimEnv:
         returns = torch.ones((self.num_envs, self.window, 1)).to(self.device)
         self.skill = torch.zeros(self.num_envs, self.skill_dim).to(self.device)
         self.skill[:, 0] = 1
-        self.images = []
 
         self.vel_cmd = torch.randint(0, 2, (self.num_envs, 1)).to(self.device)
         self.vel_cmd = self.vel_cmd.float() * 2 - 1
 
         if lambda_values is None:
-            cond_lambdas = [0, 1, 2, 5, 10]
+            # cond_lambdas = [0, 1, 2, 5, 10]
+            cond_lambdas = [0]
         else:
             cond_lambdas = lambda_values
+
+        assert self.num_envs % len(cond_lambdas) == 0
+
+        lambda_tensor = torch.zeros(self.num_envs, 1, 1).to(self.device)
+        envs_per_lambda = self.num_envs // len(cond_lambdas)
+        for i, lam in enumerate(cond_lambdas):
+            lambda_tensor[i * envs_per_lambda : (i + 1) * envs_per_lambda] = lam
+        agent.cond_lambda = lambda_tensor
+
         return_dict = {}
 
-        for lam in cond_lambdas:
+        for _ in range(self.eval_n_times):
             total_rewards = np.zeros(self.num_envs, dtype=np.float32)
             total_dones = np.zeros(self.num_envs, dtype=np.int64)
-            agent.cond_lambda = lam
 
             self.env.reset()
             agent.reset()
@@ -138,13 +141,18 @@ class RaisimEnv:
                             time.sleep(0.04 - delta)
                         start = time.time()
 
+            # split rewards by lambda
             total_rewards /= self.eval_n_steps
-            avrg_reward = total_rewards.mean()
-            std_reward = total_rewards.std()
-
-            return_dict[f"lamda_{lam}/reward_mean"] = avrg_reward
-            return_dict[f"lamda_{lam}/reward_std"] = std_reward
-            return_dict[f"lamda_{lam}/terminals_mean"] = total_dones.mean()
+            for i, lam in enumerate(cond_lambdas):
+                return_dict[f"lamda_{lam}/reward_mean"] = total_rewards[
+                    i * envs_per_lambda : (i + 1) * envs_per_lambda
+                ].mean()
+                return_dict[f"lamda_{lam}/reward_std"] = total_rewards[
+                    i * envs_per_lambda : (i + 1) * envs_per_lambda
+                ].std()
+                return_dict[f"lamda_{lam}/terminals_mean"] = total_dones[
+                    i * envs_per_lambda : (i + 1) * envs_per_lambda
+                ].mean()
 
         return return_dict
 
