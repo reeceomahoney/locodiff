@@ -71,7 +71,7 @@ class ExpertDataset(Dataset):
         # Compute returns
         if self.return_horizon > 0:
             vel_cmds = self.sample_vel_cmd(obs.shape[0])
-            returns, rewards = self.compute_returns(obs, vel_cmds, masks)
+            returns = self.compute_returns(obs, vel_cmds, masks)
 
             # Remove last steps if return horizon is set
             obs = obs[:, : -self.return_horizon]
@@ -86,7 +86,6 @@ class ExpertDataset(Dataset):
             "vel_cmd": vel_cmds,
             "skill": skills,
             "return": returns,
-            # "reward": rewards,
             "mask": masks,
         }
 
@@ -179,11 +178,13 @@ class ExpertDataset(Dataset):
         vel = vel[:, :, 0]
         vel_cmds = vel_cmds.expand(-1, vel.shape[1])
 
-        rewards = torch.zeros_like(vel)
-        rewards = torch.where(vel_cmds == 1, vel, rewards)
-        rewards = torch.where(vel_cmds == -1, -vel, rewards)
+        # rewards = torch.zeros_like(vel)
+        # rewards = torch.where(vel_cmds == 1, vel, rewards)
+        # rewards = torch.where(vel_cmds == -1, -vel, rewards)
+        rewards = vel
         rewards = torch.clamp(rewards, -0.6, 0.6)
         rewards -= rewards.max()
+        self.rewards = rewards  # for plotting
 
         horizon = self.return_horizon
         gammas = torch.tensor([0.99**i for i in range(horizon)]).to(self.device)
@@ -194,8 +195,8 @@ class ExpertDataset(Dataset):
             for t in range(T - horizon):
                 returns[i, t] = (rewards[i, t : t + horizon] * gammas).sum()
 
-        returns = torch.exp(returns/20)
-        return returns.unsqueeze(-1), rewards
+        returns = torch.exp(returns/10)
+        return returns.unsqueeze(-1)
 
 
 class SlicerWrapper(Dataset):

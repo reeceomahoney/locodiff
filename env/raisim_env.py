@@ -91,7 +91,7 @@ class RaisimEnv:
         self.vel_cmd = self.vel_cmd.float() * 2 - 1
 
         if lambda_values is None:
-            cond_lambdas = [0, 5, 10]
+            cond_lambdas = [0, 1, 2, 5, 10]
         else:
             cond_lambdas = lambda_values
         return_dict = {}
@@ -157,9 +157,10 @@ class RaisimEnv:
         vel = vel[:, 0]
         vel_cmds = vel_cmds.squeeze()
 
-        rewards = torch.zeros_like(vel)
-        rewards = torch.where(vel_cmds == 1, vel, rewards)
-        rewards = torch.where(vel_cmds == -1, -vel, rewards)
+        # rewards = torch.zeros_like(vel)
+        # rewards = torch.where(vel_cmds == 1, vel, rewards)
+        # rewards = torch.where(vel_cmds == -1, -vel, rewards)
+        rewards = vel
         rewards = rewards.cpu().numpy()
 
         return rewards
