@@ -84,14 +84,10 @@ class RaisimEnv:
         self.vel_cmd = torch.randint(0, 2, (self.num_envs, 1)).to(self.device)
         self.vel_cmd = self.vel_cmd.float() * 2 - 1
 
-        if lambda_values is None:
-            # cond_lambdas = [0, 1, 2, 5, 10]
-            cond_lambdas = [0]
-        else:
-            cond_lambdas = lambda_values
-
+        cond_lambdas = lambda_values if lambda_values is not None else [0, 1, 2, 5, 10]
         assert self.num_envs % len(cond_lambdas) == 0
 
+        # For parallel evaluation
         lambda_tensor = torch.zeros(self.num_envs, 1, 1).to(self.device)
         envs_per_lambda = self.num_envs // len(cond_lambdas)
         for i, lam in enumerate(cond_lambdas):
@@ -105,7 +101,7 @@ class RaisimEnv:
             total_dones = np.zeros(self.num_envs, dtype=np.int64)
 
             self.env.reset()
-            agent.reset()
+            agent.reset(np.ones(self.num_envs, dtype=bool))
             done = np.array([False])
             obs, vel_cmd = self.observe()
 
@@ -117,9 +113,7 @@ class RaisimEnv:
 
                 if done.any():
                     total_dones += done
-                    agent.reset()
-                if n == self.eval_n_steps - 1:
-                    total_dones += np.ones(done.shape, dtype="int64")
+                    agent.reset(done)
 
                 pred_action = agent.predict(
                     {

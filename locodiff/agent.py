@@ -220,9 +220,9 @@ class Agent:
 
         return info
 
-    def reset(self):
-        self.obs_hist.fill_(0)
-        self.skill_hist.fill_(0)
+    def reset(self, done):
+        self.obs_hist[done] = 0
+        self.skill_hist[done] = 0
 
     @torch.no_grad()
     def predict(self, batch: dict, new_sampling_steps=None):
@@ -295,46 +295,6 @@ class Agent:
             t, t_next = t_fn(sigmas[i]), t_fn(sigmas[i + 1])
             h = t_next - t
             x_t = (sigma_fn(t_next) / sigma_fn(t)) * x_t - (-h).expm1() * denoised
-
-        return x_t
-
-    def sample_euler_ancestral(
-        self,
-        noise,
-        sigmas,
-        data_dict,
-        predict,
-        eta=1.0,
-    ):
-        """
-        Ancestral sampling with Euler method steps.
-
-        1. compute dx_{i}/dt at the current timestep
-        2. get \sigma_{up} and \sigma_{down} from ancestral method
-        3. compute x_{t-1} = x_{t} + dx_{t}/dt * \sigma_{down}
-        4. Add additional noise after the update step x_{t-1} =x_{t-1} + z * \sigma_{up}
-        """
-        x_t = noise
-        s_in = x_t.new_ones([x_t.shape[0]])
-
-        for i in range(len(sigmas) - 1):
-            # compute x_{t-1}
-            if predict:
-                denoised = self.cfg_forward(x_t, sigmas[i] * s_in, data_dict)
-            else:
-                denoised = self.model(x_t, sigmas[i] * s_in, data_dict)
-            # get ancestral steps
-            sigma_down, sigma_up = utils.get_ancestral_step(
-                sigmas[i], sigmas[i + 1], eta=eta
-            )
-            # compute dx/dt
-            d = (x_t - denoised) / sigmas[i]
-            # compute dt based on sigma_down value
-            dt = sigma_down - sigmas[i]
-            # update current action
-            x_t = x_t + d * dt
-            if sigma_down > 0:
-                x_t = x_t + torch.randn_like(x_t) * sigma_up
 
         return x_t
 
