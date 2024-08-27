@@ -33,10 +33,11 @@ max_epochs: 100
 eval_every_n_steps: 1000
 sim_every_n_steps: 5000
 evaluating: False
+reward_fn: x_vel
 
 # BESO hyperparameters
 dropout: 0.0
-n_heads: 4
+n_heads: 8
 use_ema: True
 decay: 0.999
 update_ema_every_n_steps: 1
@@ -47,7 +48,7 @@ n_timesteps: 3
 
 env:
   render: True
-  num_envs: 100
+  num_envs: 200
   num_threads: "auto"
   simulation_dt: 0.005
   control_dt: 0.04

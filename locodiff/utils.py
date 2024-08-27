@@ -11,13 +11,17 @@ def get_sigmas_exponential(n, sigma_min, sigma_max, device="cpu"):
     ).exp()
     return torch.cat([sigmas, sigmas.new_zeros([1])])
 
-def get_ancestral_step(sigma_from, sigma_to, eta=1.):
+
+def get_ancestral_step(sigma_from, sigma_to, eta=1.0):
     """Calculates the noise level (sigma_down) to step down to and the amount
     of noise to add (sigma_up) when doing an ancestral sampling step."""
     if not eta:
-        return sigma_to, 0.
-    sigma_up = min(sigma_to, eta * (sigma_to ** 2 * (sigma_from ** 2 - sigma_to ** 2) / sigma_from ** 2) ** 0.5)
-    sigma_down = (sigma_to ** 2 - sigma_up ** 2) ** 0.5
+        return sigma_to, 0.0
+    sigma_up = min(
+        sigma_to,
+        eta * (sigma_to**2 * (sigma_from**2 - sigma_to**2) / sigma_from**2) ** 0.5,
+    )
+    sigma_down = (sigma_to**2 - sigma_up**2) ** 0.5
     return sigma_down, sigma_up
 
 
@@ -40,6 +44,20 @@ def rand_log_logistic(
         + min_cdf
     )
     return u.logit().mul(scale).add(loc).exp().to(dtype)
+
+
+def reward_function(obs, vel_cmds, fn_name):
+    if fn_name == "x_vel":
+        rewards = obs[..., 30]
+    elif fn_name == "x_vel_2":
+        x_vel = obs[..., 30]
+        rewards = torch.zeros_like(x_vel)
+        rewards = torch.where(vel_cmds == 1, x_vel, rewards)
+        rewards = torch.where(vel_cmds == -1, -x_vel, rewards)
+
+    rewards = torch.clamp(rewards, -0.6, 0.6)
+    rewards -= rewards.max()
+    return rewards
 
 
 class SinusoidalPosEmb(nn.Module):
@@ -204,7 +222,7 @@ class MinMaxScaler:
     def inverse_scale_output(self, y):
         out = (y + 1) * (self.y_max - self.y_min) / 2 + self.y_min
         return out
-    
+
     def scale_goal(self, goal):
         return (goal - self.goal_min) / (self.goal_max - self.goal_min) * 2 - 1
 

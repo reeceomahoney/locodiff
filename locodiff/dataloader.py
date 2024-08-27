@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset, Subset, random_split
 
-from locodiff.utils import MinMaxScaler
+from locodiff.utils import MinMaxScaler, reward_function
 
 
 class ExpertDataset(Dataset):
@@ -14,12 +14,14 @@ class ExpertDataset(Dataset):
         obs_dim: int,
         T_cond: int,
         return_horizon: int,
+        reward_fn: str,
         device="cpu",
     ):
         self.data_directory = data_directory
         self.obs_dim = obs_dim
         self.T_cond = T_cond
         self.return_horizon = return_horizon
+        self.reward_fn = reward_fn
         self.device = device
 
         current_dir = os.path.dirname(os.path.realpath(__file__))
@@ -171,19 +173,7 @@ class ExpertDataset(Dataset):
         return vel_cmd
 
     def compute_returns(self, obs, vel_cmds, masks):
-        lin_vel = obs[..., 30:32]
-        ang_vel = obs[..., 17:18]
-        vel = torch.cat([lin_vel, ang_vel], dim=-1)
-
-        vel = vel[:, :, 0]
-        vel_cmds = vel_cmds.expand(-1, vel.shape[1])
-
-        # rewards = torch.zeros_like(vel)
-        # rewards = torch.where(vel_cmds == 1, vel, rewards)
-        # rewards = torch.where(vel_cmds == -1, -vel, rewards)
-        rewards = vel
-        rewards = torch.clamp(rewards, -0.6, 0.6)
-        rewards -= rewards.max()
+        rewards = reward_function(obs, vel_cmds, self.reward_fn)
         self.rewards = rewards  # for plotting
 
         horizon = self.return_horizon
@@ -195,7 +185,7 @@ class ExpertDataset(Dataset):
             for t in range(T - horizon):
                 returns[i, t] = (rewards[i, t : t + horizon] * gammas).sum()
 
-        returns = torch.exp(returns/10)
+        returns = torch.exp(returns / 10)
         return returns.unsqueeze(-1)
 
 
@@ -248,9 +238,10 @@ def get_dataloaders_and_scaler(
     test_batch_size: int,
     num_workers: int,
     return_horizon: int,
+    reward_fn: str,
 ):
     # Build the datasets
-    dataset = ExpertDataset(data_directory, obs_dim, T_cond, return_horizon)
+    dataset = ExpertDataset(data_directory, obs_dim, T_cond, return_horizon, reward_fn)
     train, val = random_split(dataset, [train_fraction, 1 - train_fraction])
     train_set = SlicerWrapper(train, T_cond, T)
     test_set = SlicerWrapper(val, T_cond, T)

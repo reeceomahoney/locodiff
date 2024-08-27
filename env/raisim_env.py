@@ -9,6 +9,7 @@ from omegaconf import OmegaConf
 from tqdm import tqdm
 
 from env.lib.raisim_env import RaisimWrapper
+from locodiff.utils import reward_function
 
 log = logging.getLogger(__name__)
 
@@ -48,7 +49,7 @@ class RaisimEnv:
         self.nominal_joint_pos = np.zeros([self.num_envs, 12], dtype=np.float32)
         self.env.getNominalJointPositions(self.nominal_joint_pos)
 
-        self.goal = None
+        self.reward_fn = cfg.reward_fn
 
     def step(self, action):
         self.env.step(action, self._done)
@@ -84,7 +85,7 @@ class RaisimEnv:
         self.vel_cmd = torch.randint(0, 2, (self.num_envs, 1)).to(self.device)
         self.vel_cmd = self.vel_cmd.float() * 2 - 1
 
-        cond_lambdas = lambda_values if lambda_values is not None else [0, 1, 2, 5, 10]
+        cond_lambdas = lambda_values if lambda_values is not None else [0, 5, 10, 20]
         assert self.num_envs % len(cond_lambdas) == 0
 
         # For parallel evaluation
@@ -151,18 +152,7 @@ class RaisimEnv:
         return return_dict
 
     def compute_reward(self, obs, vel_cmds):
-        # velocity reward
-        lin_vel = obs[:, 30:32]
-        ang_vel = obs[:, 17:18]
-        vel = torch.cat([lin_vel, ang_vel], dim=-1)
-
-        vel = vel[:, 0]
-        vel_cmds = vel_cmds.squeeze()
-
-        # rewards = torch.zeros_like(vel)
-        # rewards = torch.where(vel_cmds == 1, vel, rewards)
-        # rewards = torch.where(vel_cmds == -1, -vel, rewards)
-        rewards = vel
+        rewards = reward_function(obs, vel_cmds, self.reward_fn)
         rewards = rewards.cpu().numpy()
 
         return rewards
