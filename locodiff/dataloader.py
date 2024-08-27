@@ -172,7 +172,6 @@ class ExpertDataset(Dataset):
 
     def compute_returns(self, obs, vel_cmds, masks):
         rewards = reward_function(obs, vel_cmds, self.reward_fn)
-        rewards = torch.clamp(rewards, -0.6, 0.6)
         rewards -= rewards.max()
         self.rewards = rewards  # for plotting
 
@@ -185,7 +184,7 @@ class ExpertDataset(Dataset):
             for t in range(T - horizon):
                 returns[i, t] = (rewards[i, t : t + horizon] * gammas).sum()
 
-        returns = torch.exp(returns / 10)
+        returns = torch.exp(returns / 20)
         return returns.unsqueeze(-1)
 
 

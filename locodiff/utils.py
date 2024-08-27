@@ -48,17 +48,32 @@ def rand_log_logistic(
 
 def reward_function(obs, vel_cmds, fn_name):
     x_vel = obs[..., 30]
+    z_vel = obs[..., 17]
     if x_vel.ndim == 1:
         vel_cmds = vel_cmds.squeeze(1)
 
     if fn_name == "x_vel":
         rewards = x_vel
+        rewards = torch.clamp(rewards, -0.6, 0.6)
     elif fn_name == "fwd_bwd":
         rewards = torch.zeros_like(x_vel)
         rewards = torch.where(vel_cmds == 1, x_vel, rewards)
         rewards = torch.where(vel_cmds == 0, -x_vel, rewards)
+        rewards = torch.clamp(rewards, -0.6, 0.6)
     elif fn_name == "on_off":
         rewards = torch.where(vel_cmds == 1, x_vel, 1)
+    elif fn_name == "vel_target":
+        lin_vel = obs[..., 30:32]
+        ang_vel = obs[..., 17:18]
+        vel = torch.cat([lin_vel, ang_vel], dim=-1)
+        if vel.ndim == 3:
+            vel_cmds = vel_cmds.unsqueeze(1)
+        rewards = torch.exp(-((vel - vel_cmds) ** 2)).mean(dim=-1)
+    elif fn_name == "self_cmd":
+        rewards = torch.zeros_like(x_vel)
+        rewards = torch.where(z_vel >= 0, x_vel, rewards)
+        rewards = torch.where(z_vel < 0, -x_vel, rewards)
+        rewards = torch.clamp(rewards, -0.6, 0.6)
 
     return rewards
 

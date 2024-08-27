@@ -29,9 +29,9 @@ class DiffusionTransformer(nn.Module):
         self.cond_mask_prob = cond_mask_prob
 
         self.action_emb = nn.Linear(self.act_dim, self.d_model)
-        self.obs_emb = nn.Linear(self.obs_dim + 1, self.d_model)
+        self.obs_emb = nn.Linear(self.obs_dim, self.d_model)
         self.sigma_emb = nn.Linear(1, self.d_model)
-        self.vel_cmd_emb = nn.Linear(1, self.d_model)
+        self.vel_cmd_emb = nn.Linear(3, self.d_model)
         self.return_emb = nn.Linear(1, self.d_model)
 
         self.pos_emb = (
@@ -165,10 +165,8 @@ class DiffusionTransformer(nn.Module):
         # embeddings
         action_emb = self.action_emb(noised_action)
         sigma_emb = self.sigma_emb(sigma.view(-1, 1, 1).log() / 4)
-        obs = data_dict["obs"]
-        vel_cmd = data_dict["vel_cmd"].unsqueeze(1).expand(-1, obs.shape[1], -1)
-        obs = torch.cat([obs, vel_cmd], dim=-1)
-        obs_emb = self.obs_emb(obs)
+        obs_emb = self.obs_emb(data_dict["obs"])
+        # vel_cmd_emb = self.vel_cmd_emb(data_dict["vel_cmd"]).unsqueeze(1)
 
         returns = self.mask_cond(data_dict["return"], uncond)
         return_emb = self.return_emb(returns).unsqueeze(1)
