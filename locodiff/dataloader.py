@@ -167,13 +167,13 @@ class ExpertDataset(Dataset):
         return torch.from_numpy(masks).to(self.device).float()
 
     def sample_vel_cmd(self, batch_size):
-        vel_cmd = torch.randint(0, 2, (batch_size, 1), device=self.device)
-        vel_cmd = vel_cmd.float() * 2 - 1
-
+        vel_cmd = torch.randint(0, 2, (batch_size, 1), device=self.device).float()
         return vel_cmd
 
     def compute_returns(self, obs, vel_cmds, masks):
         rewards = reward_function(obs, vel_cmds, self.reward_fn)
+        rewards = torch.clamp(rewards, -0.6, 0.6)
+        rewards -= rewards.max()
         self.rewards = rewards  # for plotting
 
         horizon = self.return_horizon

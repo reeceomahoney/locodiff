@@ -82,8 +82,9 @@ class RaisimEnv:
         self.skill = torch.zeros(self.num_envs, self.skill_dim).to(self.device)
         self.skill[:, 0] = 1
 
-        self.vel_cmd = torch.randint(0, 2, (self.num_envs, 1)).to(self.device)
-        self.vel_cmd = self.vel_cmd.float() * 2 - 1
+        self.vel_cmd = torch.randint(
+            0, 2, (self.num_envs, 1), device=self.device
+        ).float()
 
         cond_lambdas = lambda_values if lambda_values is not None else [0, 5, 10, 20]
         assert self.num_envs % len(cond_lambdas) == 0

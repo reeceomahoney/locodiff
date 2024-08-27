@@ -5,8 +5,9 @@ data_directory = "walk"
 obs_dim = 33
 T_cond = 8
 return_horizon = 50
+reward_fn = "on_off"
 
-dataset = ExpertDataset(data_directory, obs_dim, T_cond, return_horizon)
+dataset = ExpertDataset(data_directory, obs_dim, T_cond, return_horizon, reward_fn)
 rewards = dataset.rewards
 returns = dataset.data["return"]
 
