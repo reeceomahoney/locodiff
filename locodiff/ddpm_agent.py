@@ -224,9 +224,9 @@ class Agent:
 
         return info
 
-    def reset(self):
-        self.obs_hist.fill_(0)
-        self.skill_hist.fill_(0)
+    def reset(self, done):
+        self.obs_hist[done] = 0
+        self.skill_hist[done] = 0
 
     @torch.no_grad()
     def predict(self, batch: dict, new_sampling_steps=None):

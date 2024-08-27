@@ -46,6 +46,7 @@ dataset_fn:
   test_batch_size: 1024
   num_workers: 4
   return_horizon: 50
+  reward_fn: ${reward_fn}
 
 model:
   _target_: locodiff.ddpm_transformer.DiffusionTransformer
