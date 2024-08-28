@@ -168,3 +168,4 @@ outputs/
 *.csv
 *.bag
 *.pt
+*.png
