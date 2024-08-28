@@ -138,6 +138,11 @@ class Agent:
 
                 wandb.log({k: v for k, v in log_info.items()}, step=self.steps)
 
+            # simulate
+            if not self.steps % self.sim_every_n_steps:
+                results = self.env.simulate(self)
+                wandb.log(results, step=self.steps)
+
             # train
             try:
                 batch_loss = self.train_step(next(generator))
@@ -148,10 +153,7 @@ class Agent:
             if not self.steps % 100:
                 wandb.log({"loss": batch_loss}, step=self.steps)
 
-            # simulate
-            if not self.steps % self.sim_every_n_steps:
-                results = self.env.simulate(self)
-                wandb.log(results, step=self.steps)
+            self.steps += 1
 
         self.store_model_weights(self.working_dir)
         log.info("Training done!")
@@ -170,7 +172,6 @@ class Agent:
         loss.backward()
         self.optimizer.step()
         self.lr_scheduler.step()
-        self.steps += 1
 
         # update the ema model
         if self.steps % self.update_ema_every_n_steps == 0:
