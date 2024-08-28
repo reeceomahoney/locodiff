@@ -45,7 +45,6 @@ class ExpertDataset(Dataset):
         vel_cmds = data["vel_cmd"]
         skills = data["skill"]
         terminals = data["terminal"]
-        # torques = data["torque"]
 
         # Find episode ends
         terminals_flat = terminals.reshape(-1)
@@ -64,9 +63,6 @@ class ExpertDataset(Dataset):
         actions = self.add_padding(actions_splits, max_len, temporal=True)
         vel_cmds = self.add_padding(vel_cmds_splits, max_len, temporal=False)
         skills = self.add_padding(skills_splits, max_len, temporal=True)
-        # torques = self.add_padding(torques_splits, max_len, temporal=True)
-
-        # NB: skill initial pad is the same as unconditional mask. this might be a problem.
 
         masks = self.create_masks(obs_splits, max_len)
 
