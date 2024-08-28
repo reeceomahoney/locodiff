@@ -102,14 +102,14 @@ class RaisimEnv:
             total_rewards = np.zeros(self.num_envs, dtype=np.float32)
             total_dones = np.zeros(self.num_envs, dtype=np.int64)
 
+            action = self.nominal_joint_pos
+            done = np.array([False])
+
             self.env.reset()
             agent.reset(np.ones(self.num_envs, dtype=bool))
-            done = np.array([False])
+
             obs, vel_cmd = self.observe()
 
-            # now run the agent for n steps
-            action = self.nominal_joint_pos
-            action = np.tile(action, (self.num_envs, 1))
             for n in tqdm(range(self.eval_n_steps)):
                 start = time.time()
 
