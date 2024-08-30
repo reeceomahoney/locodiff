@@ -269,11 +269,6 @@ class Agent:
         self.obs_hist[:, :-1] = self.obs_hist[:, 1:].clone()
         self.obs_hist[:, -1] = batch["obs"]
         batch["obs"] = self.obs_hist.clone()
-
-        self.skill_hist[:, :-1] = self.skill_hist[:, 1:].clone()
-        self.skill_hist[:, -1] = batch["skill"]
-        batch["skill"] = self.skill_hist.clone()
-
         return batch
 
     @torch.no_grad()
@@ -381,7 +376,7 @@ class Agent:
 
         raw_obs = batch["obs"]
         raw_action = batch.get("action", None)
-        raw_skill = batch["skill"]
+        skill = batch["skill"]
 
         vel_cmd = batch.get("vel_cmd", None)
         # if vel_cmd is None:
@@ -392,7 +387,6 @@ class Agent:
         #     returns = self.calculate_returns(raw_obs, vel_cmd)
 
         obs = self.scaler.scale_input(raw_obs[:, : self.T_cond])
-        skill = raw_skill[:, : self.T_cond]
 
         if raw_action is None:
             action = None
@@ -416,7 +410,7 @@ class Agent:
 
     def sample_vel_cmd(self, batch_size):
         vel_cmd = torch.randint(0, 2, (batch_size, 1), device=self.device)
-        vel_cmd = vel_cmd.float() * 2 - 1
+        vel_cmd = vel_cmd.float()
 
         return vel_cmd
 
