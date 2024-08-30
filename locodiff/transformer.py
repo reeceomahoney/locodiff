@@ -39,7 +39,7 @@ class DiffusionTransformer(nn.Module):
             SinusoidalPosEmb(d_model)(torch.arange(T)).unsqueeze(0).to(device)
         )
         self.cond_pos_emb = (
-            SinusoidalPosEmb(d_model)(torch.arange(T_cond + 2)).unsqueeze(0).to(device)
+            SinusoidalPosEmb(d_model)(torch.arange(T_cond + 3)).unsqueeze(0).to(device)
         )
 
         self.encoder = nn.Sequential(
@@ -171,10 +171,10 @@ class DiffusionTransformer(nn.Module):
         skill_emb = self.skill_emb(data_dict["skill"]).unsqueeze(1)
         # vel_cmd_emb = self.vel_cmd_emb(data_dict["vel_cmd"]).unsqueeze(1)
 
-        # returns = self.mask_cond(data_dict["return"], uncond)
-        # return_emb = self.return_emb(returns).unsqueeze(1)
+        returns = self.mask_cond(data_dict["return"], uncond)
+        return_emb = self.return_emb(returns).unsqueeze(1)
 
-        cond = torch.cat([sigma_emb, skill_emb, obs_emb], dim=1)
+        cond = torch.cat([sigma_emb, return_emb, skill_emb, obs_emb], dim=1)
         cond += self.cond_pos_emb
         cond = self.encoder(cond)
 

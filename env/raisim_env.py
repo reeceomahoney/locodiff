@@ -147,6 +147,7 @@ class RaisimEnv:
 
             # split rewards by lambda
             total_rewards /= self.eval_n_steps
+            height_rewards /= self.eval_n_steps
             for i, lam in enumerate(cond_lambdas):
                 return_dict[f"lamda_{lam}/reward_mean"] = total_rewards[
                     i * envs_per_lambda : (i + 1) * envs_per_lambda
@@ -157,10 +158,10 @@ class RaisimEnv:
                 return_dict[f"lamda_{lam}/terminals_mean"] = total_dones[
                     i * envs_per_lambda : (i + 1) * envs_per_lambda
                 ].mean()
+                return_dict[f"lamda_{lam}/height_reward_mean"] = height_rewards[
+                    i * envs_per_lambda : (i + 1) * envs_per_lambda
+                    ].mean()
 
-            return_dict["height_reward_mean"] = (
-                height_rewards.mean() / self.eval_n_steps
-            )
 
         return return_dict
 
