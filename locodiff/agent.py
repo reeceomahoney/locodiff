@@ -270,9 +270,9 @@ class Agent:
         self.obs_hist[:, -1] = batch["obs"]
         batch["obs"] = self.obs_hist.clone()
 
-        self.skill_hist[:, :-1] = self.skill_hist[:, 1:].clone()
-        self.skill_hist[:, -1] = batch["skill"]
-        batch["skill"] = self.skill_hist.clone()
+        # self.skill_hist[:, :-1] = self.skill_hist[:, 1:].clone()
+        # self.skill_hist[:, -1] = batch["skill"]
+        # batch["skill"] = self.skill_hist.clone()
 
         return batch
 
@@ -392,7 +392,7 @@ class Agent:
         #     returns = self.calculate_returns(raw_obs, vel_cmd)
 
         obs = self.scaler.scale_input(raw_obs[:, : self.T_cond])
-        skill = raw_skill[:, : self.T_cond]
+        skill = raw_skill
 
         if raw_action is None:
             action = None

@@ -100,6 +100,7 @@ class RaisimEnv:
 
         for _ in range(self.eval_n_times):
             total_rewards = np.zeros(self.num_envs, dtype=np.float32)
+            height_rewards = np.zeros(self.num_envs, dtype=np.float32)
             total_dones = np.zeros(self.num_envs, dtype=np.int64)
 
             action = self.nominal_joint_pos
@@ -117,6 +118,12 @@ class RaisimEnv:
                     total_dones += done
                     agent.reset(done)
 
+                if n == 125:
+                    self.skill = torch.zeros(self.num_envs, self.skill_dim).to(
+                        self.device
+                    )
+                    self.skill[:, 1] = 1
+
                 pred_action = agent.predict(
                     {
                         "obs": obs,
@@ -128,7 +135,8 @@ class RaisimEnv:
 
                 for i in range(self.T_action):
                     obs, vel_cmd, rewards, done = self.step(action)
-                    total_rewards += rewards
+                    total_rewards += rewards[0]
+                    height_rewards += rewards[1]
                     action = pred_action[:, i]
 
                     if real_time:
@@ -150,13 +158,25 @@ class RaisimEnv:
                     i * envs_per_lambda : (i + 1) * envs_per_lambda
                 ].mean()
 
+            return_dict["height_reward_mean"] = (
+                height_rewards.mean() / self.eval_n_steps
+            )
+
         return return_dict
 
     def compute_reward(self, obs, vel_cmds):
         rewards = reward_function(obs, vel_cmds, self.reward_fn)
         rewards = rewards.cpu().numpy()
 
-        return rewards
+        # height reward
+        height = torch.from_numpy(self.get_base_position()[:, -1])
+        if self.skill[0, 0] == 1:
+            height_reward = torch.exp(-100 * (height - 0.6).pow(2))
+        elif self.skill[0, 1] == 1:
+            height_reward = torch.exp(-100 * (height - 0.5).pow(2))
+        height_reward = height_reward.cpu().numpy()
+
+        return rewards, height_reward
 
     def get_base_position(self):
         self.env.getBasePosition(self._base_position)

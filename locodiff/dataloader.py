@@ -62,7 +62,7 @@ class ExpertDataset(Dataset):
         obs = self.add_padding(obs_splits, max_len, temporal=True)
         actions = self.add_padding(actions_splits, max_len, temporal=True)
         vel_cmds = self.add_padding(vel_cmds_splits, max_len, temporal=False)
-        skills = self.add_padding(skills_splits, max_len, temporal=True)
+        skills = self.add_padding(skills_splits, max_len, temporal=False)
 
         masks = self.create_masks(obs_splits, max_len)
 
@@ -74,7 +74,6 @@ class ExpertDataset(Dataset):
             # Remove last steps if return horizon is set
             obs = obs[:, : -self.return_horizon]
             actions = actions[:, : -self.return_horizon]
-            skills = skills[:, : -self.return_horizon]
             terminals = terminals[:, : -self.return_horizon]
             masks = masks[:, : -self.return_horizon]
 
