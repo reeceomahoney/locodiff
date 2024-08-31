@@ -142,7 +142,7 @@ class Agent:
                 max_reward = max(rewards)
                 if max_reward > best_reward:
                     best_reward = max_reward
-                    self.store_model_weights(self.working_dir)
+                    self.store_model_weights(self.working_dir, best_reward=True)
                     log.info("New best reward. Stored weights have been updated!")
 
             # train
@@ -296,6 +296,8 @@ class Agent:
         """
         Classifier-free guidance sample
         """
+        # TODO: parallelize this
+
         out = self.model(x_t, sigma, data_dict)
 
         if self.cond_mask_prob > 0:

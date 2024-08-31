@@ -8,8 +8,7 @@ hydra:
   run:
     dir: .
 
-model_store_path: logs/2024-08-27/23-54-27
-classifier_path: logs/classifier/2024-05-04/10-56-58
+model_store_path: logs/2024-08-31/15-45-24
 log_wandb: True
 
 num_runs: 50
@@ -19,7 +18,7 @@ sigma_max: 80
 cond_lambda: 1
 device: cuda
 server_port: 8080
-num_envs: 350
+num_envs: 450
 
 # chose what to evaluate
 test_rollout: False

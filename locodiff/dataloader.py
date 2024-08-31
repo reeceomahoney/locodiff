@@ -179,7 +179,7 @@ class ExpertDataset(Dataset):
             for t in range(T - horizon):
                 returns[i, t] = (rewards[i, t : t + horizon] * gammas).sum()
 
-        returns = torch.exp(returns / 20)
+        returns = torch.exp(returns / 50)
         return returns.unsqueeze(-1)
 
 
