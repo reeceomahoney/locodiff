@@ -70,7 +70,6 @@ class DiffusionTransformer(nn.Module):
             nn.TransformerDecoder,
             nn.ModuleList,
             nn.Mish,
-            nn.GELU,
             nn.Sequential,
             DiffusionTransformer,
         )
@@ -207,23 +206,3 @@ class DiffusionTransformer(nn.Module):
     def detach_all(self):
         for name, param in self.named_parameters():
             param.detach_()
-
-
-if __name__ == "__main__":
-    torch.manual_seed(0)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = DiffusionTransformer(
-        obs_dim=33,
-        act_dim=12,
-        d_model=128,
-        nhead=4,
-        num_layers=4,
-        T=6,
-        T_cond=4,
-        device=device,
-    )
-    x = torch.randn(1, 6, 45).to(device)
-    cond = torch.randn(1, 4, 45).to(device)
-    goal = torch.randn(1, 1).to(device)
-    sigma = torch.tensor([1]).to(device)
-    model(x, cond, sigma)

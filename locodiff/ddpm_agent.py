@@ -64,7 +64,6 @@ class Agent:
         self.lr_scheduler = hydra.utils.instantiate(
             lr_scheduler, optimizer=self.optimizer
         )
-        self.steps = 0
         self.max_train_steps = int(max_train_steps)
         self.eval_every_n_steps = eval_every_n_steps
 
@@ -112,18 +111,13 @@ class Agent:
         Main training loop
         """
         best_test_mse = 1e10
+        best_reward = -1e10
         generator = iter(self.train_loader)
 
-        for step in tqdm(
-            range(self.max_train_steps), position=0, leave=True, dynamic_ncols=True
-        ):
+        for step in tqdm(range(self.max_train_steps), dynamic_ncols=True):
             # evaluate
-            if not self.steps % self.eval_every_n_steps:
-                log_info = {
-                    "total_mse": [],
-                    "first_mse": [],
-                    "last_mse": [],
-                }
+            if not step % self.eval_every_n_steps:
+                log_info = {"total_mse": [], "first_mse": [], "last_mse": []}
                 for batch in tqdm(
                     self.test_loader, desc="Evaluating", position=0, leave=True
                 ):
@@ -138,7 +132,20 @@ class Agent:
                     log.info("New best test loss. Stored weights have been updated!")
                 log_info["lr"] = self.optimizer.param_groups[0]["lr"]
 
-                wandb.log({k: v for k, v in log_info.items()}, step=self.steps)
+                wandb.log({k: v for k, v in log_info.items()}, step=step)
+
+            # simulate
+            if not step % self.sim_every_n_steps:
+                results = self.env.simulate(self)
+                wandb.log(results, step=step)
+
+                # save the best model by reward
+                rewards = [v for k, v in results.items() if k.endswith("/reward_mean")]
+                max_reward = max(rewards)
+                if max_reward > best_reward:
+                    best_reward = max_reward
+                    self.store_model_weights(self.working_dir, best_reward=True)
+                    log.info("New best reward. Stored weights have been updated!")
 
             # train
             try:
@@ -147,13 +154,8 @@ class Agent:
                 # restart the generator if the previous generator is exhausted.
                 generator = iter(self.train_loader)
                 batch_loss = self.train_step(next(generator))
-            if not self.steps % 100:
-                wandb.log({"loss": batch_loss}, step=self.steps)
-
-            # simulate
-            if not self.steps % self.sim_every_n_steps:
-                results = self.env.simulate(self)
-                wandb.log(results, step=self.steps)
+            if not step % 100:
+                wandb.log({"loss": batch_loss}, step=step)
 
         self.store_model_weights(self.working_dir)
         log.info("Training done!")
@@ -176,11 +178,8 @@ class Agent:
         loss.backward()
         self.optimizer.step()
         self.lr_scheduler.step()
-        self.steps += 1
 
-        # update the ema model
-        if self.steps % self.update_ema_every_n_steps == 0:
-            self.ema_helper.update(self.model.parameters())
+        self.ema_helper.update(self.model.parameters())
         return loss.item()
 
     @torch.no_grad()
@@ -268,11 +267,6 @@ class Agent:
         self.obs_hist[:, :-1] = self.obs_hist[:, 1:].clone()
         self.obs_hist[:, -1] = batch["obs"]
         batch["obs"] = self.obs_hist.clone()
-
-        self.skill_hist[:, :-1] = self.skill_hist[:, 1:].clone()
-        self.skill_hist[:, -1] = batch["skill"]
-        batch["skill"] = self.skill_hist.clone()
-
         return batch
 
     @torch.no_grad()
@@ -306,7 +300,7 @@ class Agent:
     def load_pretrained_model(self, weights_path: str, **kwargs) -> None:
         self.model.load_state_dict(
             torch.load(
-                os.path.join(weights_path, "model_state_dict.pth"),
+                os.path.join(weights_path, "best_model_state_dict.pth"),
                 map_location=self.device,
             ),
             strict=False,
@@ -323,18 +317,19 @@ class Agent:
 
         log.info("Loaded pre-trained model parameters and scaler")
 
-    def store_model_weights(self, store_path: str) -> None:
+    def store_model_weights(self, store_path: str, best_reward: bool = False) -> None:
         if self.use_ema:
             self.ema_helper.store(self.model.parameters())
             self.ema_helper.copy_to(self.model.parameters())
-        torch.save(
-            self.model.state_dict(), os.path.join(store_path, "model_state_dict.pth")
+        name = (
+            "model_state_dict.pth" if not best_reward else "best_model_state_dict.pth"
         )
+        torch.save(self.model.state_dict(), os.path.join(store_path, name))
         if self.use_ema:
             self.ema_helper.restore(self.model.parameters())
         torch.save(
             self.model.state_dict(),
-            os.path.join(store_path, "non_ema_model_state_dict.pth"),
+            os.path.join(store_path, "non_ema_" + name),
         )
 
         # Save scaler attributes
@@ -373,23 +368,18 @@ class Agent:
 
         raw_obs = batch["obs"]
         raw_action = batch.get("action", None)
-        raw_skill = batch["skill"]
-
+        skill = batch["skill"]
         vel_cmd = batch.get("vel_cmd", None)
-        # if vel_cmd is None:
-        #     vel_cmd = self.sample_vel_cmd(raw_obs.shape[0])
-
         returns = batch.get("return", None)
-        # if returns is None:
-        #     returns = self.calculate_returns(raw_obs, vel_cmd)
 
         obs = self.scaler.scale_input(raw_obs[:, : self.T_cond])
-        skill = raw_skill[:, : self.T_cond]
 
         if raw_action is None:
             action = None
         else:
-            action = self.scaler.scale_output(raw_action[:, self.T_cond - 1 : self.T_cond + self.T - 1])
+            action = self.scaler.scale_output(
+                raw_action[:, self.T_cond - 1 : self.T_cond + self.T - 1],
+            )
 
         processed_batch = {
             "obs": obs,
@@ -403,26 +393,3 @@ class Agent:
 
     def dict_to_device(self, batch):
         return {k: v.clone().to(self.device) for k, v in batch.items()}
-
-    def sample_vel_cmd(self, batch_size):
-        limits = [0.8, 0.5, 1.0]
-        cmd = torch.rand((batch_size, 3), device=self.device)
-
-        for i in range(3):
-            cmd[:, i] = (cmd[:, i] - 0.5) * 2 * limits[i]
-
-        return cmd
-
-    def calculate_returns(self, obs, vel_cmd):
-        lin_vel = obs[:, self.T_cond - 1 :, 30:32]
-        ang_vel = obs[:, self.T_cond - 1 :, 17:18]
-        vel = torch.cat([lin_vel, ang_vel], dim=-1)
-        vel_cmd = vel_cmd.unsqueeze(1)
-        rewards = torch.exp(-3 * (vel - vel_cmd).pow(2)).mean(dim=-1) - 1
-
-        horizon = 50
-        gammas = torch.tensor([0.99**i for i in range(horizon)]).to(self.device)
-
-        returns = (rewards * gammas).sum(dim=-1)
-        returns = torch.exp(returns / 15)
-        return returns.unsqueeze(-1)

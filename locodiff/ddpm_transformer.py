@@ -29,20 +29,17 @@ class DiffusionTransformer(nn.Module):
         self.cond_mask_prob = cond_mask_prob
 
         self.action_emb = nn.Linear(self.act_dim, self.d_model)
-        self.obs_emb = nn.Linear(self.obs_dim + 1, self.d_model)
+        self.obs_emb = nn.Linear(self.obs_dim, self.d_model)
         self.t_emb = nn.Linear(1, self.d_model)
-        self.vel_cmd_emb = nn.Linear(3, self.d_model)
+        self.vel_cmd_emb = nn.Linear(1, self.d_model)
         self.return_emb = nn.Linear(1, self.d_model)
+        self.skill_emb = nn.Linear(skill_dim, self.d_model)
 
         self.pos_emb = (
             SinusoidalPosEmb(d_model)(torch.arange(T)).unsqueeze(0).to(device)
         )
         self.cond_pos_emb = (
-            SinusoidalPosEmb(d_model)(torch.arange(T_cond + 2)).unsqueeze(0).to(device)
-        )
-
-        self.encoder = nn.Sequential(
-            nn.Linear(d_model, 4 * d_model), nn.Mish(), nn.Linear(4 * d_model, d_model)
+            SinusoidalPosEmb(d_model)(torch.arange(T_cond + 3)).unsqueeze(0).to(device)
         )
 
         self.decoder = nn.TransformerDecoder(
@@ -165,18 +162,15 @@ class DiffusionTransformer(nn.Module):
         # embeddings
         action_emb = self.action_emb(noised_action)
         t_emb = self.t_emb(t.view(-1, 1, 1).float().to(self.device))
-        obs = data_dict["obs"]
-        vel_cmd = data_dict["vel_cmd"].unsqueeze(1).expand(-1, obs.shape[1], -1)
-        obs = torch.cat([obs, vel_cmd], dim=-1)
-        obs_emb = self.obs_emb(obs)
+        obs_emb = self.obs_emb(data_dict["obs"])
+        skill_emb = self.skill_emb(data_dict["skill"]).unsqueeze(1)
         # vel_cmd_emb = self.vel_cmd_emb(data_dict["vel_cmd"]).unsqueeze(1)
 
         returns = self.mask_cond(data_dict["return"], uncond)
         return_emb = self.return_emb(returns).unsqueeze(1)
 
-        cond = torch.cat([t_emb, return_emb, obs_emb], dim=1)
+        cond = torch.cat([t_emb, return_emb, skill_emb, obs_emb], dim=1)
         cond += self.cond_pos_emb
-        cond = self.encoder(cond)
 
         action_emb += self.pos_emb
         x = self.decoder(tgt=action_emb, memory=cond, tgt_mask=self.mask)
@@ -212,23 +206,3 @@ class DiffusionTransformer(nn.Module):
     def detach_all(self):
         for name, param in self.named_parameters():
             param.detach_()
-
-
-if __name__ == "__main__":
-    torch.manual_seed()
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = DiffusionTransformer(
-        obs_dim=33,
-        act_dim=12,
-        d_model=128,
-        nhead=4,
-        num_layers=4,
-        T=6,
-        T_cond=4,
-        device=device,
-    )
-    x = torch.randn(1, 6, 45).to(device)
-    cond = torch.randn(1, 4, 45).to(device)
-    goal = torch.randn(1, 1).to(device)
-    sigma = torch.tensor([1]).to(device)
-    model(x, cond, sigma)

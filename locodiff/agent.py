@@ -309,7 +309,7 @@ class Agent:
     def load_pretrained_model(self, weights_path: str, **kwargs) -> None:
         self.model.load_state_dict(
             torch.load(
-                os.path.join(weights_path, "model_state_dict.pth"),
+                os.path.join(weights_path, "best_model_state_dict.pth"),
                 map_location=self.device,
             ),
             strict=False,
@@ -378,14 +378,8 @@ class Agent:
         raw_obs = batch["obs"]
         raw_action = batch.get("action", None)
         skill = batch["skill"]
-
         vel_cmd = batch.get("vel_cmd", None)
-        # if vel_cmd is None:
-        #     vel_cmd = self.sample_vel_cmd(raw_obs.shape[0])
-
         returns = batch.get("return", None)
-        # if returns is None:
-        #     returns = self.calculate_returns(raw_obs, vel_cmd)
 
         obs = self.scaler.scale_input(raw_obs[:, : self.T_cond])
 
@@ -408,40 +402,3 @@ class Agent:
 
     def dict_to_device(self, batch):
         return {k: v.clone().to(self.device) for k, v in batch.items()}
-
-    def sample_vel_cmd(self, batch_size):
-        vel_cmd = torch.randint(0, 2, (batch_size, 1), device=self.device)
-        vel_cmd = vel_cmd.float()
-
-        return vel_cmd
-
-    def calculate_returns(self, obs, vel_cmd):
-        lin_vel = obs[:, self.T_cond - 1 :, 30:32]
-        ang_vel = obs[:, self.T_cond - 1 :, 17:18]
-        vel = torch.cat([lin_vel, ang_vel], dim=-1)
-
-        vel = vel[:, :, 0]
-        vel_cmd = vel_cmd.expand(-1, vel.shape[1])
-
-        rewards = torch.zeros_like(vel)
-        # Correct
-        rewards = torch.where(
-            (vel_cmd == 1) & (vel > 0), torch.zeros_like(rewards), rewards
-        )
-        rewards = torch.where(
-            (vel_cmd == -1) & (vel < 0), torch.zeros_like(rewards), rewards
-        )
-        # Incorrect
-        rewards = torch.where(
-            (vel_cmd == 1) & (vel <= 0), -torch.ones_like(rewards), rewards
-        )
-        rewards = torch.where(
-            (vel_cmd == -1) & (vel >= 0), -torch.ones_like(rewards), rewards
-        )
-
-        horizon = 50
-        gammas = torch.tensor([0.99**i for i in range(horizon)]).to(self.device)
-
-        returns = (rewards * gammas).sum(dim=-1)
-        returns = torch.exp(returns)
-        return returns.unsqueeze(-1)
