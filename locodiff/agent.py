@@ -63,7 +63,6 @@ class Agent:
         self.lr_scheduler = hydra.utils.instantiate(
             lr_scheduler, optimizer=self.optimizer
         )
-        self.steps = 0
         self.max_train_steps = int(max_train_steps)
         self.eval_every_n_steps = eval_every_n_steps
 
@@ -110,18 +109,13 @@ class Agent:
         Main training loop
         """
         best_test_mse = 1e10
+        best_reward = -1e10
         generator = iter(self.train_loader)
 
-        for step in tqdm(
-            range(self.max_train_steps), position=0, leave=True, dynamic_ncols=True
-        ):
+        for step in tqdm(range(self.max_train_steps), dynamic_ncols=True):
             # evaluate
-            if not self.steps % self.eval_every_n_steps:
-                log_info = {
-                    "total_mse": [],
-                    "first_mse": [],
-                    "last_mse": [],
-                }
+            if not step % self.eval_every_n_steps:
+                log_info = {"total_mse": [], "first_mse": [], "last_mse": []}
                 for batch in tqdm(
                     self.test_loader, desc="Evaluating", position=0, leave=True
                 ):
@@ -136,12 +130,20 @@ class Agent:
                     log.info("New best test loss. Stored weights have been updated!")
                 log_info["lr"] = self.optimizer.param_groups[0]["lr"]
 
-                wandb.log({k: v for k, v in log_info.items()}, step=self.steps)
+                wandb.log({k: v for k, v in log_info.items()}, step=step)
 
             # simulate
-            if not self.steps % self.sim_every_n_steps:
+            if not step % self.sim_every_n_steps:
                 results = self.env.simulate(self)
-                wandb.log(results, step=self.steps)
+                wandb.log(results, step=step)
+
+                # save the best model by reward
+                rewards = [v for k, v in results.items() if k.endswith("/reward_mean")]
+                max_reward = max(rewards)
+                if max_reward > best_reward:
+                    best_reward = max_reward
+                    self.store_model_weights(self.working_dir)
+                    log.info("New best reward. Stored weights have been updated!")
 
             # train
             try:
@@ -150,10 +152,8 @@ class Agent:
                 # restart the generator if the previous generator is exhausted.
                 generator = iter(self.train_loader)
                 batch_loss = self.train_step(next(generator))
-            if not self.steps % 100:
-                wandb.log({"loss": batch_loss}, step=self.steps)
-
-            self.steps += 1
+            if not step % 100:
+                wandb.log({"loss": batch_loss}, step=step)
 
         self.store_model_weights(self.working_dir)
         log.info("Training done!")
@@ -173,9 +173,7 @@ class Agent:
         self.optimizer.step()
         self.lr_scheduler.step()
 
-        # update the ema model
-        if self.steps % self.update_ema_every_n_steps == 0:
-            self.ema_helper.update(self.model.parameters())
+        self.ema_helper.update(self.model.parameters())
         return loss.item()
 
     @torch.no_grad()
@@ -326,18 +324,19 @@ class Agent:
 
         log.info("Loaded pre-trained model parameters and scaler")
 
-    def store_model_weights(self, store_path: str) -> None:
+    def store_model_weights(self, store_path: str, best_reward: bool = False) -> None:
         if self.use_ema:
             self.ema_helper.store(self.model.parameters())
             self.ema_helper.copy_to(self.model.parameters())
-        torch.save(
-            self.model.state_dict(), os.path.join(store_path, "model_state_dict.pth")
+        name = (
+            "model_state_dict.pth" if not best_reward else "best_model_state_dict.pth"
         )
+        torch.save(self.model.state_dict(), os.path.join(store_path, name))
         if self.use_ema:
             self.ema_helper.restore(self.model.parameters())
         torch.save(
             self.model.state_dict(),
-            os.path.join(store_path, "non_ema_model_state_dict.pth"),
+            os.path.join(store_path, "non_ema_" + name),
         )
 
         # Save scaler attributes
