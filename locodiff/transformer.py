@@ -42,10 +42,6 @@ class DiffusionTransformer(nn.Module):
             SinusoidalPosEmb(d_model)(torch.arange(T_cond + 3)).unsqueeze(0).to(device)
         )
 
-        self.encoder = nn.Sequential(
-            nn.Linear(d_model, 4 * d_model), nn.GELU(), nn.Linear(4 * d_model, d_model)
-        )
-
         self.decoder = nn.TransformerDecoder(
             nn.TransformerDecoderLayer(
                 d_model=self.d_model,
@@ -176,7 +172,6 @@ class DiffusionTransformer(nn.Module):
 
         cond = torch.cat([sigma_emb, return_emb, skill_emb, obs_emb], dim=1)
         cond += self.cond_pos_emb
-        cond = self.encoder(cond)
 
         action_emb += self.pos_emb
         x = self.decoder(tgt=action_emb, memory=cond, tgt_mask=self.mask)
