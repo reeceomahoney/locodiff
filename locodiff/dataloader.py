@@ -180,7 +180,12 @@ class ExpertDataset(Dataset):
             for t in range(T - horizon):
                 returns[i, t] = (rewards[i, t : t + horizon] * gammas).sum()
 
-        returns = torch.exp(returns / 50)
+        returns = torch.exp(returns / 10)
+
+        # shift max return to 1
+        returns = torch.where(returns == 1, -1, returns)
+        returns = returns - returns.max() + 1
+
         return returns.unsqueeze(-1)
 
 

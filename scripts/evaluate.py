@@ -58,11 +58,14 @@ def main(cfg: DictConfig) -> None:
         results_dict = env.simulate(agent, real_time=True)
         print(results_dict)
     if cfg["test_reward_lambda"]:
-        lambda_values = [0, 1, 2, 5, 10, 20, 50, 100, 150]
+        # lambda_values = [0, 1, 2, 5, 10, 20, 50, 100, 150]
+        lambda_values = [0, 1, 1.2, 1.5, 1.7, 2, 5, 10, 20]
 
         results_dict = env.simulate(agent, real_time=False, lambda_values=lambda_values)
         rewards = [v for k, v in results_dict.items() if k.endswith("/reward_mean")]
-        terminals = [v for k, v in results_dict.items() if k.endswith("/terminals_mean")]
+        terminals = [
+            v for k, v in results_dict.items() if k.endswith("/terminals_mean")
+        ]
 
         print(rewards)
         print(terminals)
@@ -146,58 +149,6 @@ def main(cfg: DictConfig) -> None:
 
             plt.tight_layout()
             plt.savefig("results.png")
-        if cfg["test_cond_lambda"]:
-            agent.num_sampling_steps = 10
-            lambdas = [0, 1e-6, 2e-3]
-            batch = {k: v[3:4] for k, v in batch.items()}
-
-            fix, axs = plt.subplots(2, 3, figsize=(15, 10))
-            axs = axs.flatten()
-
-            obs = batch["observation"].cpu().numpy()
-            obs[:, :, :2] -= obs[:, model_cfg["T_cond"] - 1, :2]
-
-            for i, l in enumerate(lambdas):
-                info = agent.evaluate(batch, cond_lambda=l)
-                goal = info["goal"].cpu().numpy()
-                pred = info["prediction"].cpu().numpy()[0, :, :2]
-                gt = obs[0, model_cfg["T_cond"] - 1 :, :2]
-
-                axs[i].title.set_text(f"Lambda: {l}")
-                axs[i].plot(gt[:, 0], gt[:, 1], "o-", label="observed")
-                axs[i].plot(pred[:, 0], pred[:, 1], "x-", label="predicted")
-                axs[i].plot(goal[0, 0], goal[0, 1], "rx", label="Goal")
-
-                axs[i].legend()
-        if cfg["test_t_sne"]:
-            env.eval_n_times = 10
-            results_dict = env.simulate(
-                agent, n_inference_steps=cfg["n_inference_steps"], real_time=True
-            )
-
-            obs_dim = 36
-            obs = results_dict["all_obs"]
-            vels = np.concatenate([obs[..., 33:35], obs[..., 20:21]], axis=-1)
-            cmds = results_dict["all_cmds"]
-
-            error = (vels - cmds) ** 2
-            error = error.mean(axis=(0, 1))
-            print(error)
-
-            # dataset = np.load("data/datasets/walk.npy", allow_pickle=True).item()
-            # dataset_obs = dataset["observations"].reshape(-1, obs_dim)[:12450, 6:18]
-
-            # tsne_1 = TSNE(n_components=2).fit_transform(obs)
-            # tsne_2 = TSNE(n_components=2).fit_transform(dataset_obs)
-
-            # plt.scatter(tsne_1[:, 0], tsne_1[:, 1], label="Ground truth")
-            # plt.scatter(tsne_2[:, 0], tsne_2[:, 1], label="Generated")
-            # plt.legend()
-            # plt.show()
-
-        # if not cfg["visualize x-y trajectory"]:
-        #     plt.legend()
-        #     if socket.gethostname() == "ori-drs-sid":gg
 
 
 if __name__ == "__main__":

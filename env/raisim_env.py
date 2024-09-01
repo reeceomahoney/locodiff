@@ -86,7 +86,7 @@ class RaisimEnv:
             0, 2, (self.num_envs, 1), device=self.device
         ).float()
 
-        cond_lambdas = lambda_values if lambda_values is not None else [0, 50, 100, 150]
+        cond_lambdas = lambda_values if lambda_values is not None else [0, 1, 1.5, 2]
         assert self.num_envs % len(cond_lambdas) == 0
 
         # For parallel evaluation
