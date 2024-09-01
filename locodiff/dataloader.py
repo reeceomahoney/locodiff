@@ -55,7 +55,6 @@ class ExpertDataset(Dataset):
         actions_splits = self.split_eps(actions, split_indices)
         vel_cmds_splits = self.split_eps(vel_cmds, split_indices)
         skills_splits = self.split_eps(skills, split_indices)
-        # torques_splits = self.split_eps(torques, split_indices)
 
         max_len = max(split.shape[0] for split in obs_splits)
 
@@ -82,9 +81,11 @@ class ExpertDataset(Dataset):
             "action": actions,
             "vel_cmd": vel_cmds,
             "skill": skills,
-            "return": returns,
             "mask": masks,
         }
+
+        if self.return_horizon > 0:
+            processed_data["return"] = returns
 
         return processed_data
 

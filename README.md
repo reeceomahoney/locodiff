@@ -9,3 +9,4 @@
 - [ ] fix cmake stdout
 - [ ] Add setup to README
 - [ ] Make dims consistent everywhere
+- [ ] add experiment options to config 

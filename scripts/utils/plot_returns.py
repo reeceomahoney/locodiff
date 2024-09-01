@@ -19,7 +19,7 @@ plt.ylabel("Frequency")
 
 # Plot histogram for returns
 plt.subplot(1, 2, 2)
-returns = returns[returns != 1]
+returns = returns[returns != returns.min()]
 print(returns.max())
 plt.hist(returns.flatten().cpu().numpy(), bins=20)
 plt.xlabel("Returns")

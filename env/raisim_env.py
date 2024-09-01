@@ -160,8 +160,7 @@ class RaisimEnv:
                 ].mean()
                 return_dict[f"lamda_{lam}/height_reward_mean"] = height_rewards[
                     i * envs_per_lambda : (i + 1) * envs_per_lambda
-                    ].mean()
-
+                ].mean()
 
         return return_dict
 
