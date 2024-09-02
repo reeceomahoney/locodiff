@@ -386,7 +386,7 @@ class Agent:
             "action": action,
             "vel_cmd": vel_cmd,
             "skill": skill,
-            "return": returns[:, self.T_cond - 1],
+            "return": returns[:, self.T_cond - 1] if returns is not None else None,
         }
 
         return processed_batch

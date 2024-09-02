@@ -134,7 +134,7 @@ class Agent:
 
             # simulate
             if not step % self.sim_every_n_steps:
-                results = self.env.simulate(self)
+                results = self.env.simulate(self, lambda_values=[0])
                 wandb.log(results, step=step)
 
                 # save the best model by reward
@@ -395,7 +395,7 @@ class Agent:
             "action": action,
             "vel_cmd": vel_cmd,
             "skill": skill,
-            "return": returns[:, self.T_cond - 1],
+            "return": returns[:, self.T_cond - 1] if returns is not None else None,
         }
 
         return processed_batch
