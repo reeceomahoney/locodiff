@@ -169,6 +169,7 @@ class Agent:
         action = data_dict["action"]
         noise = torch.randn_like(action)
         timesteps = torch.randint(0, self.num_sampling_steps, (noise.shape[0],))
+        timesteps = timesteps.float().to(self.device)
         noise_trajectory = self.noise_scheduler.add_noise(action, noise, timesteps)
         pred = self.model(noise_trajectory, timesteps, data_dict)
 
@@ -196,7 +197,7 @@ class Agent:
         self.model.training = False
 
         # get the sigma distribution for sampling based on Karras et al. 2022
-        noise = torch.randn_like(data_dict["action"]) * self.sigma_max
+        noise = torch.randn_like(data_dict["action"])
         self.noise_scheduler.set_timesteps(self.num_sampling_steps)
         x_0 = self.sample_ddpm(noise, data_dict)
 
@@ -277,10 +278,11 @@ class Agent:
         x_t = noise
 
         for t in self.noise_scheduler.timesteps:
+            t_pt = t.float().to(self.device)
             if predict:
-                output = self.cfg_forward(x_t, t.expand(x_t.shape[0]), data_dict)
+                output = self.cfg_forward(x_t, t_pt.expand(x_t.shape[0]), data_dict)
             else:
-                output = self.model(x_t, t.expand(x_t.shape[0]), data_dict)
+                output = self.model(x_t, t_pt.expand(x_t.shape[0]), data_dict)
             x_t = self.noise_scheduler.step(output, t, x_t).prev_sample
 
         return x_t

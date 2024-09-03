@@ -66,9 +66,9 @@ def reward_function(obs, vel_cmds, fn_name):
         lin_vel = obs[..., 30:32]
         ang_vel = obs[..., 17:18]
         vel = torch.cat([lin_vel, ang_vel], dim=-1)
-        # vel_cmds = torch.tensor([0.8, 0.0, 0.0]).to(vel.device)
-        if vel.ndim == 3:
-            vel_cmds = vel_cmds.unsqueeze(1)
+        vel_cmds = torch.tensor([0.8, 0.0, 0.0]).to(vel.device)
+        # if vel.ndim == 3:
+        #     vel_cmds = vel_cmds.unsqueeze(1)
         rewards = torch.exp(-3*((vel - vel_cmds) ** 2)).mean(dim=-1)
     elif fn_name == "self_cmd":
         rewards = torch.zeros_like(x_vel)

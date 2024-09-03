@@ -2,7 +2,7 @@ defaults:
   - agents: agent
   - _self_
 
-data_path: noise/walk_noise_0.15
+data_path: walk_mid
 
 hydra:
   run:
@@ -33,7 +33,7 @@ max_epochs: 100
 eval_every_n_steps: 1000
 sim_every_n_steps: 5000
 evaluating: False
-reward_horizon: 0
+reward_horizon: 50
 reward_fn: vel_target
 
 # BESO hyperparameters

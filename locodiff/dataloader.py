@@ -68,6 +68,7 @@ class ExpertDataset(Dataset):
         # Compute returns
         if self.return_horizon > 0:
             vel_cmds = self.sample_vel_cmd(obs.shape[0])
+            # vel_cmds = self.random_vel_cmd(vel_cmds)
             returns = self.compute_returns(obs, vel_cmds, masks)
 
             # Remove last steps if return horizon is set
@@ -165,6 +166,20 @@ class ExpertDataset(Dataset):
     def sample_vel_cmd(self, batch_size):
         vel_cmd = torch.randint(0, 2, (batch_size, 1), device=self.device).float()
         return vel_cmd
+
+    def random_vel_cmd(self, vel_cmds):
+        # replace half of the vel_cmds with random values
+        vel_limits = [0.8, 0.5, 1.0]
+        rand_cmds = torch.rand_like(vel_cmds)
+        for i in range(3):
+            rand_cmds[:, i] = rand_cmds[:, i] * 2 * vel_limits[i] - vel_limits[i]
+
+        mask = torch.rand(vel_cmds.shape[0], 1)
+        mask = mask < 0.5
+        mask = mask.expand_as(vel_cmds)
+        vel_cmds[mask] = rand_cmds[mask]
+
+        return vel_cmds
 
     def compute_returns(self, obs, vel_cmds, masks):
         rewards = reward_function(obs, vel_cmds, self.reward_fn)

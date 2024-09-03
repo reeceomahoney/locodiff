@@ -10,3 +10,4 @@
 - [ ] Add setup to README
 - [ ] Make dims consistent everywhere
 - [ ] add experiment options to config 
+- [ ] refactor ddpm agent into main agent

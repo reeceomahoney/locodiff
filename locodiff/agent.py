@@ -134,7 +134,7 @@ class Agent:
 
             # simulate
             if not step % self.sim_every_n_steps:
-                results = self.env.simulate(self, lambda_values=[0])
+                results = self.env.simulate(self)
                 wandb.log(results, step=step)
 
                 # save the best model by reward
