@@ -169,8 +169,8 @@ class Agent:
         action = data_dict["action"]
         noise = torch.randn_like(action)
         timesteps = torch.randint(0, self.num_sampling_steps, (noise.shape[0],))
-        timesteps = timesteps.float().to(self.device)
         noise_trajectory = self.noise_scheduler.add_noise(action, noise, timesteps)
+        timesteps = timesteps.float().to(self.device)
         pred = self.model(noise_trajectory, timesteps, data_dict)
 
         loss = torch.nn.functional.mse_loss(pred, noise)
