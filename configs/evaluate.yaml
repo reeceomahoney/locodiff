@@ -8,7 +8,7 @@ hydra:
   run:
     dir: .
 
-model_store_path: logs/2024-08-31/15-45-24
+model_store_path: logs/2024-09-04/11-43-20
 log_wandb: True
 
 num_runs: 50
@@ -22,9 +22,5 @@ num_envs: 450
 
 # chose what to evaluate
 test_rollout: False
-test_reward_lambda: True
-test_timestep_mse: False
-test_total_mse: False
-test_observation_error: False
-visualize x-y trajectory: False
-test_t_sne: True
+test_reward_lambda: False
+test_mse: True
