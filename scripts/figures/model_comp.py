@@ -1,32 +1,27 @@
 import numpy as np
-
 import matplotlib.pyplot as plt
 
-# Set the style
 plt.style.use("seaborn-v0_8")
-
-data = [[0.91, 0.92, 0.92, 0.88], [0.88, 0.80, 0, 0], [0.69, 0, 0, 0]]
-x_labels = ["Forwards", "Backwards", "Lateral", "Rotation"]  # Text labels for x-axis
-
-# Set the width of each bar
+plt.rcParams.update({"xtick.labelsize": 24, "ytick.labelsize": 24})
 bar_width = 0.2
 
-# Plot the data as side-by-side bar chart
-x = np.arange(len(data[0]))  # Generate x-axis values
-plt.bar(x - bar_width, data[0], width=bar_width, label="Ground Truth")
-plt.bar(x, data[1], width=bar_width, label="SDE (Ours)")
-plt.bar(x + bar_width, data[2], width=bar_width, label="DDPM")
+data = [[0.91, 0.92, 0.92, 0.88], [0.88, 0.81, 0, 0], [0.69, 0.64, 0, 0]]
+x = np.arange(len(data[0]))
+x_labels = ["Forwards", "Backwards", "Lateral", "Rotation"]  # Text labels for x-axis
 
-# Replace x-axis ticks with text labels
-plt.xticks(x, x_labels)
+fig, ax = plt.subplots(figsize=(14, 10))
+ax.patch.set_edgecolor("black")
+ax.patch.set_linewidth(1.5)
 
-# Add labels and title
-plt.xlabel("Commands")
-plt.ylabel("Rewards")
-plt.title("Velocity Tracking Reward for Different Commands")
+ax.bar(x - bar_width, data[0], width=bar_width, label="Ground Truth")
+ax.bar(x, data[1], width=bar_width, label="SDE (Ours)")
+ax.bar(x + bar_width, data[2], width=bar_width, label="DDPM")
 
-# Add legend with a box
-plt.legend(frameon=True, fancybox=True, borderpad=1, facecolor="white")
+ax.set_xticks(x, x_labels)
 
-# Show the plot
+ax.set_xlabel("Commands", fontsize=24, labelpad=20)
+ax.set_ylabel("Rewards", fontsize=24, labelpad=20)
+ax.set_title("Velocity Tracking Reward for Different Commands", fontsize=24, pad=20)
+
+ax.legend(frameon=True, fancybox=True, borderpad=1, facecolor="white")
 plt.show()
