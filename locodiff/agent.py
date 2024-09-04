@@ -320,7 +320,7 @@ class Agent:
     @torch.no_grad()
     def sample_ddpm(self, noise: torch.Tensor, data_dict: dict, predict: bool = False):
         """
-        Perform inference using the DDIM sampler
+        Perform inference using the DDPM sampler
         """
         x_t = noise
 
