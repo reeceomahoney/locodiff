@@ -47,7 +47,7 @@ class Agent:
         evaluating: bool,
         reward_fn: str,
         ddpm: bool = False,
-        noise_schedule: DictConfig = None,
+        noise_scheduler: DictConfig = None,
     ):
         self.ddpm = ddpm
 
@@ -65,7 +65,7 @@ class Agent:
         # training
         if self.ddpm:
             optim_groups = self.model.get_optim_groups(weight_decay)
-            self.noise_scheduler = hydra.utils.instantiate(noise_schedule)
+            self.noise_scheduler = hydra.utils.instantiate(noise_scheduler)
         else:
             optim_groups = self.model.inner_model.get_optim_groups(weight_decay)
         self.optimizer = hydra.utils.instantiate(optimization, optim_groups)

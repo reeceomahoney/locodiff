@@ -1,4 +1,4 @@
-_target_: locodiff.ddpm_agent.Agent
+_target_: locodiff.agent.Agent
 _recursive_: false
 
 optimization:
