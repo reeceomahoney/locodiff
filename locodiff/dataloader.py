@@ -65,17 +65,18 @@ class ExpertDataset(Dataset):
 
         masks = self.create_masks(obs_splits, max_len)
 
-        # Compute returns
-        if self.return_horizon > 0:
-            vel_cmds = self.sample_vel_cmd(obs.shape[0])
-            # vel_cmds = self.random_vel_cmd(vel_cmds)
-            returns = self.compute_returns(obs, vel_cmds, masks)
+        vel_cmds = self.sample_vel_cmd(obs.shape[0])
 
-            # Remove last steps if return horizon is set
-            obs = obs[:, : -self.return_horizon]
-            actions = actions[:, : -self.return_horizon]
-            terminals = terminals[:, : -self.return_horizon]
-            masks = masks[:, : -self.return_horizon]
+        # Compute returns
+        # if self.return_horizon > 0:
+        #     # vel_cmds = self.random_vel_cmd(vel_cmds)
+        #     returns = self.compute_returns(obs, vel_cmds, masks)
+
+        #     # Remove last steps if return horizon is set
+        #     obs = obs[:, : -self.return_horizon]
+        #     actions = actions[:, : -self.return_horizon]
+        #     terminals = terminals[:, : -self.return_horizon]
+        #     masks = masks[:, : -self.return_horizon]
 
         processed_data = {
             "obs": obs,
@@ -85,8 +86,8 @@ class ExpertDataset(Dataset):
             "mask": masks,
         }
 
-        if self.return_horizon > 0:
-            processed_data["return"] = returns
+        # if self.return_horizon > 0:
+        #     processed_data["return"] = returns
 
         return processed_data
 
@@ -213,7 +214,7 @@ class SlicerWrapper(Dataset):
 
     def _create_slices(self, T_cond, T):
         slices = []
-        window = T_cond + T - 1
+        window = T_cond + 50 - 1
         for i in range(len(self.dataset)):
             length = len(self.dataset[i]["obs"])
             if length >= window:

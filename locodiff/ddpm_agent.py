@@ -302,7 +302,7 @@ class Agent:
     def load_pretrained_model(self, weights_path: str, **kwargs) -> None:
         self.model.load_state_dict(
             torch.load(
-                os.path.join(weights_path, "best_model_state_dict.pth"),
+                os.path.join(weights_path, "model_state_dict.pth"),
                 map_location=self.device,
             ),
             strict=False,

@@ -62,8 +62,8 @@ class RaisimEnv:
         obs_and_cmd = self._observation[:, :36]
         obs_and_cmd = torch.from_numpy(obs_and_cmd).to(self.device)
         obs = obs_and_cmd[:, :33]
-        vel_cmd = obs_and_cmd[:, 33:36]
-        # vel_cmd = self.vel_cmd
+        # vel_cmd = obs_and_cmd[:, 33:36]
+        vel_cmd = self.vel_cmd
         return obs, vel_cmd
 
     def reset(self, conditional_reset=False):
@@ -78,15 +78,15 @@ class RaisimEnv:
     def simulate(self, agent, real_time=False, lambda_values=None):
         log.info("Starting trained model evaluation")
 
-        returns = torch.ones((self.num_envs, self.window, 1)).to(self.device)
+        returns = torch.ones((self.num_envs, 1)).to(self.device)
         self.skill = torch.zeros(self.num_envs, self.skill_dim).to(self.device)
         self.skill[:, 0] = 1
 
-        # self.vel_cmd = torch.randint(
-        #     0, 2, (self.num_envs, 1), device=self.device
-        # ).float()
+        self.vel_cmd = torch.randint(
+            0, 2, (self.num_envs, 1), device=self.device
+        ).float()
 
-        cond_lambdas = lambda_values if lambda_values is not None else [0, 1, 1.5, 2]
+        cond_lambdas = lambda_values if lambda_values is not None else [0, 10, 20, 50]
         assert self.num_envs % len(cond_lambdas) == 0
 
         # For parallel evaluation

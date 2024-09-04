@@ -309,7 +309,7 @@ class Agent:
     def load_pretrained_model(self, weights_path: str, **kwargs) -> None:
         self.model.load_state_dict(
             torch.load(
-                os.path.join(weights_path, "best_model_state_dict.pth"),
+                os.path.join(weights_path, "model_state_dict.pth"),
                 map_location=self.device,
             ),
             strict=False,
@@ -380,6 +380,8 @@ class Agent:
         skill = batch["skill"]
         vel_cmd = batch.get("vel_cmd", None)
         returns = batch.get("return", None)
+        if returns is None:
+            returns = self.compute_returns(raw_obs, vel_cmd)
 
         obs = self.scaler.scale_input(raw_obs[:, : self.T_cond])
 
@@ -395,10 +397,31 @@ class Agent:
             "action": action,
             "vel_cmd": vel_cmd,
             "skill": skill,
-            "return": returns[:, self.T_cond - 1] if returns is not None else None,
+            "return": returns,
         }
 
         return processed_batch
 
     def dict_to_device(self, batch):
         return {k: v.clone().to(self.device) for k, v in batch.items()}
+    
+    def compute_returns(self, obs, vel_cmd):
+        rewards = utils.reward_function(obs, vel_cmd, "vel_target")
+        rewards = rewards[:, self.T_cond - 1:] - 1
+
+        horizon = 50
+        gammas = torch.tensor([0.99**i for i in range(horizon)]).to(self.device)
+        returns = (rewards * gammas).sum(dim=-1)
+        returns = torch.exp(returns / 10)
+        returns += (1 - returns.max())
+
+        # import matplotlib.pyplot as plt
+
+        # plt.hist(returns.flatten().cpu().numpy(), bins=20)
+        # plt.xlabel("Returns")
+        # plt.ylabel("Frequency")
+        # plt.savefig("returns.png")
+        # exit()
+
+        return returns.unsqueeze(-1)
+        

@@ -11,3 +11,4 @@
 - [ ] Make dims consistent everywhere
 - [ ] add experiment options to config 
 - [ ] refactor ddpm agent into main agent
+- [ ] dont create folder in debug mode

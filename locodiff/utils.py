@@ -69,7 +69,7 @@ def reward_function(obs, vel_cmds, fn_name):
         vel_cmds = torch.tensor([0.8, 0.0, 0.0]).to(vel.device)
         # if vel.ndim == 3:
         #     vel_cmds = vel_cmds.unsqueeze(1)
-        rewards = torch.exp(-3*((vel - vel_cmds) ** 2)).mean(dim=-1)
+        rewards = torch.exp(-3 * ((vel - vel_cmds) ** 2)).mean(dim=-1)
     elif fn_name == "self_cmd":
         rewards = torch.zeros_like(x_vel)
         rewards = torch.where(z_vel >= 0, x_vel, rewards)
