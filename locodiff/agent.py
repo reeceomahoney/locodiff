@@ -184,7 +184,6 @@ class Agent:
             loss = torch.nn.functional.mse_loss(pred, noise)
         else:
             sigma = self.make_sample_density(len(noise))
-            pred = self.model(noise, data_dict)
             loss = self.model.loss(noise, sigma, data_dict)
 
         self.optimizer.zero_grad()
