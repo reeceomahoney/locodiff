@@ -423,7 +423,7 @@ class Agent:
         vel_cmd = batch.get("vel_cmd", None)
         if vel_cmd is None:
             vel_cmd = self.sample_vel_cmd(raw_obs.shape[0])
-    
+
         returns = batch.get("return", None)
         if returns is None:
             returns = self.compute_returns(raw_obs, vel_cmd)
@@ -453,16 +453,16 @@ class Agent:
     def sample_vel_cmd(self, batch_size):
         vel_cmd = torch.randint(0, 2, (batch_size, 1), device=self.device).float()
         return vel_cmd
-    
+
     def compute_returns(self, obs, vel_cmd):
         rewards = utils.reward_function(obs, vel_cmd, self.reward_fn)
-        rewards = rewards[:, self.T_cond - 1:] - 1
+        rewards = rewards[:, self.T_cond - 1 :] - 1
 
         horizon = 50
         gammas = torch.tensor([0.99**i for i in range(horizon)]).to(self.device)
         returns = (rewards * gammas).sum(dim=-1)
         returns = torch.exp(returns / 10)
-        returns += (1 - returns.max())
+        returns += 1 - returns.max()
 
         # import matplotlib.pyplot as plt
 
