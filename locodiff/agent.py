@@ -46,7 +46,11 @@ class Agent:
         cond_mask_prob: float,
         evaluating: bool,
         reward_fn: str,
+        ddpm: bool = False,
+        noise_schedule: DictConfig = None,
     ):
+        self.ddpm = ddpm
+
         # model
         self.model = hydra.utils.instantiate(model).to(device)
         self.T = T
@@ -59,7 +63,11 @@ class Agent:
         log.info("Parameter count: {:e}".format(total_params))
 
         # training
-        optim_groups = self.model.inner_model.get_optim_groups(weight_decay)
+        if self.ddpm:
+            optim_groups = self.model.get_optim_groups(weight_decay)
+            self.noise_scheduler = hydra.utils.instantiate(noise_schedule)
+        else:
+            optim_groups = self.model.inner_model.get_optim_groups(weight_decay)
         self.optimizer = hydra.utils.instantiate(optimization, optim_groups)
         self.lr_scheduler = hydra.utils.instantiate(
             lr_scheduler, optimizer=self.optimizer
@@ -166,9 +174,18 @@ class Agent:
         self.model.train()
         self.model.training = True
 
-        noise = torch.randn_like(data_dict["action"])
-        sigma = self.make_sample_density(len(noise))
-        loss = self.model.loss(noise, sigma, data_dict)
+        action = data_dict["action"]
+        noise = torch.randn_like(action)
+        if self.ddpm:
+            timesteps = torch.randint(0, self.num_sampling_steps, (noise.shape[0],))
+            noise_trajectory = self.noise_scheduler.add_noise(action, noise, timesteps)
+            timesteps = timesteps.float().to(self.device)
+            pred = self.model(noise_trajectory, timesteps, data_dict)
+            loss = torch.nn.functional.mse_loss(pred, noise)
+        else:
+            sigma = self.make_sample_density(len(noise))
+            pred = self.model(noise, data_dict)
+            loss = self.model.loss(noise, sigma, data_dict)
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -192,11 +209,16 @@ class Agent:
         self.model.training = False
 
         # get the sigma distribution for sampling based on Karras et al. 2022
-        sigmas = utils.get_sigmas_exponential(
-            self.num_sampling_steps, self.sigma_min, self.sigma_max, self.device
-        )
-        noise = torch.randn_like(data_dict["action"]) * self.sigma_max
-        x_0 = self.sample_ddim(noise, sigmas, data_dict, predict=False)
+        noise = torch.randn_like(data_dict["action"])
+        if self.ddpm:
+            self.noise_scheduler.set_timesteps(self.num_sampling_steps)
+            x_0 = self.sample_ddpm(noise, data_dict)
+        else:
+            noise = noise * self.sigma_max
+            sigmas = utils.get_sigmas_exponential(
+                self.num_sampling_steps, self.sigma_min, self.sigma_max, self.device
+            )
+            x_0 = self.sample_ddim(noise, sigmas, data_dict, predict=False)
 
         mse = nn.functional.mse_loss(x_0, data_dict["action"], reduction="none")
         total_mse = mse.mean().item()
@@ -244,16 +266,18 @@ class Agent:
         self.model.eval()
 
         # get the sigma distribution for the desired sampling method
-        sigmas = utils.get_sigmas_exponential(
-            n_sampling_steps, self.sigma_min, self.sigma_max, self.device
-        )
-
         noise = torch.randn(
             (self.num_envs, self.T, self.action_dim), device=self.device
         )
-        noise *= self.sigma_max
-
-        x_0 = self.sample_ddim(noise, sigmas, data_dict, predict=True)
+        if self.ddpm:
+            self.noise_scheduler.set_timesteps(n_sampling_steps)
+            x_0 = self.sample_ddpm(noise, data_dict, predict=True)
+        else:
+            noise *= self.sigma_max
+            sigmas = utils.get_sigmas_exponential(
+                n_sampling_steps, self.sigma_min, self.sigma_max, self.device
+            )
+            x_0 = self.sample_ddim(noise, sigmas, data_dict, predict=True)
 
         # get the action for the current timestep
         x_0 = self.scaler.clip(x_0)
@@ -291,6 +315,23 @@ class Agent:
             t, t_next = t_fn(sigmas[i]), t_fn(sigmas[i + 1])
             h = t_next - t
             x_t = (sigma_fn(t_next) / sigma_fn(t)) * x_t - (-h).expm1() * denoised
+
+        return x_t
+
+    @torch.no_grad()
+    def sample_ddpm(self, noise: torch.Tensor, data_dict: dict, predict: bool = False):
+        """
+        Perform inference using the DDIM sampler
+        """
+        x_t = noise
+
+        for t in self.noise_scheduler.timesteps:
+            t_pt = t.float().to(self.device)
+            if predict:
+                output = self.cfg_forward(x_t, t_pt.expand(x_t.shape[0]), data_dict)
+            else:
+                output = self.model(x_t, t_pt.expand(x_t.shape[0]), data_dict)
+            x_t = self.noise_scheduler.step(output, t, x_t).prev_sample
 
         return x_t
 
