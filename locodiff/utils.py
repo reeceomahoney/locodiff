@@ -48,12 +48,11 @@ def rand_log_logistic(
 
 def reward_function(obs, vel_cmds, fn_name):
     x_vel = obs[..., 30]
-    z_vel = obs[..., 17]
     if x_vel.ndim == 1:
         vel_cmds = vel_cmds.squeeze(1)
 
     if fn_name == "x_vel":
-        rewards = x_vel
+        rewards = obs[..., 30]
         rewards = torch.clamp(rewards, -0.6, 0.6)
     elif fn_name == "fwd_bwd":
         lin_vel = obs[..., 30:32]
