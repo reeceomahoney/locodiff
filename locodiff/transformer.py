@@ -195,6 +195,7 @@ class DiffusionTransformer(nn.Module):
         return mask
 
     def mask_cond(self, cond, force_mask=False):
+        cond = cond.clone()
         if force_mask:
             cond[...] = 0
             return cond
