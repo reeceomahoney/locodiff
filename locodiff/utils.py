@@ -56,25 +56,27 @@ def reward_function(obs, vel_cmds, fn_name):
         rewards = x_vel
         rewards = torch.clamp(rewards, -0.6, 0.6)
     elif fn_name == "fwd_bwd":
-        rewards = torch.zeros_like(x_vel)
-        rewards = torch.where(vel_cmds == 1, x_vel, rewards)
-        rewards = torch.where(vel_cmds == 0, -x_vel, rewards)
-        rewards = torch.clamp(rewards, -0.6, 0.6)
-    elif fn_name == "on_off":
-        rewards = torch.where(vel_cmds == 1, x_vel, 1)
+        lin_vel = obs[..., 30:32]
+        ang_vel = obs[..., 17:18]
+        vel = torch.cat([lin_vel, ang_vel], dim=-1)
+
+        rewards = torch.zeros_like(vel[..., 0])
+        tgt1 = torch.tensor([0.8, 0.0, 0.0]).to(vel.device)
+        tgt2 = torch.tensor([-0.8, 0.0, 0.0]).to(vel.device)
+        rewards = torch.where(
+            vel_cmds == 1, torch.exp(-3 * ((vel - tgt1) ** 2)).mean(dim=-1), rewards
+        )
+        rewards = torch.where(
+            vel_cmds == 0, torch.exp(-3 * ((vel - tgt2) ** 2)).mean(dim=-1), rewards
+        )
     elif fn_name == "vel_target":
         lin_vel = obs[..., 30:32]
         ang_vel = obs[..., 17:18]
         vel = torch.cat([lin_vel, ang_vel], dim=-1)
-        vel_cmds = torch.tensor([0.8, 0.0, 0.0]).to(vel.device)
+        tgt = torch.tensor([0.8, 0.0, 0.0]).to(vel.device)
         # if vel.ndim == 3:
         #     vel_cmds = vel_cmds.unsqueeze(1)
-        rewards = torch.exp(-3 * ((vel - vel_cmds) ** 2)).mean(dim=-1)
-    elif fn_name == "self_cmd":
-        rewards = torch.zeros_like(x_vel)
-        rewards = torch.where(z_vel >= 0, x_vel, rewards)
-        rewards = torch.where(z_vel < 0, -x_vel, rewards)
-        rewards = torch.clamp(rewards, -0.6, 0.6)
+        rewards = torch.exp(-3 * ((vel - tgt) ** 2)).mean(dim=-1)
     else:
         raise ValueError(f"Unknown reward function {fn_name}")
 

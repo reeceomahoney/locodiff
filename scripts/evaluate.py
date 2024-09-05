@@ -58,8 +58,8 @@ def main(cfg: DictConfig) -> None:
         results_dict = env.simulate(agent, real_time=True)
         print(results_dict)
     if cfg["test_reward_lambda"]:
-        # lambda_values = [0, 1, 2, 5, 10, 20, 50, 100, 150]
-        lambda_values = [0, 1, 1.5, 2, 3, 5, 7, 10, 20]
+        # lambda_values = [0, 1, 2, 10, 20, 50, 100, 200, 500]
+        lambda_values = [0, 1, 1.2, 1.5, 2]
 
         results_dict = env.simulate(agent, real_time=False, lambda_values=lambda_values)
         rewards = [v for k, v in results_dict.items() if k.endswith("/reward_mean")]

@@ -466,9 +466,13 @@ class Agent:
 
         # import matplotlib.pyplot as plt
 
-        # plt.hist(returns.flatten().cpu().numpy(), bins=20)
-        # plt.xlabel("Returns")
-        # plt.ylabel("Frequency")
+        # fig, axs = plt.subplots(1, 2)
+        # axs[0].hist(rewards.flatten().cpu().numpy(), bins=20)
+        # axs[0].set_xlabel("Rewards")
+        # axs[0].set_ylabel("Frequency")
+        # axs[1].hist(returns.flatten().cpu().numpy(), bins=20)
+        # axs[1].set_xlabel("Returns")
+        # axs[1].set_ylabel("Frequency")
         # plt.savefig("returns.png")
         # exit()
 
