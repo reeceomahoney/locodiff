@@ -29,12 +29,14 @@ def main(cfg: DictConfig) -> None:
     model_cfg = OmegaConf.load(cfg_store_path)
     model_cfg.device = cfg.device
     model_cfg.agents["device"] = cfg.device
-    model_cfg.env["num_envs"] = cfg.num_envs
     model_cfg.env["server_port"] = cfg.server_port
     model_cfg.env["max_time"] = 100
     model_cfg["T_action"] = 1
     model_cfg["use_ema"] = False
     model_cfg["evaluating"] = True
+
+    lambda_values = [0, 1, 1.2, 1.5, 2, 5, 10]
+    model_cfg.env["num_envs"] = 25 * len(lambda_values)
 
     # set seeds
     np.random.seed(model_cfg.seed)
@@ -58,9 +60,6 @@ def main(cfg: DictConfig) -> None:
         results_dict = env.simulate(agent, real_time=True)
         print(results_dict)
     if cfg["test_reward_lambda"]:
-        # lambda_values = [0, 1, 2, 10, 20, 50, 100, 200, 500]
-        lambda_values = [0, 1, 1.2, 1.5, 2]
-
         results_dict = env.simulate(agent, real_time=False, lambda_values=lambda_values)
         rewards = [v for k, v in results_dict.items() if k.endswith("/reward_mean")]
         terminals = [
