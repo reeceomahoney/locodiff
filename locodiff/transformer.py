@@ -33,18 +33,16 @@ class DiffusionTransformer(nn.Module):
         self.action_emb = nn.Linear(self.act_dim, self.d_model)
         self.obs_emb = nn.Linear(self.obs_dim, self.d_model)
         self.sigma_emb = nn.Linear(1, self.d_model)
-        self.vel_cmd_emb = nn.Linear(1, self.d_model)
+        # self.vel_cmd_emb = nn.Linear(1, self.d_model)
         self.return_emb = nn.Linear(1, self.d_model)
         self.skill_emb = nn.Linear(skill_dim, self.d_model)
 
-        # self.pos_emb = (
-        #     SinusoidalPosEmb(d_model)(torch.arange(T)).unsqueeze(0).to(device)
-        # )
-        # self.cond_pos_emb = (
-        #     SinusoidalPosEmb(d_model)(torch.arange(T_cond + 3)).unsqueeze(0).to(device)
-        # )
-        self.pos_emb = nn.Parameter(torch.randn(1, T, d_model))
-        self.cond_pos_emb = nn.Parameter(torch.randn(1, T_cond + 3, d_model))
+        self.pos_emb = (
+            SinusoidalPosEmb(d_model)(torch.arange(T)).unsqueeze(0).to(device)
+        )
+        self.cond_pos_emb = (
+            SinusoidalPosEmb(d_model)(torch.arange(T_cond + 3)).unsqueeze(0).to(device)
+        )
 
         self.decoder = nn.TransformerDecoder(
             nn.TransformerDecoderLayer(
@@ -135,9 +133,6 @@ class DiffusionTransformer(nn.Module):
                 elif pn.endswith("weight") and isinstance(m, blacklist_weight_modules):
                     # weights of blacklist modules will NOT be weight decayed
                     no_decay.add(fpn)
-        
-        no_decay.add("pos_emb")
-        no_decay.add("cond_pos_emb")
 
         # validate that we considered every parameter
         param_dict = {pn: p for pn, p in self.named_parameters()}
@@ -175,7 +170,8 @@ class DiffusionTransformer(nn.Module):
         action_emb = self.action_emb(noised_action)
         obs_emb = self.obs_emb(data_dict["obs"])
         # skill_emb = self.skill_emb(data_dict["skill"]).unsqueeze(1)
-        vel_cmd_emb = self.vel_cmd_emb(data_dict["vel_cmd"]).unsqueeze(1)
+        # vel_cmd_emb = self.vel_cmd_emb(data_dict["vel_cmd"]).unsqueeze(1)
+        vel_cmd_emb = SinusoidalPosEmb(self.d_model)(data_dict["vel_cmd"])
 
         returns = self.mask_cond(data_dict["return"], uncond)
         return_emb = self.return_emb(returns).unsqueeze(1)
