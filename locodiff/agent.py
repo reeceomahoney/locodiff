@@ -224,7 +224,7 @@ class Agent:
             )
             x_0 = self.sample_ddim(noise, sigmas, data_dict, predict=False)
 
-            data_dict["return"] = torch.zeros_like(data_dict["return"])
+            data_dict["return"] = torch.ones_like(data_dict["return"])
             x_0_uncond = self.sample_ddim(noise, sigmas, data_dict, predict=False)
 
         mse = nn.functional.mse_loss(x_0, data_dict["action"], reduction="none")
