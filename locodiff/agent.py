@@ -465,8 +465,7 @@ class Agent:
         return {k: v.clone().to(self.device) for k, v in batch.items()}
 
     def sample_vel_cmd(self, batch_size):
-        idx = torch.randint(0, 2, (batch_size, 1), device=self.device)
-        vel_cmd = torch.nn.functional.one_hot(idx, 2).float()
+        vel_cmd = torch.randint(0, 2, (batch_size, 1), device=self.device).float()
         return vel_cmd
 
     def compute_returns(self, obs, vel_cmd):

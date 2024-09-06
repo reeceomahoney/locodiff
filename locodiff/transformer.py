@@ -33,7 +33,7 @@ class DiffusionTransformer(nn.Module):
         self.action_emb = nn.Linear(self.act_dim, self.d_model)
         self.obs_emb = nn.Linear(self.obs_dim, self.d_model)
         self.sigma_emb = nn.Linear(1, self.d_model)
-        self.vel_cmd_emb = nn.Linear(2, self.d_model)
+        self.vel_cmd_emb = nn.Linear(1, self.d_model)
         self.return_emb = nn.Linear(1, self.d_model)
         self.skill_emb = nn.Linear(skill_dim, self.d_model)
         
@@ -170,7 +170,7 @@ class DiffusionTransformer(nn.Module):
         action_emb = self.action_emb(noised_action)
         obs_emb = self.obs_emb(data_dict["obs"])
         # skill_emb = self.skill_emb(data_dict["skill"]).unsqueeze(1)
-        vel_cmd_emb = self.vel_cmd_emb(data_dict["vel_cmd"])
+        vel_cmd_emb = self.vel_cmd_emb(data_dict["vel_cmd"]).unsqueeze(1)
 
         returns = self.mask_cond(data_dict["return"], uncond)
         return_emb = self.return_emb(returns).unsqueeze(1)
