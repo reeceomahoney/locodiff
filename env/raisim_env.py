@@ -194,7 +194,7 @@ class RaisimEnv:
 
         returns = np.exp(returns / 10)
         returns = returns.mean(axis=1)
-        returns += 1 - 0.7
+        # returns += 1 - 0.7
         returns = returns.clip(0, 1)
         
         return returns
