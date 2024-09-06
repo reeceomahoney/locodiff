@@ -27,12 +27,13 @@ def main(cfg: DictConfig) -> None:
         mode = "disabled"
         cfg["sim_every_n_steps"] = 10
         cfg["num_hidden_layers"] = 1
+        output_dir = "/tmp"
     else:
         mode = "online"
+        output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
 
     # init wandb
     wandb.config = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
-    output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
     wandb.init(
         project=cfg.wandb.project, mode=mode, config=wandb.config, dir=output_dir
     )
@@ -48,6 +49,8 @@ def main(cfg: DictConfig) -> None:
 
 
 if __name__ == "__main__":
-    cwd = os.getcwd()
-    print("Current working directory:", cwd)
+    # Disable Hydra directory creation in debug mode
+    if sys.gettrace() is not None:
+        sys.argv.append("hydra.output_subdir=null")
+        sys.argv.append("hydra.run.dir=.")
     main()
