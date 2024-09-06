@@ -82,9 +82,7 @@ class RaisimEnv:
         self.skill = torch.zeros(self.num_envs, self.skill_dim).to(self.device)
         self.skill[:, 0] = 1
 
-        self.vel_cmd = torch.randint(
-            0, 2, (self.num_envs, 1), device=self.device
-        ).float()
+        self.sample_vel_cmd()
 
         cond_lambdas = (
             lambda_values if lambda_values is not None else [0, 1, 1.2, 1.5, 2]
@@ -148,7 +146,7 @@ class RaisimEnv:
                         if delta < 0.04 and real_time:
                             time.sleep(0.04 - delta)
                         start = time.time()
-            
+
             returns = self.compute_returns(total_rewards)
 
             # split rewards by lambda
@@ -167,6 +165,10 @@ class RaisimEnv:
 
         return return_dict
 
+    def sample_vel_cmd(self):
+        idx = torch.randint(0, 2, (self.num_envs, 1), device=self.device)
+        self.vel_cmd = torch.nn.functional.one_hot(idx, 2).float()
+
     def compute_reward(self, obs, vel_cmds):
         rewards = reward_function(obs, vel_cmds, self.reward_fn)
         rewards = rewards.cpu().numpy()
@@ -180,7 +182,7 @@ class RaisimEnv:
         height_reward = height_reward.cpu().numpy()
 
         return rewards, height_reward
-    
+
     def compute_returns(self, rewards):
         # TODO split epsideos by dones
         rewards -= 1
@@ -196,7 +198,7 @@ class RaisimEnv:
         returns = returns.mean(axis=1)
         # returns += 1 - 0.7
         returns = returns.clip(0, 1)
-        
+
         return returns
 
     def get_base_position(self):

@@ -62,11 +62,19 @@ def reward_function(obs, vel_cmds, fn_name):
         rewards = torch.zeros_like(vel[..., 0])
         tgt1 = torch.tensor([0.8, 0.0, 0.0]).to(vel.device)
         tgt2 = torch.tensor([-0.8, 0.0, 0.0]).to(vel.device)
+
+        # For the first command (index 0)
         rewards = torch.where(
-            vel_cmds == 1, torch.exp(-3 * ((vel - tgt1) ** 2)).mean(dim=-1), rewards
+            vel_cmds[..., 0] == 1,
+            torch.exp(-3 * ((vel - tgt1) ** 2)).mean(dim=-1),
+            rewards,
         )
+
+        # For the second command (index 1)
         rewards = torch.where(
-            vel_cmds == 0, torch.exp(-3 * ((vel - tgt2) ** 2)).mean(dim=-1), rewards
+            vel_cmds[..., 1] == 1,
+            torch.exp(-3 * ((vel - tgt2) ** 2)).mean(dim=-1),
+            rewards,
         )
     elif fn_name == "vel_target":
         lin_vel = obs[..., 30:32]
