@@ -43,7 +43,7 @@ use_ema: True
 decay: 0.999
 update_ema_every_n_steps: 1
 sigma_data: 0.2
-cond_mask_prob: 0.25
+cond_mask_prob: 0.1
 cond_lambda: 10
 n_timesteps: 3
 

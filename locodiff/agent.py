@@ -125,7 +125,12 @@ class Agent:
         for step in tqdm(range(self.max_train_steps), dynamic_ncols=True):
             # evaluate
             if not step % self.eval_every_n_steps:
-                log_info = {"total_mse": [], "first_mse": [], "last_mse": []}
+                log_info = {
+                    "total_mse": [],
+                    "first_mse": [],
+                    "last_mse": [],
+                    "uncond_mse": [],
+                }
                 for batch in tqdm(
                     self.test_loader, desc="Evaluating", position=0, leave=True
                 ):
@@ -219,7 +224,15 @@ class Agent:
             )
             x_0 = self.sample_ddim(noise, sigmas, data_dict, predict=False)
 
+            data_dict["return"] = torch.zeros_like(data_dict["return"])
+            x_0_uncond = self.sample_ddim(noise, sigmas, data_dict, predict=False)
+
         mse = nn.functional.mse_loss(x_0, data_dict["action"], reduction="none")
+        uncond_mse = (
+            nn.functional.mse_loss(x_0_uncond, data_dict["action"], reduction="none")
+            .mean()
+            .item()
+        )
         total_mse = mse.mean().item()
         self.total_mse = total_mse
 
@@ -238,6 +251,7 @@ class Agent:
             "first_mse": first_mse,
             "last_mse": last_mse,
             "timestep_mse": timestep_mse,
+            "uncond_mse": uncond_mse,
         }
 
         return info
