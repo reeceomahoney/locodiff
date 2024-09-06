@@ -129,7 +129,8 @@ class Agent:
                     "total_mse": [],
                     "first_mse": [],
                     "last_mse": [],
-                    "uncond_mse": [],
+                    "max_return_mse": [],
+                    "cond_max_diff": [],
                 }
                 for batch in tqdm(
                     self.test_loader, desc="Evaluating", position=0, leave=True
@@ -225,14 +226,12 @@ class Agent:
             x_0 = self.sample_ddim(noise, sigmas, data_dict, predict=False)
 
             data_dict["return"] = torch.ones_like(data_dict["return"])
-            x_0_uncond = self.sample_ddim(noise, sigmas, data_dict, predict=False)
+            x_0_max_return = self.sample_ddim(noise, sigmas, data_dict, predict=False)
 
         mse = nn.functional.mse_loss(x_0, data_dict["action"], reduction="none")
-        uncond_mse = (
-            nn.functional.mse_loss(x_0_uncond, data_dict["action"], reduction="none")
-            .mean()
-            .item()
-        )
+        max_return_mse = nn.functional.mse_loss(
+            x_0_max_return, data_dict["action"]
+        ).item()
         total_mse = mse.mean().item()
         self.total_mse = total_mse
 
@@ -251,7 +250,8 @@ class Agent:
             "first_mse": first_mse,
             "last_mse": last_mse,
             "timestep_mse": timestep_mse,
-            "uncond_mse": uncond_mse,
+            "max_return_mse": max_return_mse,
+            "cond_max_diff": abs(max_return_mse - total_mse),
         }
 
         return info
