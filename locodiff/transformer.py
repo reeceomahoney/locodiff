@@ -36,6 +36,8 @@ class DiffusionTransformer(nn.Module):
         self.vel_cmd_emb = nn.Linear(1, self.d_model)
         self.return_emb = nn.Linear(1, self.d_model)
         self.skill_emb = nn.Linear(skill_dim, self.d_model)
+        
+        self.drop = nn.Dropout(dropout)
 
         self.pos_emb = (
             SinusoidalPosEmb(d_model)(torch.arange(T)).unsqueeze(0).to(device)
@@ -177,6 +179,7 @@ class DiffusionTransformer(nn.Module):
 
         cond = torch.cat([sigma_emb, return_emb, skill_emb, vel_cmd_emb, obs_emb], dim=1)
         cond += self.cond_pos_emb
+        cond = self.drop(cond)
 
         action_emb += self.pos_emb
         x = self.decoder(tgt=action_emb, memory=cond, tgt_mask=self.mask)
