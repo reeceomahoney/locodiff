@@ -34,9 +34,7 @@ def main(cfg: DictConfig) -> None:
     model_cfg["T_action"] = 1
     model_cfg["use_ema"] = False
     model_cfg["evaluating"] = True
-
-    lambda_values = [0, 1, 1.2, 1.5, 2, 5, 10]
-    model_cfg.env["num_envs"] = 25 * len(lambda_values)
+    model_cfg.env["num_envs"] = 25 * len(cfg.lambda_values)
 
     # set seeds
     np.random.seed(model_cfg.seed)
@@ -52,7 +50,6 @@ def main(cfg: DictConfig) -> None:
     # set new noise limits
     agent.sigma_max = cfg.sigma_max
     agent.sigma_min = cfg.sigma_min
-    agent.cond_lambda = cfg.cond_lambda
 
     # Evaluate
     if cfg["test_rollout"]:
@@ -60,18 +57,18 @@ def main(cfg: DictConfig) -> None:
         results_dict = env.simulate(agent, real_time=True)
         print(results_dict)
     if cfg["test_reward_lambda"]:
-        results_dict = env.simulate(agent, real_time=False, lambda_values=lambda_values)
-        rewards = [v for k, v in results_dict.items() if k.endswith("/reward_mean")]
+        results_dict = env.simulate(agent, real_time=False, lambda_values=cfg.lambda_values)
+        returns = [v for k, v in results_dict.items() if k.endswith("/return_mean")]
         terminals = [
             v for k, v in results_dict.items() if k.endswith("/terminals_mean")
         ]
 
-        print(rewards)
+        print(returns)
         print(terminals)
-        plt.bar(range(len(rewards)), rewards)
-        plt.xticks(range(len(lambda_values)), lambda_values)
+        plt.bar(range(len(returns)), returns)
+        plt.xticks(range(len(cfg.lambda_values)), cfg.lambda_values)
         plt.xlabel("Lambda")
-        plt.ylabel("Velocity tracking reward")
+        plt.ylabel("Velocity tracking return")
         plt.savefig("results.png")
     if cfg["test_mse"]:
         dataloader = agent.test_loader
