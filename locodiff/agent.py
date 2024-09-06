@@ -119,7 +119,7 @@ class Agent:
         Main training loop
         """
         best_test_mse = 1e10
-        best_reward = -1e10
+        best_return = -1e10
         generator = iter(self.train_loader)
 
         for step in tqdm(range(self.max_train_steps), dynamic_ncols=True):
@@ -148,10 +148,10 @@ class Agent:
                 wandb.log(results, step=step)
 
                 # save the best model by reward
-                rewards = [v for k, v in results.items() if k.endswith("/reward_mean")]
-                max_reward = max(rewards)
-                if max_reward > best_reward:
-                    best_reward = max_reward
+                returns = [v for k, v in results.items() if k.endswith("/return_mean")]
+                max_return = max(returns)
+                if max_return > best_return:
+                    best_return = max_return
                     self.store_model_weights(self.working_dir, best_reward=True)
                     log.info("New best reward. Stored weights have been updated!")
 
@@ -462,7 +462,8 @@ class Agent:
         gammas = torch.tensor([0.99**i for i in range(horizon)]).to(self.device)
         returns = (rewards * gammas).sum(dim=-1)
         returns = torch.exp(returns / 10)
-        returns += 1 - returns.max()
+        returns += 1 - 0.7
+        returns = returns.clamp(0, 1)
 
         # import matplotlib.pyplot as plt
 
@@ -474,6 +475,7 @@ class Agent:
         # axs[1].set_xlabel("Returns")
         # axs[1].set_ylabel("Frequency")
         # plt.savefig("returns.png")
+        # print(returns.max())
         # exit()
 
         return returns.unsqueeze(-1)

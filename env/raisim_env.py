@@ -86,7 +86,9 @@ class RaisimEnv:
             0, 2, (self.num_envs, 1), device=self.device
         ).float()
 
-        cond_lambdas = lambda_values if lambda_values is not None else [0, 1, 1.2, 1.5, 2]
+        cond_lambdas = (
+            lambda_values if lambda_values is not None else [0, 1, 1.2, 1.5, 2]
+        )
         assert self.num_envs % len(cond_lambdas) == 0
 
         # For parallel evaluation
@@ -99,7 +101,9 @@ class RaisimEnv:
         return_dict = {}
 
         for _ in range(self.eval_n_times):
-            total_rewards = np.zeros(self.num_envs, dtype=np.float32)
+            total_rewards = np.zeros(
+                (self.num_envs, self.eval_n_steps), dtype=np.float32
+            )
             height_rewards = np.zeros(self.num_envs, dtype=np.float32)
             total_dones = np.zeros(self.num_envs, dtype=np.int64)
 
@@ -135,7 +139,7 @@ class RaisimEnv:
 
                 for i in range(self.T_action):
                     obs, vel_cmd, rewards, done = self.step(action)
-                    total_rewards += rewards[0]
+                    total_rewards[:, n] = rewards[0]
                     height_rewards += rewards[1]
                     action = pred_action[:, i]
 
@@ -144,21 +148,20 @@ class RaisimEnv:
                         if delta < 0.04 and real_time:
                             time.sleep(0.04 - delta)
                         start = time.time()
+            
+            returns = self.compute_returns(total_rewards)
 
             # split rewards by lambda
             total_rewards /= self.eval_n_steps
             height_rewards /= self.eval_n_steps
             for i, lam in enumerate(cond_lambdas):
-                return_dict[f"lamda_{lam}/reward_mean"] = total_rewards[
+                return_dict[f"lamda_{lam}/return_mean"] = returns[
                     i * envs_per_lambda : (i + 1) * envs_per_lambda
                 ].mean()
-                return_dict[f"lamda_{lam}/reward_std"] = total_rewards[
+                return_dict[f"lamda_{lam}/return_std"] = returns[
                     i * envs_per_lambda : (i + 1) * envs_per_lambda
                 ].std()
                 return_dict[f"lamda_{lam}/terminals_mean"] = total_dones[
-                    i * envs_per_lambda : (i + 1) * envs_per_lambda
-                ].mean()
-                return_dict[f"lamda_{lam}/height_reward_mean"] = height_rewards[
                     i * envs_per_lambda : (i + 1) * envs_per_lambda
                 ].mean()
 
@@ -177,6 +180,24 @@ class RaisimEnv:
         height_reward = height_reward.cpu().numpy()
 
         return rewards, height_reward
+    
+    def compute_returns(self, rewards):
+        # TODO split epsideos by dones
+        rewards -= 1
+
+        horizon = 50
+        gammas = np.array([0.99**i for i in range(horizon)])
+        returns = np.zeros_like(rewards[:, :-horizon])
+
+        for i in range(returns.shape[1]):
+            returns[:, i] = (rewards[:, i : i + horizon] * gammas).sum(axis=-1)
+
+        returns = np.exp(returns / 10)
+        returns = returns.mean(axis=1)
+        returns += 1 - 0.7
+        returns = returns.clip(0, 1)
+        
+        return returns
 
     def get_base_position(self):
         self.env.getBasePosition(self._base_position)
