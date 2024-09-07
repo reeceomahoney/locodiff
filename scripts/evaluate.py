@@ -35,6 +35,7 @@ def main(cfg: DictConfig) -> None:
     model_cfg["use_ema"] = False
     model_cfg["evaluating"] = True
     model_cfg.env["num_envs"] = 25 * len(cfg.lambda_values)
+    model_cfg.n_timesteps = cfg.n_inference_steps
 
     # set seeds
     np.random.seed(model_cfg.seed)
