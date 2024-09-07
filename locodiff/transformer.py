@@ -169,7 +169,7 @@ class DiffusionTransformer(nn.Module):
         # embeddings
         action_emb = self.action_emb(noised_action)
         obs = data_dict["obs"]
-        vel_cmd = data_dict["vel_cmd"]
+        vel_cmd = data_dict["vel_cmd"].unsqueeze(1).expand(-1, obs.shape[1], -1)
         obs = torch.cat([obs, vel_cmd], dim=1)
         obs_emb = self.obs_emb(obs)
         # obs_emb = self.obs_emb(data_dict["obs"])
