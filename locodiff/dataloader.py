@@ -65,11 +65,11 @@ class ExpertDataset(Dataset):
 
         masks = self.create_masks(obs_splits, max_len)
 
-        vel_cmds = self.sample_vel_cmd(obs.shape[0])
+        # vel_cmds = self.sample_vel_cmd(obs.shape[0])
+        # vel_cmds = self.random_vel_cmd(vel_cmds)
 
         # Compute returns
         # if self.return_horizon > 0:
-        #     # vel_cmds = self.random_vel_cmd(vel_cmds)
         #     returns = self.compute_returns(obs, vel_cmds, masks)
 
         #     # Remove last steps if return horizon is set
