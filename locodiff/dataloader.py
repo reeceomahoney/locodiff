@@ -81,7 +81,7 @@ class ExpertDataset(Dataset):
         processed_data = {
             "obs": obs,
             "action": actions,
-            # "vel_cmd": vel_cmds,
+            "vel_cmd": vel_cmds,
             "skill": skills,
             "mask": masks,
         }
