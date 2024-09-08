@@ -217,11 +217,11 @@ class MinMaxScaler:
         self.y_max = y_data.max(0).values.to(device)
         self.y_min = y_data.min(0).values.to(device)
 
-        self.x_mean = x_data.mean(0).values.to(device)
-        self.x_std = x_data.std(0).values.to(device)
+        self.x_mean = x_data.mean(0).to(device)
+        self.x_std = x_data.std(0).to(device)
 
-        self.y_mean = y_data.mean(0).values.to(device)
-        self.y_std = y_data.std(0).values.to(device)
+        self.y_mean = y_data.mean(0).to(device)
+        self.y_std = y_data.std(0).to(device)
 
         self.y_bounds = torch.zeros((2, y_data.shape[-1])).to(device)
         self.y_bounds[0, :] = -3
