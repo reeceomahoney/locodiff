@@ -8,11 +8,11 @@ hydra:
   run:
     dir: .
 
-model_store_path: logs/2024-09-06/14-53-06
+model_store_path: logs/2024-09-08/14-48-31
 log_wandb: True
 
 num_runs: 50
-n_inference_steps: 3
+n_inference_steps: 10
 sigma_min: 0.001
 sigma_max: 80
 lambda_values: [0, 1, 1.2, 1.5, 2, 5, 10]
