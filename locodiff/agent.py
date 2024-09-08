@@ -216,6 +216,9 @@ class Agent:
         if self.ddpm:
             self.noise_scheduler.set_timesteps(self.num_sampling_steps)
             x_0 = self.sample_ddpm(noise, data_dict)
+
+            data_dict["return"] = torch.ones_like(data_dict["return"])
+            x_0_max_return = self.sample_ddpm(noise, data_dict)
         else:
             noise = noise * self.sigma_max
             sigmas = utils.get_sigmas_exponential(
