@@ -111,7 +111,6 @@ class Agent:
         self.device = device
         self.env = None
         self.working_dir = None
-        self.total_mse = None
         self.reward_fn = reward_fn
 
     def train_agent(self):
@@ -129,8 +128,7 @@ class Agent:
                     "total_mse": [],
                     "first_mse": [],
                     "last_mse": [],
-                    "max_return_mse": [],
-                    "cond_max_diff": [],
+                    "output_divergence": [],
                 }
                 for batch in tqdm(
                     self.test_loader, desc="Evaluating", position=0, leave=True
@@ -228,30 +226,23 @@ class Agent:
             data_dict["return"] = torch.ones_like(data_dict["return"])
             x_0_max_return = self.sample_ddim(noise, sigmas, data_dict, predict=False)
 
+        # calculate the MSE
         mse = nn.functional.mse_loss(x_0, data_dict["action"], reduction="none")
-        max_return_mse = nn.functional.mse_loss(
-            x_0_max_return, data_dict["action"]
-        ).item()
         total_mse = mse.mean().item()
-        self.total_mse = total_mse
-
-        # mse of the first and last timestep
         first_mse = mse[:, 0, :].mean().item()
         last_mse = mse[:, -1, :].mean().item()
-        timestep_mse = mse.mean(dim=(0, 2))
+
+        output_divergence = torch.abs(x_0 - x_0_max_return).mean().item()
 
         # restore the previous model parameters
         if self.use_ema:
             self.ema_helper.restore(self.model.parameters())
 
         info = {
-            "mse": mse,
             "total_mse": total_mse,
             "first_mse": first_mse,
             "last_mse": last_mse,
-            "timestep_mse": timestep_mse,
-            "max_return_mse": max_return_mse,
-            "cond_max_diff": abs(max_return_mse - total_mse),
+            "output_divergence": output_divergence,
         }
 
         return info
