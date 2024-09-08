@@ -379,10 +379,6 @@ class Agent:
         self.scaler.x_min = scaler_state["x_min"]
         self.scaler.y_max = scaler_state["y_max"]
         self.scaler.y_min = scaler_state["y_min"]
-        self.scaler.x_mean = scaler_state["x_mean"]
-        self.scaler.x_std = scaler_state["x_std"]
-        self.scaler.y_mean = scaler_state["y_mean"]
-        self.scaler.y_std = scaler_state["y_std"]
 
         log.info("Loaded pre-trained model parameters and scaler")
 
@@ -408,10 +404,6 @@ class Agent:
                 "x_min": self.scaler.x_min,
                 "y_max": self.scaler.y_max,
                 "y_min": self.scaler.y_min,
-                "x_mean": self.scaler.x_mean,
-                "x_std": self.scaler.x_std,
-                "y_mean": self.scaler.y_mean,
-                "y_std": self.scaler.y_std,
             },
             os.path.join(store_path, "scaler.pth"),
         )
