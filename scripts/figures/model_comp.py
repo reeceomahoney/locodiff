@@ -5,7 +5,7 @@ plt.style.use("seaborn-v0_8")
 plt.rcParams.update({"xtick.labelsize": 24, "ytick.labelsize": 24})
 bar_width = 0.2
 
-data = [[0.90, 0.96, 0.97, 0.90], [0.89, 0, 0, 0]]
+data = [[0.90, 0.96, 0.97, 0.90], [0.89, 0.86, 0, 0], [0.75, 0, 0, 0]]
 x = np.arange(len(data[0]))
 x_labels = ["Forwards", "Backwards", "Lateral", "Rotation"]  # Text labels for x-axis
 

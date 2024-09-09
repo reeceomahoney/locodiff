@@ -1,12 +1,11 @@
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 plt.style.use("seaborn-v0_8")
 plt.rcParams.update({"xtick.labelsize": 24, "ytick.labelsize": 24})
 
-data = [0.5455793, 0.67960495, 0.8092913, 0.8293958, 0.86788064, 0.87723356]
-x_labels = [0, 1, 1.5, 2, 3, 5]
-
+data = [0.5145297, 0.85218513, 0.8606936, 0.8706338, 0.8789472, 0.81202245, 0.51021385]
+x_labels = [0, 1, 1.2, 1.5, 2, 5, 10]
 fig, ax = plt.subplots(figsize=(14, 10))
 ax.patch.set_edgecolor("black")
 ax.patch.set_linewidth(1.5)
