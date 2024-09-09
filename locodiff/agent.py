@@ -128,7 +128,7 @@ class Agent:
                     "total_mse": [],
                     "first_mse": [],
                     "last_mse": [],
-                    # "output_divergence": [],
+                    "output_divergence": [],
                 }
                 for batch in tqdm(
                     self.test_loader, desc="Evaluating", position=0, leave=True
@@ -217,8 +217,8 @@ class Agent:
             self.noise_scheduler.set_timesteps(self.num_sampling_steps)
             x_0 = self.sample_ddpm(noise, data_dict)
 
-            # data_dict["return"] = torch.ones_like(data_dict["return"])
-            # x_0_max_return = self.sample_ddpm(noise, data_dict)
+            data_dict["return"] = torch.ones_like(data_dict["return"])
+            x_0_max_return = self.sample_ddpm(noise, data_dict)
         else:
             noise = noise * self.sigma_max
             sigmas = utils.get_sigmas_exponential(
@@ -235,7 +235,7 @@ class Agent:
         first_mse = mse[:, 0, :].mean().item()
         last_mse = mse[:, -1, :].mean().item()
 
-        # output_divergence = torch.abs(x_0 - x_0_max_return).mean().item()
+        output_divergence = torch.abs(x_0 - x_0_max_return).mean().item()
 
         # restore the previous model parameters
         if self.use_ema:
@@ -245,7 +245,7 @@ class Agent:
             "total_mse": total_mse,
             "first_mse": first_mse,
             "last_mse": last_mse,
-            # "output_divergence": output_divergence,
+            "output_divergence": output_divergence,
         }
 
         return info
@@ -433,8 +433,8 @@ class Agent:
             vel_cmd = self.sample_vel_cmd(raw_obs.shape[0])
 
         returns = batch.get("return", None)
-        # if returns is None:
-        #     returns = self.compute_returns(raw_obs, vel_cmd)
+        if returns is None:
+            returns = self.compute_returns(raw_obs, vel_cmd)
 
         obs = self.scaler.scale_input(raw_obs[:, : self.T_cond])
 
