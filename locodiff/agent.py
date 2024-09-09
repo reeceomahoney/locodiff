@@ -281,13 +281,14 @@ class Agent:
             x_0 = self.sample_ddpm(noise, data_dict, predict=True)
         else:
             noise *= self.sigma_max
-            # sigmas = utils.get_sigmas_exponential(
-            #     n_sampling_steps, self.sigma_min, self.sigma_max, self.device
-            # )
-            # x_0 = self.sample_ddim(noise, sigmas, data_dict, predict=True)
-            sigmas = utils.get_sigmas_linear(
+            sigmas = utils.get_sigmas_exponential(
                 n_sampling_steps, self.sigma_min, self.sigma_max, self.device
             )
+            # sigmas = utils.get_sigmas_linear(
+            #     n_sampling_steps, self.sigma_min, self.sigma_max, self.device
+            # )
+
+            # x_0 = self.sample_ddim(noise, sigmas, data_dict, predict=True)
             x_0 = self.sample_euler_ancestral(noise, sigmas, data_dict, predict=True)
 
         # get the action for the current timestep
