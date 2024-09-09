@@ -148,7 +148,7 @@ class RaisimEnv:
                         if delta < 0.04 and real_time:
                             time.sleep(0.04 - delta)
                         start = time.time()
-            
+
             returns = self.compute_returns(total_rewards)
 
             # split rewards by lambda
@@ -180,7 +180,7 @@ class RaisimEnv:
         height_reward = height_reward.cpu().numpy()
 
         return rewards, height_reward
-    
+
     def compute_returns(self, rewards):
         # TODO split epsideos by dones
         rewards -= 1
@@ -196,7 +196,7 @@ class RaisimEnv:
         returns = returns.mean(axis=1)
         returns += 1 - 0.7
         returns = returns.clip(0, 1)
-        
+
         return returns
 
     def get_base_position(self):
