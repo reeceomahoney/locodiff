@@ -1,17 +1,13 @@
-import os
 import logging
-import numpy as np
-import matplotlib.pyplot as plt
+import os
 
 import hydra
-from omegaconf import DictConfig, OmegaConf
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
-from tqdm import tqdm
-from scipy.spatial.transform import Rotation as R
-from sklearn.manifold import TSNE
+from omegaconf import DictConfig, OmegaConf
 
 from env.raisim_env import RaisimEnv
-
 
 log = logging.getLogger(__name__)
 
@@ -58,7 +54,9 @@ def main(cfg: DictConfig) -> None:
         results_dict = env.simulate(agent, real_time=True)
         print(results_dict)
     if cfg["test_reward_lambda"]:
-        results_dict = env.simulate(agent, real_time=False, lambda_values=cfg.lambda_values)
+        results_dict = env.simulate(
+            agent, real_time=False, lambda_values=cfg.lambda_values
+        )
         returns = [v for k, v in results_dict.items() if k.endswith("/return_mean")]
         terminals = [
             v for k, v in results_dict.items() if k.endswith("/terminals_mean")
@@ -70,7 +68,7 @@ def main(cfg: DictConfig) -> None:
         plt.xticks(range(len(cfg.lambda_values)), cfg.lambda_values)
         plt.xlabel("Lambda")
         plt.ylabel("Velocity tracking return")
-        plt.savefig("results.png")
+        plt.show()
     if cfg["test_mse"]:
         dataloader = agent.test_loader
         batch = next(iter(dataloader))
