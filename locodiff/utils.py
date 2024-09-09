@@ -207,12 +207,10 @@ class ExponentialMovingAverage:
         self.shadow_params = state_dict["shadow_params"]
 
 
-class MinMaxScaler:
-    """
-    Min Max scaler, that scales the output data between -1 and 1 and the input to a uniform Gaussian.
-    """
-
-    def __init__(self, x_data: np.ndarray, y_data: np.ndarray, device: str):
+class Scaler:
+    def __init__(
+        self, x_data: torch.Tensor, y_data: torch.Tensor, scaling: str, device: str
+    ):
         self.device = device
 
         x_data = x_data.detach()
@@ -230,24 +228,33 @@ class MinMaxScaler:
         self.y_mean = y_data.mean(0).to(device)
         self.y_std = y_data.std(0).to(device)
 
+        self.scaling = scaling
+
         self.y_bounds = torch.zeros((2, y_data.shape[-1])).to(device)
-        self.y_bounds[0, :] = -1.1
-        self.y_bounds[1, :] = 1.1
+        if self.scaling == "linear":
+            self.y_bounds[0, :] = -1.1
+            self.y_bounds[1, :] = 1.1
+        elif self.scaling == "gaussian":
+            self.y_bounds[0, :] = -3
+            self.y_bounds[1, :] = 3
 
     def scale_input(self, x):
-        out = (x - self.x_min) / (self.x_max - self.x_min) * 2 - 1
-        # out = (x - self.x_mean) / self.x_std
-        return out
+        if self.scaling == "linear":
+            return (x - self.x_min) / (self.x_max - self.x_min) * 2 - 1
+        elif self.scaling == "gaussian":
+            return (x - self.x_mean) / self.x_std
 
     def scale_output(self, y):
-        out = (y - self.y_min) / (self.y_max - self.y_min) * 2 - 1
-        # out = (y - self.y_mean) / self.y_std
-        return out
+        if self.scaling == "linear":
+            return (y - self.y_min) / (self.y_max - self.y_min) * 2 - 1
+        elif self.scaling == "gaussian":
+            return (y - self.y_mean) / self.y_std
 
     def inverse_scale_output(self, y):
-        out = (y + 1) * (self.y_max - self.y_min) / 2 + self.y_min
-        # out = y * self.y_std + self.y_mean
-        return out
+        if self.scaling == "linear":
+            return (y + 1) * (self.y_max - self.y_min) / 2 + self.y_min
+        elif self.scaling == "gaussian":
+            return y * self.y_std + self.y_mean
 
     def clip(self, y):
         return torch.clamp(y, self.y_bounds[0, :], self.y_bounds[1, :])

@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset, Subset, random_split
 
-from locodiff.utils import MinMaxScaler, reward_function
+from locodiff.utils import Scaler, reward_function
 
 
 class ExpertDataset(Dataset):
@@ -255,6 +255,7 @@ def get_dataloaders_and_scaler(
     num_workers: int,
     return_horizon: int,
     reward_fn: str,
+    scaling: str,
 ):
     # Build the datasets
     dataset = ExpertDataset(data_directory, obs_dim, T_cond, return_horizon, reward_fn)
@@ -265,7 +266,7 @@ def get_dataloaders_and_scaler(
     # Build the scaler
     x_data = train_set.get_all_obs()
     y_data = train_set.get_all_actions()
-    scaler = MinMaxScaler(x_data, y_data, device)
+    scaler = Scaler(x_data, y_data, scaling, device)
 
     # Build the dataloaders
     train_dataloader = DataLoader(

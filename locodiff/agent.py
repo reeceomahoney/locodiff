@@ -46,6 +46,7 @@ class Agent:
         cond_mask_prob: float,
         evaluating: bool,
         reward_fn: str,
+        scaling: str,
         ddpm: bool = False,
         noise_scheduler: DictConfig = None,
     ):
@@ -101,7 +102,7 @@ class Agent:
             # Load a dummy scaler for evaluation
             x_data = torch.zeros((1, obs_dim), device=device)
             y_data = torch.zeros((1, action_dim), device=device)
-            self.scaler = utils.MinMaxScaler(x_data, y_data, device)
+            self.scaler = utils.Scaler(x_data, y_data, scaling, device)
         else:
             self.train_loader, self.test_loader, self.scaler = hydra.utils.instantiate(
                 dataset_fn
@@ -288,8 +289,8 @@ class Agent:
             #     n_sampling_steps, self.sigma_min, self.sigma_max, self.device
             # )
 
-            # x_0 = self.sample_ddim(noise, sigmas, data_dict, predict=True)
-            x_0 = self.sample_euler_ancestral(noise, sigmas, data_dict, predict=True)
+            x_0 = self.sample_ddim(noise, sigmas, data_dict, predict=True)
+            # x_0 = self.sample_euler_ancestral(noise, sigmas, data_dict, predict=True)
 
         # get the action for the current timestep
         x_0 = self.scaler.clip(x_0)
@@ -342,9 +343,9 @@ class Agent:
         Ancestral sampling with Euler method steps.
 
         1. compute dx_{i}/dt at the current timestep
-        2. get \sigma_{up} and \sigma_{down} from ancestral method
-        3. compute x_{t-1} = x_{t} + dx_{t}/dt * \sigma_{down}
-        4. Add additional noise after the update step x_{t-1} =x_{t-1} + z * \sigma_{up}
+        2. get sigma_{up} and sigma_{down} from ancestral method
+        3. compute x_{t-1} = x_{t} + dx_{t}/dt * sigma_{down}
+        4. Add additional noise after the update step x_{t-1} =x_{t-1} + z * sigma_{up}
         """
         x_t = noise
         s_in = x_t.new_ones([x_t.shape[0]])
@@ -415,10 +416,10 @@ class Agent:
         self.scaler.x_min = scaler_state["x_min"]
         self.scaler.y_max = scaler_state["y_max"]
         self.scaler.y_min = scaler_state["y_min"]
-        # self.scaler.x_mean = scaler_state["x_mean"]
-        # self.scaler.x_std = scaler_state["x_std"]
-        # self.scaler.y_mean = scaler_state["y_mean"]
-        # self.scaler.y_std = scaler_state["y_std"]
+        self.scaler.x_mean = scaler_state["x_mean"]
+        self.scaler.x_std = scaler_state["x_std"]
+        self.scaler.y_mean = scaler_state["y_mean"]
+        self.scaler.y_std = scaler_state["y_std"]
 
         log.info("Loaded pre-trained model parameters and scaler")
 

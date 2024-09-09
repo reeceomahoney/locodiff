@@ -37,6 +37,7 @@ cond_lambda: ${cond_lambda}
 cond_mask_prob: ${cond_mask_prob}
 evaluating: ${evaluating}
 reward_fn: ${reward_fn}
+scaling: ${scaling}
 
 dataset_fn:
   _target_: locodiff.dataloader.get_dataloaders_and_scaler
@@ -51,3 +52,4 @@ dataset_fn:
   num_workers: 4
   return_horizon: ${reward_horizon}
   reward_fn: ${reward_fn}
+  scaling: ${scaling}
