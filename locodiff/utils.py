@@ -235,8 +235,8 @@ class Scaler:
             self.y_bounds[0, :] = -1.1
             self.y_bounds[1, :] = 1.1
         elif self.scaling == "gaussian":
-            self.y_bounds[0, :] = -3
-            self.y_bounds[1, :] = 3
+            self.y_bounds[0, :] = -5
+            self.y_bounds[1, :] = 5
 
     def scale_input(self, x) -> torch.Tensor:
         if self.scaling == "linear":
