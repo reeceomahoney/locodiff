@@ -238,23 +238,29 @@ class Scaler:
             self.y_bounds[0, :] = -3
             self.y_bounds[1, :] = 3
 
-    def scale_input(self, x):
+    def scale_input(self, x) -> torch.Tensor:
         if self.scaling == "linear":
             return (x - self.x_min) / (self.x_max - self.x_min) * 2 - 1
         elif self.scaling == "gaussian":
             return (x - self.x_mean) / self.x_std
+        else:
+            raise ValueError(f"Unknown scaling {self.scaling}")
 
-    def scale_output(self, y):
+    def scale_output(self, y) -> torch.Tensor:
         if self.scaling == "linear":
             return (y - self.y_min) / (self.y_max - self.y_min) * 2 - 1
         elif self.scaling == "gaussian":
             return (y - self.y_mean) / self.y_std
+        else:
+            raise ValueError(f"Unknown scaling {self.scaling}")
 
-    def inverse_scale_output(self, y):
+    def inverse_scale_output(self, y) -> torch.Tensor:
         if self.scaling == "linear":
             return (y + 1) * (self.y_max - self.y_min) / 2 + self.y_min
         elif self.scaling == "gaussian":
             return y * self.y_std + self.y_mean
+        else:
+            raise ValueError(f"Unknown scaling {self.scaling}")
 
     def clip(self, y):
         return torch.clamp(y, self.y_bounds[0, :], self.y_bounds[1, :])

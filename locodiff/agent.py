@@ -230,6 +230,9 @@ class Agent:
             data_dict["return"] = torch.ones_like(data_dict["return"])
             x_0_max_return = self.sample_ddim(noise, sigmas, data_dict, predict=False)
 
+        x_0 = self.scaler.inverse_scale_output(x_0)
+        data_dict["action"] = self.scaler.inverse_scale_output(data_dict["action"])
+
         # calculate the MSE
         mse = nn.functional.mse_loss(x_0, data_dict["action"], reduction="none")
         total_mse = mse.mean().item()
