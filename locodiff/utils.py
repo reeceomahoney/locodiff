@@ -79,7 +79,7 @@ def reward_function(obs, vel_cmds, fn_name):
         lin_vel = obs[..., 30:32]
         ang_vel = obs[..., 17:18]
         vel = torch.cat([lin_vel, ang_vel], dim=-1)
-        tgt = torch.tensor([0.0, 0.0, 1.0]).to(vel.device)
+        tgt = torch.tensor([-0.8, 0.0, 0.0]).to(vel.device)
         rewards = torch.exp(-3 * ((vel - tgt) ** 2)).mean(dim=-1)
     elif fn_name == "vel_target_var":
         lin_vel = obs[..., 30:32]

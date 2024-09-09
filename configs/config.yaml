@@ -1,5 +1,5 @@
 defaults:
-  - agents: agent
+  - agents: ddpm_agent
   - _self_
 
 data_path: walk
@@ -35,7 +35,7 @@ sim_every_n_steps: 5000
 evaluating: False
 reward_horizon: 0
 reward_fn: vel_target
-scaling: gaussian
+scaling: linear
 
 # BESO hyperparameters
 dropout: 0.0
