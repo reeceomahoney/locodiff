@@ -281,10 +281,14 @@ class Agent:
             x_0 = self.sample_ddpm(noise, data_dict, predict=True)
         else:
             noise *= self.sigma_max
-            sigmas = utils.get_sigmas_exponential(
+            # sigmas = utils.get_sigmas_exponential(
+            #     n_sampling_steps, self.sigma_min, self.sigma_max, self.device
+            # )
+            # x_0 = self.sample_ddim(noise, sigmas, data_dict, predict=True)
+            sigmas = utils.get_sigmas_linear(
                 n_sampling_steps, self.sigma_min, self.sigma_max, self.device
             )
-            x_0 = self.sample_ddim(noise, sigmas, data_dict, predict=True)
+            x_0 = self.sample_euler_ancestral(noise, sigmas, data_dict, predict=True)
 
         # get the action for the current timestep
         x_0 = self.scaler.clip(x_0)
@@ -322,6 +326,43 @@ class Agent:
             t, t_next = t_fn(sigmas[i]), t_fn(sigmas[i + 1])
             h = t_next - t
             x_t = (sigma_fn(t_next) / sigma_fn(t)) * x_t - (-h).expm1() * denoised
+
+        return x_t
+
+    @torch.no_grad()
+    def sample_euler_ancestral(
+        self,
+        noise: torch.Tensor,
+        sigmas: torch.Tensor,
+        data_dict: dict,
+        predict: bool = False,
+    ):
+        """
+        Ancestral sampling with Euler method steps.
+
+        1. compute dx_{i}/dt at the current timestep
+        2. get \sigma_{up} and \sigma_{down} from ancestral method
+        3. compute x_{t-1} = x_{t} + dx_{t}/dt * \sigma_{down}
+        4. Add additional noise after the update step x_{t-1} =x_{t-1} + z * \sigma_{up}
+        """
+        x_t = noise
+        s_in = x_t.new_ones([x_t.shape[0]])
+        for i in range(len(sigmas) - 1):
+            # compute x_{t-1}
+            if predict:
+                denoised = self.cfg_forward(x_t, sigmas[i] * s_in, data_dict)
+            else:
+                denoised = self.model(x_t, sigmas[i] * s_in, data_dict)
+            # get ancestral steps
+            sigma_down, sigma_up = utils.get_ancestral_step(sigmas[i], sigmas[i + 1])
+            # compute dx/dt
+            d = (x_t - denoised) / sigmas[i]
+            # compute dt based on sigma_down value
+            dt = sigma_down - sigmas[i]
+            # update current action
+            x_t = x_t + d * dt
+            if sigma_down > 0:
+                x_t = x_t + torch.randn_like(x_t) * sigma_up
 
         return x_t
 
@@ -373,10 +414,10 @@ class Agent:
         self.scaler.x_min = scaler_state["x_min"]
         self.scaler.y_max = scaler_state["y_max"]
         self.scaler.y_min = scaler_state["y_min"]
-        self.scaler.x_mean = scaler_state["x_mean"]
-        self.scaler.x_std = scaler_state["x_std"]
-        self.scaler.y_mean = scaler_state["y_mean"]
-        self.scaler.y_std = scaler_state["y_std"]
+        # self.scaler.x_mean = scaler_state["x_mean"]
+        # self.scaler.x_std = scaler_state["x_std"]
+        # self.scaler.y_mean = scaler_state["y_mean"]
+        # self.scaler.y_std = scaler_state["y_std"]
 
         log.info("Loaded pre-trained model parameters and scaler")
 

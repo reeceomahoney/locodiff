@@ -1,11 +1,11 @@
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 plt.style.use("seaborn-v0_8")
 plt.rcParams.update({"xtick.labelsize": 24, "ytick.labelsize": 24})
 bar_width = 0.2
 
-data = [[0.91, 0.92, 0.92, 0.88], [0.88, 0.81, 0.77, 0.84], [0.69, 0.67, 0.68, 0]]
+data = [[0.90, 0.96, 0.97, 0.90], [0.88, 0.81, 0.77, 0.84], [0.69, 0.67, 0.68, 0]]
 x = np.arange(len(data[0]))
 x_labels = ["Forwards", "Backwards", "Lateral", "Rotation"]  # Text labels for x-axis
 

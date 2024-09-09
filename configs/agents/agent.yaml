@@ -17,8 +17,8 @@ max_train_steps: ${max_train_steps}
 eval_every_n_steps: ${eval_every_n_steps}
 num_sampling_steps: ${n_timesteps}
 sigma_data: ${sigma_data}
-sigma_min: 0.001
-sigma_max: 80
+sigma_min: 0.005
+sigma_max: 1
 use_ema: ${use_ema}
 decay: ${decay}
 device: ${device}

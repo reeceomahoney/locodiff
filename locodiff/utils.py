@@ -1,4 +1,5 @@
 import math
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -9,6 +10,12 @@ def get_sigmas_exponential(n, sigma_min, sigma_max, device="cpu"):
     sigmas = torch.linspace(
         math.log(sigma_max), math.log(sigma_min), n, device=device
     ).exp()
+    return torch.cat([sigmas, sigmas.new_zeros([1])])
+
+
+def get_sigmas_linear(n, sigma_min, sigma_max, device="cpu"):
+    """Constructs an linear noise schedule."""
+    sigmas = torch.linspace(sigma_max, sigma_min, n, device=device)
     return torch.cat([sigmas, sigmas.new_zeros([1])])
 
 
@@ -224,22 +231,22 @@ class MinMaxScaler:
         self.y_std = y_data.std(0).to(device)
 
         self.y_bounds = torch.zeros((2, y_data.shape[-1])).to(device)
-        self.y_bounds[0, :] = -3
-        self.y_bounds[1, :] = 3
+        self.y_bounds[0, :] = -1.1
+        self.y_bounds[1, :] = 1.1
 
     def scale_input(self, x):
-        # out = (x - self.x_min) / (self.x_max - self.x_min) * 2 - 1
-        out = (x - self.x_mean) / self.x_std
+        out = (x - self.x_min) / (self.x_max - self.x_min) * 2 - 1
+        # out = (x - self.x_mean) / self.x_std
         return out
 
     def scale_output(self, y):
-        # out = (y - self.y_min) / (self.y_max - self.y_min) * 2 - 1
-        out = (y - self.y_mean) / self.y_std
+        out = (y - self.y_min) / (self.y_max - self.y_min) * 2 - 1
+        # out = (y - self.y_mean) / self.y_std
         return out
 
     def inverse_scale_output(self, y):
-        # out = (y + 1) * (self.y_max - self.y_min) / 2 + self.y_min
-        out = y * self.y_std + self.y_mean
+        out = (y + 1) * (self.y_max - self.y_min) / 2 + self.y_min
+        # out = y * self.y_std + self.y_mean
         return out
 
     def clip(self, y):
