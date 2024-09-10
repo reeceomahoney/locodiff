@@ -294,6 +294,7 @@ class Agent:
 
             x_0 = self.sample_ddim(noise, sigmas, data_dict, predict=True)
             # x_0 = self.sample_euler_ancestral(noise, sigmas, data_dict, predict=True)
+            # x_0 = self.sample_dpmpp_2m_sde(noise, sigmas, data_dict, predict=True)
 
         # get the action for the current timestep
         x_0 = self.scaler.clip(x_0)
@@ -369,6 +370,60 @@ class Agent:
             if sigma_down > 0:
                 x_t = x_t + torch.randn_like(x_t) * sigma_up
 
+        return x_t
+
+    @torch.no_grad()
+    def sample_dpmpp_2m_sde(
+        self,
+        noise: torch.Tensor,
+        sigmas: torch.Tensor,
+        data_dict: dict,
+        predict: bool = False,
+    ):
+        """DPM-Solver++(2M)."""
+        sigma_min, sigma_max = sigmas[sigmas > 0].min(), sigmas.max()
+        x_t = noise
+        noise_sampler = utils.BrownianTreeNoiseSampler(x_t, sigma_min, sigma_max)
+        s_in = x_t.new_ones([x_t.shape[0]])
+
+        old_denoised = None
+        h_last = None
+
+        for i in range(len(sigmas) - 1):
+            if predict:
+                denoised = self.cfg_forward(x_t, sigmas[i] * s_in, data_dict)
+            else:
+                denoised = self.model(x_t, sigmas[i] * s_in, data_dict)
+
+            if sigmas[i + 1] == 0:
+                # Denoising step
+                x_t = denoised
+            else:
+                # DPM-Solver++(2M) SDE
+                t, s = -sigmas[i].log(), -sigmas[i + 1].log()
+                h = s - t
+                eta_h = h
+
+                x_t = (
+                    sigmas[i + 1] / sigmas[i] * (-eta_h).exp() * x_t
+                    + (-h - eta_h).expm1().neg() * denoised
+                )
+
+                if old_denoised is not None:
+                    r = h_last / h
+                    x_t = x_t + ((-h - eta_h).expm1().neg() / (-h - eta_h) + 1) * (
+                        1 / r
+                    ) * (denoised - old_denoised)
+
+                x_t = (
+                    x_t
+                    + noise_sampler(sigmas[i], sigmas[i + 1])
+                    * sigmas[i + 1]
+                    * (-2 * eta_h).expm1().neg().sqrt()
+                )
+
+            old_denoised = denoised
+            h_last = h
         return x_t
 
     @torch.no_grad()
