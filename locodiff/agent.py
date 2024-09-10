@@ -514,17 +514,9 @@ class Agent:
         """
         Generate a density function for training sigmas
         """
-        sd_config = []
-        loc = sd_config["loc"] if "loc" in sd_config else math.log(self.sigma_data)
-        scale = sd_config["scale"] if "scale" in sd_config else 0.5
-        min_value = (
-            sd_config["min_value"] if "min_value" in sd_config else self.sigma_min
-        )
-        max_value = (
-            sd_config["max_value"] if "max_value" in sd_config else self.sigma_max
-        )
+        loc = math.log(self.sigma_data)
         density = utils.rand_log_logistic(
-            (size,), loc, scale, min_value, max_value, self.device
+            (size,), loc, 0.5, self.sigma_min, self.sigma_max, self.device
         )
         return density
 
