@@ -24,22 +24,19 @@ class ScalingWrapper(torch.nn.Module):
 
         noised_action = action + noise * sigma.view(-1, 1, 1)
 
-        # c_skip, c_out, c_in = self.get_scalings(sigma)
-        # model_output = self.inner_model(noised_action * c_in, sigma, data_dict)
-        # target = (action - c_skip * noised_action) / c_out
-        model_output = self.inner_model(noised_action, sigma, data_dict)
-        target = action
+        c_skip, c_out, c_in = self.get_scalings(sigma)
+        model_output = self.inner_model(noised_action * c_in, sigma, data_dict)
+        target = (action - c_skip * noised_action) / c_out
 
         loss = (model_output - target).pow(2).mean()
         return loss
 
     def forward(self, x_t, sigma, data_dict, uncond=False):
-        # c_skip, c_out, c_in = self.get_scalings(sigma)
-        # return (
-        #     self.inner_model(x_t * c_in, sigma, data_dict, uncond) * c_out
-        #     + x_t * c_skip
-        # )
-        return self.inner_model(x_t, sigma, data_dict, uncond)
+        c_skip, c_out, c_in = self.get_scalings(sigma)
+        return (
+            self.inner_model(x_t * c_in, sigma, data_dict, uncond) * c_out
+            + x_t * c_skip
+        )
 
     def get_params(self):
         return self.inner_model.parameters()
