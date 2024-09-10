@@ -1,13 +1,12 @@
 import logging
-import os
 import sys
 
 import hydra
 import numpy as np
 import torch
+import wandb
 from omegaconf import DictConfig, OmegaConf
 
-import wandb
 from env.raisim_env import RaisimEnv
 
 log = logging.getLogger(__name__)
@@ -38,6 +37,7 @@ def main(cfg: DictConfig) -> None:
         project=cfg.wandb.project, mode=mode, config=wandb.config, dir=output_dir
     )
 
+    cfg.agents.output_dir = output_dir
     agent = hydra.utils.instantiate(cfg.agents)
     agent.env = RaisimEnv(cfg)
     agent.working_dir = output_dir

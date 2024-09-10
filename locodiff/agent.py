@@ -47,6 +47,7 @@ class Agent:
         evaluating: bool,
         reward_fn: str,
         scaling: str,
+        output_dir: str,
         ddpm: bool = False,
         noise_scheduler: DictConfig = None,
     ):
@@ -111,7 +112,7 @@ class Agent:
         # misc
         self.device = device
         self.env = None
-        self.working_dir = None
+        self.working_dir = output_dir
         self.reward_fn = reward_fn
 
     def train_agent(self):
@@ -393,28 +394,28 @@ class Agent:
             else:
                 denoised = self.model(x_t, sigmas[i] * s_in, data_dict)
 
-            # DPM-Solver++(2M) SDE
-            t, s = -sigmas[i].log(), -sigmas[i + 1].log()
-            h = s - t
-            eta_h = h
+                # DPM-Solver++(2M) SDE
+                t, s = -sigmas[i].log(), -sigmas[i + 1].log()
+                h = s - t
+                eta_h = h
 
-            x_t = (
-                sigmas[i + 1] / sigmas[i] * (-eta_h).exp() * x_t
-                + (-h - eta_h).expm1().neg() * denoised
-            )
+                x_t = (
+                    sigmas[i + 1] / sigmas[i] * (-eta_h).exp() * x_t
+                    + (-h - eta_h).expm1().neg() * denoised
+                )
 
-            if old_denoised is not None:
-                r = h_last / h
-                x_t = x_t + ((-h - eta_h).expm1().neg() / (-h - eta_h) + 1) * (
-                    1 / r
-                ) * (denoised - old_denoised)
+                if old_denoised is not None:
+                    r = h_last / h
+                    x_t = x_t + ((-h - eta_h).expm1().neg() / (-h - eta_h) + 1) * (
+                        1 / r
+                    ) * (denoised - old_denoised)
 
-            x_t = (
-                x_t
-                + noise_sampler(sigmas[i], sigmas[i + 1])
-                * sigmas[i + 1]
-                * (-2 * eta_h).expm1().neg().sqrt()
-            )
+                x_t = (
+                    x_t
+                    + noise_sampler(sigmas[i], sigmas[i + 1])
+                    * sigmas[i + 1]
+                    * (-2 * eta_h).expm1().neg().sqrt()
+                )
 
             old_denoised = denoised
             h_last = h

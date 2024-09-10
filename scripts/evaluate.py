@@ -32,6 +32,7 @@ def main(cfg: DictConfig) -> None:
     model_cfg.evaluating = True
     model_cfg.env["num_envs"] = 100 * len(cfg.lambda_values)
     model_cfg.n_timesteps = cfg.n_inference_steps
+    model_cfg.agents.output_dir = cfg.model_store_path
 
     # set seeds
     np.random.seed(model_cfg.seed)
