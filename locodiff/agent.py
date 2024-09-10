@@ -393,32 +393,28 @@ class Agent:
             else:
                 denoised = self.model(x_t, sigmas[i] * s_in, data_dict)
 
-            if sigmas[i + 1] == 0:
-                # Denoising step
-                x_t = denoised
-            else:
-                # DPM-Solver++(2M) SDE
-                t, s = -sigmas[i].log(), -sigmas[i + 1].log()
-                h = s - t
-                eta_h = h
+            # DPM-Solver++(2M) SDE
+            t, s = -sigmas[i].log(), -sigmas[i + 1].log()
+            h = s - t
+            eta_h = h
 
-                x_t = (
-                    sigmas[i + 1] / sigmas[i] * (-eta_h).exp() * x_t
-                    + (-h - eta_h).expm1().neg() * denoised
-                )
+            x_t = (
+                sigmas[i + 1] / sigmas[i] * (-eta_h).exp() * x_t
+                + (-h - eta_h).expm1().neg() * denoised
+            )
 
-                if old_denoised is not None:
-                    r = h_last / h
-                    x_t = x_t + ((-h - eta_h).expm1().neg() / (-h - eta_h) + 1) * (
-                        1 / r
-                    ) * (denoised - old_denoised)
+            if old_denoised is not None:
+                r = h_last / h
+                x_t = x_t + ((-h - eta_h).expm1().neg() / (-h - eta_h) + 1) * (
+                    1 / r
+                ) * (denoised - old_denoised)
 
-                x_t = (
-                    x_t
-                    + noise_sampler(sigmas[i], sigmas[i + 1])
-                    * sigmas[i + 1]
-                    * (-2 * eta_h).expm1().neg().sqrt()
-                )
+            x_t = (
+                x_t
+                + noise_sampler(sigmas[i], sigmas[i + 1])
+                * sigmas[i + 1]
+                * (-2 * eta_h).expm1().neg().sqrt()
+            )
 
             old_denoised = denoised
             h_last = h
