@@ -232,6 +232,7 @@ class Agent:
             x_0_max_return = self.sample_ddim(noise, sigmas, data_dict, predict=False)
 
         x_0 = self.scaler.inverse_scale_output(x_0)
+        x_0_max_return = self.scaler.inverse_scale_output(x_0_max_return)
         data_dict["action"] = self.scaler.inverse_scale_output(data_dict["action"])
 
         # calculate the MSE

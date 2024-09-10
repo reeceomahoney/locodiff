@@ -34,7 +34,7 @@ eval_every_n_steps: 1000
 sim_every_n_steps: 5000
 evaluating: False
 reward_horizon: 0
-reward_fn: fwd_bwd
+reward_fn: vel_target
 scaling: gaussian
 
 # BESO hyperparameters
