@@ -5,6 +5,7 @@ import hydra
 import numpy as np
 import torch
 import wandb
+from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig, OmegaConf
 
 from env.raisim_env import RaisimEnv
@@ -29,7 +30,7 @@ def main(cfg: DictConfig) -> None:
         output_dir = "/tmp"
     else:
         mode = "online"
-        output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
+        output_dir = HydraConfig.get().runtime.output_dir
 
     # init wandb
     wandb.config = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
