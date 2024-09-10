@@ -321,17 +321,15 @@ class Agent:
         """
         x_t = noise
         s_in = x_t.new_ones([x_t.shape[0]])
-        sigma_fn = lambda t: t.neg().exp()
-        t_fn = lambda sigma: sigma.log().neg()
 
         for i in range(len(sigmas) - 1):
             if predict:
                 denoised = self.cfg_forward(x_t, sigmas[i] * s_in, data_dict)
             else:
                 denoised = self.model(x_t, sigmas[i] * s_in, data_dict)
-            t, t_next = t_fn(sigmas[i]), t_fn(sigmas[i + 1])
+            t, t_next = -sigmas[i].log(), -sigmas[i + 1].log()
             h = t_next - t
-            x_t = (sigma_fn(t_next) / sigma_fn(t)) * x_t - (-h).expm1() * denoised
+            x_t = ((-t_next).exp() / (-t).exp()) * x_t - (-h).expm1() * denoised
 
         return x_t
 
