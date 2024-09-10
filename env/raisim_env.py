@@ -192,10 +192,11 @@ class RaisimEnv:
         for i in range(returns.shape[1]):
             returns[:, i] = (rewards[:, i : i + horizon] * gammas).sum(axis=-1)
 
-        returns = np.exp(returns / 10)
+        returns = np.exp(returns / 50)
         returns = returns.mean(axis=1)
-        returns += 0.3
-        returns = returns.clip(0, 1)
+        returns = (returns - 0.550) / (0.914 - 0.550)
+        # returns += 0.3
+        # returns = returns.clip(0, 1)
 
         return returns
 
