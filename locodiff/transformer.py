@@ -42,7 +42,7 @@ class DiffusionTransformer(nn.Module):
             SinusoidalPosEmb(d_model)(torch.arange(T)).unsqueeze(0).to(device)
         )
         self.cond_pos_emb = (
-            SinusoidalPosEmb(d_model)(torch.arange(T_cond + 2)).unsqueeze(0).to(device)
+            SinusoidalPosEmb(d_model)(torch.arange(T_cond + 3)).unsqueeze(0).to(device)
         )
 
         self.decoder = nn.TransformerDecoder(
@@ -169,19 +169,19 @@ class DiffusionTransformer(nn.Module):
 
         # embeddings
         action_emb = self.action_emb(noised_action)
-        # obs_emb = self.obs_emb(data_dict["obs"])
+        obs_emb = self.obs_emb(data_dict["obs"])
         # skill_emb = self.skill_emb(data_dict["skill"]).unsqueeze(1)
-        # vel_cmd_emb = self.vel_cmd_emb(data_dict["vel_cmd"]).unsqueeze(1)
+        vel_cmd_emb = self.vel_cmd_emb(data_dict["vel_cmd"]).unsqueeze(1)
 
-        obs = data_dict["obs"]
-        vel_cmd = data_dict["vel_cmd"].unsqueeze(1).expand(-1, obs.shape[1], -1)
-        obs = torch.cat([obs, vel_cmd], dim=-1)
-        obs_emb = self.obs_emb(obs)
+        # obs = data_dict["obs"]
+        # vel_cmd = data_dict["vel_cmd"].unsqueeze(1).expand(-1, obs.shape[1], -1)
+        # obs = torch.cat([obs, vel_cmd], dim=-1)
+        # obs_emb = self.obs_emb(obs)
 
         returns = self.mask_cond(data_dict["return"], uncond)
         return_emb = self.return_emb(returns).unsqueeze(1)
 
-        cond = torch.cat([sigma_emb, return_emb, obs_emb], dim=1)
+        cond = torch.cat([sigma_emb, return_emb, vel_cmd_emb, obs_emb], dim=1)
         cond += self.cond_pos_emb
 
         action_emb += self.pos_emb
