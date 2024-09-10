@@ -38,6 +38,7 @@ cond_mask_prob: ${cond_mask_prob}
 evaluating: ${evaluating}
 reward_fn: ${reward_fn}
 scaling: ${scaling}
+output_dir: ""
 
 dataset_fn:
   _target_: locodiff.dataloader.get_dataloaders_and_scaler
