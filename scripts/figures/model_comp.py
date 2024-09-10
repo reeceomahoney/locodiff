@@ -5,7 +5,7 @@ plt.style.use("seaborn-v0_8")
 plt.rcParams.update({"xtick.labelsize": 24, "ytick.labelsize": 24})
 bar_width = 0.2
 
-data = [[0.90, 0.96, 0.97, 0.90], [0.88, 0.92, 0.89, 0], [0.75, 0.89, 0, 0]]
+data = [[0.90, 0.96, 0.97, 0.90], [0.90, 0.90, 0.92, 0.92]]
 x = np.arange(len(data[0]))
 x_labels = ["Forwards", "Backwards", "Lateral", "Rotation"]  # Text labels for x-axis
 
@@ -13,9 +13,8 @@ fig, ax = plt.subplots(figsize=(14, 11))
 ax.patch.set_edgecolor("black")
 ax.patch.set_linewidth(1.5)
 
-ax.bar(x - bar_width, data[0], width=bar_width, label="Ground Truth")
-ax.bar(x, data[1], width=bar_width, label="SDE (Ours)")
-ax.bar(x + bar_width, data[2], width=bar_width, label="DDPM")
+ax.bar(x - bar_width / 2, data[0], width=bar_width, label="Ground Truth")
+ax.bar(x + bar_width / 2, data[1], width=bar_width, label="Ours")
 
 ax.set_xticks(x, x_labels)
 
