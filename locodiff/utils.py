@@ -126,7 +126,7 @@ def reward_function(obs, vel_cmds, fn_name):
 
         rewards = torch.zeros_like(vel[..., 0])
         tgt1 = torch.tensor([0.8, 0.0, 0.0]).to(vel.device)
-        tgt2 = torch.tensor([-0.8, 0.0, 0.0]).to(vel.device)
+        tgt2 = torch.tensor([0.8, 0.0, 0.0]).to(vel.device)
         rewards = torch.where(
             vel_cmds == 1, torch.exp(-3 * ((vel - tgt1) ** 2)).mean(dim=-1), rewards
         )
