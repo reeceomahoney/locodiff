@@ -24,7 +24,7 @@ obs_dim: 33
 skill_dim: 2
 
 # policy model params
-hidden_dim: 64
+hidden_dim: 128
 num_hidden_layers: 4
 weight_decay: 1e-3
 train_method: "steps"
@@ -38,7 +38,7 @@ reward_fn: fwd_bwd
 scaling: gaussian
 
 # BESO hyperparameters
-dropout: 0.0
+dropout: 0.3
 n_heads: 8
 use_ema: True
 decay: 0.999
