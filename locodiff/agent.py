@@ -593,10 +593,11 @@ class Agent:
         return returns.unsqueeze(-1)
 
     def compute_returns_from_rewards(self, rewards):
+        rewards = rewards.clone() - 0.22  # max reward
         horizon = 50
         gammas = torch.tensor([0.99**i for i in range(horizon)]).to(self.device)
         returns = (rewards * gammas).sum(dim=-1)
-        returns = torch.exp(returns / 10)
+        returns = torch.exp(returns / 50)
         returns = (returns - returns.min()) / (returns.max() - returns.min())
 
         return returns.unsqueeze(-1)
