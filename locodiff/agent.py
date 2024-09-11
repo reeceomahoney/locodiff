@@ -154,8 +154,9 @@ class Agent:
                 wandb.log(results, step=step)
 
                 # save the best model by reward
-                returns = [v for k, v in results.items() if k.endswith("/return_mean")]
-                max_return = max(returns)
+                # returns = [v for k, v in results.items() if k.endswith("/return_mean")]
+                rewards = [v for k, v in results.items() if k.endswith("/reward_mean")]
+                max_return = max(rewards)
                 if max_return > best_return:
                     best_return = max_return
                     self.store_model_weights(self.working_dir, best_reward=True)
