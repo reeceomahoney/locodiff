@@ -562,9 +562,9 @@ class Agent:
 
     def compute_returns(self, obs, vel_cmd):
         rewards = utils.reward_function(obs, vel_cmd, self.reward_fn)
-        rewards = rewards[:, self.T_cond - 1 :] - 1
-
         horizon = 1
+        rewards = rewards[:, self.T_cond - 1 : self.T_cond + horizon] - 1
+
         gammas = torch.tensor([0.99**i for i in range(horizon)]).to(self.device)
         returns = (rewards * gammas).sum(dim=-1)
         returns = torch.exp(returns / 1)
