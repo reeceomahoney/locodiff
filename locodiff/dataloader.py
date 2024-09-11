@@ -45,7 +45,7 @@ class ExpertDataset(Dataset):
         vel_cmds = data["vel_cmd"]
         skills = data["skill"]
         terminals = data["terminal"]
-        rewards = data["reward"]
+        # rewards = data["reward"]
 
         # Find episode ends
         terminals_flat = terminals.reshape(-1)
@@ -56,7 +56,7 @@ class ExpertDataset(Dataset):
         actions_splits = self.split_eps(actions, split_indices)
         vel_cmds_splits = self.split_eps(vel_cmds, split_indices)
         skills_splits = self.split_eps(skills, split_indices)
-        rewards_splits = self.split_eps(rewards, split_indices)
+        # rewards_splits = self.split_eps(rewards, split_indices)
 
         max_len = max(split.shape[0] for split in obs_splits)
 
@@ -64,7 +64,7 @@ class ExpertDataset(Dataset):
         actions = self.add_padding(actions_splits, max_len, temporal=True)
         vel_cmds = self.add_padding(vel_cmds_splits, max_len, temporal=False)
         skills = self.add_padding(skills_splits, max_len, temporal=False)
-        rewards = self.add_padding(rewards_splits, max_len, temporal=False)
+        # rewards = self.add_padding(rewards_splits, max_len, temporal=False)
 
         masks = self.create_masks(obs_splits, max_len)
 
@@ -87,7 +87,7 @@ class ExpertDataset(Dataset):
             "vel_cmd": vel_cmds,
             "skill": skills,
             "mask": masks,
-            "reward": rewards,
+            # "reward": rewards,
         }
 
         # if self.return_horizon > 0:
