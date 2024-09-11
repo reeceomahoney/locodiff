@@ -454,7 +454,7 @@ class Agent:
 
         return out
 
-    def load_pretrained_model(self, weights_path: str, **kwargs) -> None:
+    def load_pretrained_model(self, weights_path: str) -> None:
         self.model.load_state_dict(
             torch.load(
                 os.path.join(weights_path, "model_state_dict.pth"),
@@ -564,14 +564,13 @@ class Agent:
         rewards = utils.reward_function(obs, vel_cmd, self.reward_fn)
         rewards = rewards[:, self.T_cond - 1 :] - 1
 
-        horizon = 5
+        horizon = 1
         gammas = torch.tensor([0.99**i for i in range(horizon)]).to(self.device)
         returns = (rewards * gammas).sum(dim=-1)
-        returns = torch.exp(returns / 10)
+        returns = torch.exp(returns / 1)
         returns = (returns - returns.min()) / (returns.max() - returns.min())
 
         # import matplotlib.pyplot as plt
-        #
         # fig, axs = plt.subplots(1, 2)
         # axs[0].hist(rewards.flatten().cpu().numpy(), bins=20)
         # axs[0].set_xlabel("Rewards")
