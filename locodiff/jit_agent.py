@@ -1,14 +1,9 @@
-import torch
-import hydra
+import logging
 import math
 import os
-from faulthandler import disable
-from functools import partial
-import logging
 
 import hydra
 import torch
-from tqdm import trange
 
 import locodiff.utils as utils
 
@@ -29,8 +24,9 @@ class JitAgent:
         T: int,
         T_cond: int,
         T_action: int,
-        pred_obs_dim: int,
+        obs_dim: int,
         action_dim: int,
+        cond_lambda: int,
     ):
         # model
         self.model = hydra.utils.instantiate(model).to(device).eval()
@@ -38,78 +34,85 @@ class JitAgent:
         self.T = T
         self.T_cond = T_cond
         self.T_action = T_action
+        self.obs_hist = torch.zeros((1, T_cond, obs_dim), device=device)
 
         # diffusion
         self.num_sampling_steps = num_sampling_steps
         self.sigma_data = sigma_data
         self.sigma_min = sigma_min
         self.sigma_max = sigma_max
+        self.cond_lambda = cond_lambda
 
         # env
-        self.pred_obs_dim = pred_obs_dim
         self.action_dim = action_dim
 
         self.scaler = hydra.utils.instantiate(dataset_fn)[-1]
         self.device = device
 
     @torch.no_grad()
-    def forward(self, obs, cmd, indicator) -> torch.Tensor:
+    def forward(self, obs, vel_cmd, skill, returns, use_cfg: bool) -> torch.Tensor:
         """
         Predicts the output of the model based on the provided batch of data.
         """
-        state_in, cmd, indicator = self.process_batch({"observation": obs, "cmd": cmd, "indicator": indicator})
+
+        batch = {"obs": obs, "vel_cmd": vel_cmd, "skill": skill, "return": returns}
+        batch = self.stack_context(batch)
+        data_dict = self.process_batch(batch)
 
         # get the sigma distribution for the desired sampling method
+        noise = torch.randn((1, self.T, self.action_dim), device=self.device)
+        noise *= self.sigma_max
         sigmas = utils.get_sigmas_exponential(
             self.num_sampling_steps, self.sigma_min, self.sigma_max, self.device
         )
-
-        sa_dim = self.pred_obs_dim + self.action_dim
-        x = torch.ones((1, self.T, sa_dim), device=self.device)
-        x *= self.sigma_max
-
-        x_0 = self.sample_ddim(x, sigmas, state_in, cmd, indicator=indicator)
+        x_0 = self.sample_ddim(noise, sigmas, data_dict, use_cfg)
 
         # get the action for the current timestep
         x_0 = self.scaler.clip(x_0)
-        pred_traj = self.scaler.inverse_scale_output(x_0)
-        pred_action = pred_traj[:, : self.T_action, self.pred_obs_dim :]
+        pred_action = self.scaler.inverse_scale_output(x_0).cpu().numpy()
+        pred_action = pred_action[:, : self.T_action].copy()
 
         return pred_action
 
+    def stack_context(self, batch):
+        self.obs_hist[:, :-1] = self.obs_hist[:, 1:].clone()
+        self.obs_hist[:, -1] = batch["obs"]
+        batch["obs"] = self.obs_hist.clone()
+        return batch
+
     @torch.no_grad()
-    def sample_ddim(self, x_t, sigmas, cond, cmd, **kwargs):
+    def sample_ddim(
+        self, noise: torch.Tensor, sigmas: torch.Tensor, data_dict: dict, use_cfg: bool
+    ):
         """
-        Sample from the model using the DDIM sampler
-
-        Args:
-            x_t (torch.Tensor): The initial state-action noise tensor.
-            goals (torch.Tensor): One-hot encoding of the goals.
-            sigmas (torch.Tensor): The sigma distribution for the sampling.
-            cond (torch.Tensor): The conditioning input for the model.
-        Returns:
-            torch.Tensor: The predicted output of the model.
+        Perform inference using the DDIM sampler
         """
+        x_t = noise
         s_in = x_t.new_ones([x_t.shape[0]])
-        kwargs["cmd"] = cmd
 
-        for i in trange(sigmas.shape[0] - 1, disable=disable):
-            denoised = self.model(x_t, cond, sigmas[i] * s_in, **kwargs)
-            t, t_next = self.t_fn(sigmas[i]), self.t_fn(sigmas[i + 1])
+        for i in range(len(sigmas) - 1):
+            if use_cfg:
+                denoised = self.cfg_forward(x_t, sigmas[i] * s_in, data_dict)
+            else:
+                denoised = self.model(x_t, sigmas[i] * s_in, data_dict)
+            t, t_next = -sigmas[i].log(), -sigmas[i + 1].log()
             h = t_next - t
-            x_t = (self.sigma_fn(t_next) / self.sigma_fn(t)) * x_t - (
-                -h
-            ).expm1() * denoised
+            x_t = ((-t_next).exp() / (-t).exp()) * x_t - (-h).expm1() * denoised
 
         return x_t
 
-    def sigma_fn(self, t):
-        return t.neg().exp()
+    def cfg_forward(self, x_t: torch.Tensor, sigma: torch.Tensor, data_dict: dict):
+        """
+        Classifier-free guidance sample
+        """
+        # TODO: parallelize this
 
-    def t_fn(self, sigma):
-        return sigma.log().neg()
+        out = self.model(x_t, sigma, data_dict)
 
-    def load_pretrained_model(self, weights_path: str, **kwargs) -> None:
+        out_uncond = self.model(x_t, sigma, data_dict, uncond=True)
+        out = out_uncond + self.cond_lambda * (out - out_uncond)
+
+    def load_pretrained_model(self, weights_path: str) -> None:
         self.model.load_state_dict(
             torch.load(
                 os.path.join(weights_path, "model_state_dict.pth"),
@@ -126,50 +129,51 @@ class JitAgent:
         self.scaler.x_min = scaler_state["x_min"]
         self.scaler.y_max = scaler_state["y_max"]
         self.scaler.y_min = scaler_state["y_min"]
-        self.scaler.cmd_max = scaler_state["cmd_max"]
-        self.scaler.cmd_min = scaler_state["cmd_min"]
+        self.scaler.x_mean = scaler_state["x_mean"]
+        self.scaler.x_std = scaler_state["x_std"]
+        self.scaler.y_mean = scaler_state["y_mean"]
+        self.scaler.y_std = scaler_state["y_std"]
 
         log.info("Loaded pre-trained model parameters and scaler")
 
     @torch.no_grad()
-    def make_sample_density(self):
+    def make_sample_density(self, size):
         """
         Generate a density function for training sigmas
         """
-        sd_config = []
-        loc = sd_config["loc"] if "loc" in sd_config else math.log(self.sigma_data)
-        scale = sd_config["scale"] if "scale" in sd_config else 0.5
-        min_value = (
-            sd_config["min_value"] if "min_value" in sd_config else self.sigma_min
+        loc = math.log(self.sigma_data)
+        density = utils.rand_log_logistic(
+            (size,), loc, 0.5, self.sigma_min, self.sigma_max, self.device
         )
-        max_value = (
-            sd_config["max_value"] if "max_value" in sd_config else self.sigma_max
-        )
-        return partial(
-            utils.rand_log_logistic,
-            loc=loc,
-            scale=scale,
-            min_value=min_value,
-            max_value=max_value,
-        )
+        return density
 
     @torch.no_grad()
-    def process_batch(self, batch: dict):
-        """
-        Processes a batch of data and returns the state, action and goal
-        """
-        state = self.get_to_device(batch, "observation")
-        cmd = self.get_to_device(batch, "cmd")
-        indicator = self.get_to_device(batch, "indicator")
+    def process_batch(self, batch: dict) -> dict:
+        batch = self.dict_to_device(batch)
 
-        # Centre posisition around the current state
-        current_pos = state[:, self.T_cond - 1, :2].clone()
-        state[..., :2] -= current_pos.unsqueeze(1)
-        state_in = self.scaler.scale_input(state[:, : self.T_cond])
+        raw_obs = batch["obs"]
+        raw_action = batch.get("action", None)
+        skill = batch["skill"]
+        vel_cmd = batch.get("vel_cmd", None)
+        returns = batch.get("return", None)
+        obs = self.scaler.scale_input(raw_obs[:, : self.T_cond])
 
-        cmd = self.scaler.scale_cmd(cmd)
+        if raw_action is None:
+            action = None
+        else:
+            action = self.scaler.scale_output(
+                raw_action[:, self.T_cond - 1 : self.T_cond + self.T - 1],
+            )
 
-        return state_in, cmd, indicator
+        processed_batch = {
+            "obs": obs,
+            "action": action,
+            "vel_cmd": vel_cmd,
+            "skill": skill,
+            "return": returns,
+        }
 
-    def get_to_device(self, batch, key):
-        return batch.get(key).clone().to(self.device)
+        return processed_batch
+
+    def dict_to_device(self, batch):
+        return {k: v.clone().to(self.device) for k, v in batch.items()}
