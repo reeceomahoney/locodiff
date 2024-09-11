@@ -85,6 +85,7 @@ class RaisimEnv:
         self.vel_cmd = torch.randint(
             0, 2, (self.num_envs, 1), device=self.device
         ).float()
+        self.vel_cmd = self.vel_cmd * 2 - 1
 
         cond_lambdas = (
             lambda_values if lambda_values is not None else [0, 1, 1.2, 1.5, 2]

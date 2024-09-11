@@ -558,7 +558,7 @@ class Agent:
 
     def sample_vel_cmd(self, batch_size):
         vel_cmd = torch.randint(0, 2, (batch_size, 1), device=self.device).float()
-        return vel_cmd
+        return vel_cmd * 2 - 1
 
     def compute_returns(self, obs, vel_cmd):
         rewards = utils.reward_function(obs, vel_cmd, self.reward_fn)
