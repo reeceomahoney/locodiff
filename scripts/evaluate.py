@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 
 import hydra
 import matplotlib.pyplot as plt
@@ -19,6 +20,8 @@ torch.cuda.empty_cache()
 @hydra.main(config_path="../configs", config_name="evaluate.yaml", version_base=None)
 def main(cfg: DictConfig) -> None:
     # config
+    if sys.gettrace() is not None:
+        cfg.model_store_path = "../" + cfg.model_store_path
     cfg_store_path = os.path.join(
         os.getcwd(), cfg.model_store_path, ".hydra/config.yaml"
     )

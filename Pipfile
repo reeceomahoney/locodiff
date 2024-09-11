@@ -22,6 +22,8 @@ scikit-learn = "*"
 pybind11 = {extras = ["global"], version = "*"}
 diffusers = "*"
 torchsde = "*"
+debugpy = "*"
+einops = "*"
 
 [dev-packages]
 

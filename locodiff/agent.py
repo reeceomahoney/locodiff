@@ -101,8 +101,8 @@ class Agent:
 
         if evaluating:
             # Load a dummy scaler for evaluation
-            x_data = torch.zeros((1, obs_dim), device=device)
-            y_data = torch.zeros((1, action_dim), device=device)
+            x_data = torch.zeros((2, obs_dim), device=device)
+            y_data = torch.zeros((2, action_dim), device=device)
             self.scaler = utils.Scaler(x_data, y_data, scaling, device)
         else:
             self.train_loader, self.test_loader, self.scaler = hydra.utils.instantiate(

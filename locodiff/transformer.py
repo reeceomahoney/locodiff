@@ -38,6 +38,8 @@ class DiffusionTransformer(nn.Module):
         self.return_emb = nn.Linear(1, self.d_model)
         self.skill_emb = nn.Linear(skill_dim, self.d_model)
 
+        self.drop = nn.Dropout(dropout)
+
         self.pos_emb = (
             SinusoidalPosEmb(d_model)(torch.arange(T)).unsqueeze(0).to(device)
         )
@@ -73,6 +75,7 @@ class DiffusionTransformer(nn.Module):
             nn.TransformerDecoder,
             nn.ModuleList,
             nn.Mish,
+            nn.SiLU,
             nn.Sequential,
             DiffusionTransformer,
         )
@@ -119,7 +122,7 @@ class DiffusionTransformer(nn.Module):
         whitelist_weight_modules = (torch.nn.Linear, torch.nn.MultiheadAttention)
         blacklist_weight_modules = (torch.nn.LayerNorm, torch.nn.Embedding)
         for mn, m in self.named_modules():
-            for pn, p in m.named_parameters():
+            for pn, _ in m.named_parameters():
                 fpn = "%s.%s" % (mn, pn) if mn else pn  # full param name
 
                 if pn.endswith("bias"):
@@ -183,11 +186,13 @@ class DiffusionTransformer(nn.Module):
 
         cond = torch.cat([sigma_emb, return_emb, obs_emb], dim=1)
         cond += self.cond_pos_emb
+        cond = self.drop(cond)
 
         action_emb += self.pos_emb
         x = self.decoder(tgt=action_emb, memory=cond, tgt_mask=self.mask)
         x = self.ln_f(x)
         out = self.action_pred(x)
+        out = self.drop(out)
 
         return out
 
@@ -217,5 +222,5 @@ class DiffusionTransformer(nn.Module):
         return self.parameters()
 
     def detach_all(self):
-        for name, param in self.named_parameters():
+        for _, param in self.named_parameters():
             param.detach_()
