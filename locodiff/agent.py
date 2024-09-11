@@ -229,7 +229,7 @@ class Agent:
             )
             x_0 = self.sample_ddim(noise, sigmas, data_dict, predict=False)
 
-            data_dict["return"] = torch.ones_like(data_dict["return"])
+            # data_dict["return"] = torch.ones_like(data_dict["return"])
             x_0_max_return = self.sample_ddim(noise, sigmas, data_dict, predict=False)
 
         x_0 = self.scaler.inverse_scale_output(x_0)
