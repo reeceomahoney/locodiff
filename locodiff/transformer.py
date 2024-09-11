@@ -63,11 +63,7 @@ class DiffusionTransformer(nn.Module):
         self.register_buffer("mask", mask)
 
         self.ln_f = nn.LayerNorm(self.d_model)
-        self.action_pred = nn.Sequential(
-            nn.Linear(d_model, d_model),
-            nn.SiLU(),
-            nn.Linear(d_model, self.act_dim),
-        )
+        self.action_pred = nn.Linear(d_model, d_model)
 
         self.apply(self._init_weights)
         self.to(device)
@@ -125,7 +121,7 @@ class DiffusionTransformer(nn.Module):
         whitelist_weight_modules = (torch.nn.Linear, torch.nn.MultiheadAttention)
         blacklist_weight_modules = (torch.nn.LayerNorm, torch.nn.Embedding)
         for mn, m in self.named_modules():
-            for pn, p in m.named_parameters():
+            for pn, _ in m.named_parameters():
                 fpn = "%s.%s" % (mn, pn) if mn else pn  # full param name
 
                 if pn.endswith("bias"):
@@ -211,12 +207,12 @@ class DiffusionTransformer(nn.Module):
     def mask_cond(self, cond, force_mask=False):
         cond = cond.clone()
         if force_mask:
-            cond[...] = 0
+            cond[...] = -1
             return cond
         elif self.training and self.cond_mask_prob > 0:
             mask = (torch.rand(cond.shape[0], 1) > self.cond_mask_prob).float()
             mask = mask.expand_as(cond)
-            cond[mask == 0] = 0
+            cond[mask == 0] = -1
             return cond
         else:
             return cond
@@ -225,5 +221,5 @@ class DiffusionTransformer(nn.Module):
         return self.parameters()
 
     def detach_all(self):
-        for name, param in self.named_parameters():
+        for _, param in self.named_parameters():
             param.detach_()
