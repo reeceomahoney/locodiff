@@ -527,12 +527,16 @@ class Agent:
         raw_action = batch.get("action", None)
         skill = batch["skill"]
         vel_cmd = batch.get("vel_cmd", None)
-        if vel_cmd is None:
-            vel_cmd = self.sample_vel_cmd(raw_obs.shape[0])
+        # if vel_cmd is None:
+        #     vel_cmd = self.sample_vel_cmd(raw_obs.shape[0])
 
         returns = batch.get("return", None)
-        if returns is None:
-            returns = self.compute_returns(raw_obs, vel_cmd)
+        # if returns is None:
+        #     returns = self.compute_returns(raw_obs, vel_cmd)
+
+        rewards = batch.get("reward", None)
+        if rewards is not None and returns is None:
+            returns = self.compute_returns_from_rewards(rewards)
 
         obs = self.scaler.scale_input(raw_obs[:, : self.T_cond])
 
@@ -557,12 +561,12 @@ class Agent:
         return {k: v.clone().to(self.device) for k, v in batch.items()}
 
     def sample_vel_cmd(self, batch_size):
-        # vel_cmd = torch.randint(0, 2, (batch_size, 1), device=self.device).float()
-        # return vel_cmd * 2 - 1
-        vel_ranges = torch.tensor([0.8, 0.5, 1.0], device=self.device)
-        vel_cmd = torch.rand((batch_size, 3), device=self.device)
-        vel_cmd = vel_cmd * 2 * vel_ranges - vel_ranges
-        return vel_cmd
+        # vel_ranges = torch.tensor([0.8, 0.5, 1.0], device=self.device)
+        # vel_cmd = torch.rand((batch_size, 3), device=self.device)
+        # vel_cmd = vel_cmd * 2 * vel_ranges - vel_ranges
+        # return vel_cmd
+        vel_cmd = torch.randint(0, 2, (batch_size, 1), device=self.device).float()
+        return vel_cmd * 2 - 1
 
     def compute_returns(self, obs, vel_cmd):
         rewards = utils.reward_function(obs, vel_cmd, self.reward_fn)
@@ -585,5 +589,14 @@ class Agent:
         # plt.savefig("returns.png")
         # print(returns.max())
         # exit()
+
+        return returns.unsqueeze(-1)
+
+    def compute_returns_from_rewards(self, rewards):
+        horizon = 50
+        gammas = torch.tensor([0.99**i for i in range(horizon)]).to(self.device)
+        returns = (rewards * gammas).sum(dim=-1)
+        returns = torch.exp(returns / 10)
+        returns = (returns - returns.min()) / (returns.max() - returns.min())
 
         return returns.unsqueeze(-1)
