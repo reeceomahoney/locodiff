@@ -152,15 +152,18 @@ class RaisimEnv:
             returns = self.compute_returns(total_rewards)
 
             # split rewards by lambda
-            total_rewards /= self.eval_n_steps
+            # total_rewards /= self.eval_n_steps
             height_rewards /= self.eval_n_steps
             for i, lam in enumerate(cond_lambdas):
-                return_dict[f"lamda_{lam}/return_mean"] = returns[
+                # return_dict[f"lamda_{lam}/return_mean"] = returns[
+                #     i * envs_per_lambda : (i + 1) * envs_per_lambda
+                # ].mean()
+                # return_dict[f"lamda_{lam}/return_std"] = returns[
+                #     i * envs_per_lambda : (i + 1) * envs_per_lambda
+                # ].std()
+                return_dict[f"lamda_{lam}/reward_mean"] = total_rewards[
                     i * envs_per_lambda : (i + 1) * envs_per_lambda
                 ].mean()
-                return_dict[f"lamda_{lam}/return_std"] = returns[
-                    i * envs_per_lambda : (i + 1) * envs_per_lambda
-                ].std()
                 return_dict[f"lamda_{lam}/terminals_mean"] = total_dones[
                     i * envs_per_lambda : (i + 1) * envs_per_lambda
                 ].mean()
@@ -183,7 +186,7 @@ class RaisimEnv:
 
     def compute_returns(self, rewards):
         # TODO split epsideos by dones
-        rewards -= 1
+        rewards = rewards.copy() - 1
 
         horizon = 50
         gammas = np.array([0.99**i for i in range(horizon)])
@@ -192,7 +195,7 @@ class RaisimEnv:
         for i in range(returns.shape[1]):
             returns[:, i] = (rewards[:, i : i + horizon] * gammas).sum(axis=-1)
 
-        returns = np.exp(returns / 50)
+        returns = np.exp(returns / 10)
         returns = returns.mean(axis=1)
         returns = (returns - 0.550) / (0.914 - 0.550)
         # returns += 0.3

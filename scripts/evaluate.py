@@ -58,14 +58,15 @@ def main(cfg: DictConfig) -> None:
         results_dict = env.simulate(
             agent, real_time=False, lambda_values=cfg.lambda_values
         )
-        returns = [v for k, v in results_dict.items() if k.endswith("/return_mean")]
+        # returns = [v for k, v in results_dict.items() if k.endswith("/return_mean")]
+        rewards = [v for k, v in results_dict.items() if k.endswith("/reward_mean")]
         terminals = [
             v for k, v in results_dict.items() if k.endswith("/terminals_mean")
         ]
 
-        print(returns)
+        print(rewards)
         print(terminals)
-        plt.bar(range(len(returns)), returns)
+        plt.bar(range(len(rewards)), rewards)
         plt.xticks(range(len(cfg.lambda_values)), cfg.lambda_values)
         plt.xlabel("Lambda")
         plt.ylabel("Velocity tracking return")
