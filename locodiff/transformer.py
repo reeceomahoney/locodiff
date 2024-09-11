@@ -63,7 +63,11 @@ class DiffusionTransformer(nn.Module):
         self.register_buffer("mask", mask)
 
         self.ln_f = nn.LayerNorm(self.d_model)
-        self.action_pred = nn.Linear(d_model, self.act_dim)
+        self.action_pred = nn.Sequential(
+            nn.Linear(d_model, d_model),
+            nn.SiLU(),
+            nn.Linear(d_model, self.act_dim),
+        )
 
         self.apply(self._init_weights)
         self.to(device)

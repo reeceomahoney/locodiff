@@ -38,7 +38,7 @@ reward_fn: fwd_bwd
 scaling: gaussian
 
 # BESO hyperparameters
-dropout: 0.3
+dropout: 0.0
 n_heads: 8
 use_ema: True
 decay: 0.999
