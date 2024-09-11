@@ -62,8 +62,8 @@ class RaisimEnv:
         obs_and_cmd = self._observation[:, :36]
         obs_and_cmd = torch.from_numpy(obs_and_cmd).to(self.device)
         obs = obs_and_cmd[:, :33]
-        # vel_cmd = obs_and_cmd[:, 33:36]
-        vel_cmd = self.vel_cmd
+        vel_cmd = obs_and_cmd[:, 33:36]
+        # vel_cmd = self.vel_cmd
         return obs, vel_cmd
 
     def reset(self, conditional_reset=False):

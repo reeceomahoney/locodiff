@@ -10,3 +10,5 @@
 - [ ] Parallelize cfg forward
 - [ ] fix cmake stdout w/ pipenv
 - [ ] Add setup to README
+- [ ] Add max reward to wandb
+

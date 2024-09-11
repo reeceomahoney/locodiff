@@ -557,8 +557,12 @@ class Agent:
         return {k: v.clone().to(self.device) for k, v in batch.items()}
 
     def sample_vel_cmd(self, batch_size):
-        vel_cmd = torch.randint(0, 2, (batch_size, 1), device=self.device).float()
-        return vel_cmd * 2 - 1
+        # vel_cmd = torch.randint(0, 2, (batch_size, 1), device=self.device).float()
+        # return vel_cmd * 2 - 1
+        vel_ranges = torch.tensor([0.8, 0.5, 1.0], device=self.device)
+        vel_cmd = torch.rand((batch_size, 3), device=self.device)
+        vel_cmd = vel_cmd * 2 * vel_ranges - vel_ranges
+        return vel_cmd
 
     def compute_returns(self, obs, vel_cmd):
         rewards = utils.reward_function(obs, vel_cmd, self.reward_fn)
@@ -567,7 +571,7 @@ class Agent:
 
         gammas = torch.tensor([0.99**i for i in range(horizon)]).to(self.device)
         returns = (rewards * gammas).sum(dim=-1)
-        returns = torch.exp(returns / 1)
+        returns = torch.exp(returns / 10)
         returns = (returns - returns.min()) / (returns.max() - returns.min())
 
         # import matplotlib.pyplot as plt
