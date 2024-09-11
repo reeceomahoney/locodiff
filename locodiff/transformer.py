@@ -92,6 +92,7 @@ class DiffusionTransformer(nn.Module):
             nn.TransformerDecoder,
             nn.ModuleList,
             nn.Mish,
+            nn.SiLU,
             nn.Sequential,
             DiffusionTransformer,
         )
