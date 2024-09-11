@@ -31,12 +31,29 @@ class DiffusionTransformer(nn.Module):
         self.cond_mask_prob = cond_mask_prob
         self.ddpm = ddpm
 
-        self.action_emb = nn.Linear(self.act_dim, self.d_model)
-        self.obs_emb = nn.Linear(self.obs_dim + 1, self.d_model)
-        self.sigma_emb = nn.Linear(1, self.d_model)
-        self.vel_cmd_emb = nn.Linear(1, self.d_model)
-        self.return_emb = nn.Linear(1, self.d_model)
-        self.skill_emb = nn.Linear(skill_dim, self.d_model)
+        # self.action_emb = nn.Linear(self.act_dim, self.d_model)
+        # self.obs_emb = nn.Linear(self.obs_dim + 1, self.d_model)
+        # self.sigma_emb = nn.Linear(1, self.d_model)
+        # self.vel_cmd_emb = nn.Linear(1, self.d_model)
+        # self.return_emb = nn.Linear(1, self.d_model)
+        # self.skill_emb = nn.Linear(skill_dim, self.d_model)
+
+        self.action_emb = nn.Sequential(
+            nn.Linear(self.act_dim, self.d_model),
+            nn.SiLU(),
+            nn.Linear(self.d_model, self.d_model),
+        )
+        self.obs_emb = nn.Sequential(
+            nn.Linear(self.obs_dim + 1, self.d_model),
+            nn.SiLU(),
+            nn.Linear(self.d_model, self.d_model),
+        )
+        self.sigma_emb = nn.Sequential(
+            nn.Linear(1, self.d_model), nn.SiLU(), nn.Linear(self.d_model, self.d_model)
+        )
+        self.return_emb = nn.Sequential(
+            nn.Linear(1, self.d_model), nn.SiLU(), nn.Linear(self.d_model, self.d_model)
+        )
 
         self.drop = nn.Dropout(dropout)
 
@@ -207,12 +224,12 @@ class DiffusionTransformer(nn.Module):
     def mask_cond(self, cond, force_mask=False):
         cond = cond.clone()
         if force_mask:
-            cond[...] = -1
+            cond[...] = 0
             return cond
         elif self.training and self.cond_mask_prob > 0:
             mask = (torch.rand(cond.shape[0], 1) > self.cond_mask_prob).float()
             mask = mask.expand_as(cond)
-            cond[mask == 0] = -1
+            cond[mask == 0] = 0
             return cond
         else:
             return cond
