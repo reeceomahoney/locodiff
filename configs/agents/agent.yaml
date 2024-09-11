@@ -2,7 +2,7 @@ _target_: locodiff.agent.Agent
 _recursive_: false
 
 defaults:
-  - model: mlp
+  - model: transformer
 
 optimization:
   _target_: torch.optim.AdamW
