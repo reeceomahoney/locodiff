@@ -2,7 +2,7 @@ defaults:
   - agents: agent
   - _self_
 
-data_path: walk_reward
+data_path: walk_mid
 
 hydra:
   run:
@@ -44,7 +44,7 @@ use_ema: True
 decay: 0.999
 update_ema_every_n_steps: 1
 sigma_data: 0.5
-cond_mask_prob: 0.1
+cond_mask_prob: 0.0
 cond_lambda: 10
 n_timesteps: 3
 
