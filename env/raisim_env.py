@@ -79,8 +79,6 @@ class RaisimEnv:
         log.info("Starting trained model evaluation")
 
         returns = torch.ones((self.num_envs, 1)).to(self.device)
-        self.skill = torch.zeros(self.num_envs, self.skill_dim).to(self.device)
-        self.skill[:, 0] = 1
 
         self.vel_cmd = torch.randint(
             0, 2, (self.num_envs, 1), device=self.device
@@ -107,6 +105,8 @@ class RaisimEnv:
             )
             height_rewards = np.zeros(self.num_envs, dtype=np.float32)
             total_dones = np.zeros(self.num_envs, dtype=np.int64)
+            self.skill = torch.zeros(self.num_envs, self.skill_dim).to(self.device)
+            self.skill[:, 0] = 1
 
             action = self.nominal_joint_pos
             done = np.array([False])
