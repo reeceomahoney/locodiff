@@ -595,7 +595,7 @@
   </joint>
   <link name="LF_KFE_drive">
     <visual>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin rpy="0 3.14 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="../meshes/drive.dae" scale="1.0 1.0 1.0"/>
       </geometry>
@@ -832,7 +832,7 @@
   </joint>
   <link name="RF_KFE_drive">
     <visual>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin rpy="0 3.14 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="../meshes/drive.dae" scale="1.0 1.0 1.0"/>
       </geometry>
@@ -1069,7 +1069,7 @@
   </joint>
   <link name="LH_KFE_drive">
     <visual>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin rpy="0 3.14 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="../meshes/drive.dae" scale="1.0 1.0 1.0"/>
       </geometry>
@@ -1306,7 +1306,7 @@
   </joint>
   <link name="RH_KFE_drive">
     <visual>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin rpy="0 3.14 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="../meshes/drive.dae" scale="1.0 1.0 1.0"/>
       </geometry>
