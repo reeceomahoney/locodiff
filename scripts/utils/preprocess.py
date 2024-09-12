@@ -1,6 +1,7 @@
-import numpy as np
 import os
+
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 def load_data(data_path):
@@ -40,16 +41,17 @@ def split_by_vel_cmd(obs, terminals):
 
 
 data_dir = os.path.dirname(os.path.realpath(__file__)) + "/../../data/"
-walk_data = load_data(data_dir + "raw/noise/walk_pos_noise.npy")
-# crawl_data = load_data(data_dir + "raw/crawl.npy")
+walk_data = load_data(data_dir + "raw/walk_rand.npy")
+crawl_data = load_data(data_dir + "raw/mid_rand.npy")
+del walk_data["rewards"]
 
 # roll actions (only need this for pmtg)
 act = np.roll(walk_data["actions"], -1, axis=1)
 act[:, -1] = act[:, -2].copy()
 walk_data["actions"] = act.copy()
 
-# data = cat(walk_data, crawl_data)
-data = walk_data
+data = cat(walk_data, crawl_data)
+# data = walk_data
 
 obs = data["observations"]
 act = data["actions"]
@@ -60,7 +62,7 @@ terminals = shift_terminals(terminals)
 
 skill = np.zeros_like(vel_cmds[..., :2])
 skill[:1000, :, 0] = 1
-# skill[1000:, :, 1] = 1
+skill[1000:, :, 1] = 1
 
 processed_data = {
     "obs": obs,
@@ -71,7 +73,7 @@ processed_data = {
 }
 
 # Save the data to a new file
-name = "noise/walk_pos_noise"
+name = "walk_mid_rand"
 print(f"Saving data to {data_dir}/{name}.npy")
 print(f"Observations shape: {obs.shape}, Actions shape: {act.shape}")
 np.save(f"{data_dir}/{name}.npy", processed_data)
