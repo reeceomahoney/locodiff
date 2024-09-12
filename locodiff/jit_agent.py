@@ -50,13 +50,13 @@ class JitAgent:
         self.device = device
 
     @torch.no_grad()
-    def forward(self, obs, vel_cmd, skill, returns, use_cfg: bool) -> torch.Tensor:
+    def forward(self, obs, vel_cmd, skill, returns) -> torch.Tensor:
         """
         Predicts the output of the model based on the provided batch of data.
         """
+        use_cfg = False
 
         batch = {"obs": obs, "vel_cmd": vel_cmd, "skill": skill, "return": returns}
-        batch = self.stack_context(batch)
         data_dict = self.process_batch(batch)
 
         # get the sigma distribution for the desired sampling method
@@ -69,8 +69,8 @@ class JitAgent:
 
         # get the action for the current timestep
         x_0 = self.scaler.clip(x_0)
-        pred_action = self.scaler.inverse_scale_output(x_0).cpu().numpy()
-        pred_action = pred_action[:, : self.T_action].copy()
+        pred_action = self.scaler.inverse_scale_output(x_0)
+        pred_action = pred_action[:, : self.T_action]
 
         return pred_action
 
@@ -90,7 +90,7 @@ class JitAgent:
         x_t = noise
         s_in = x_t.new_ones([x_t.shape[0]])
 
-        for i in range(len(sigmas) - 1):
+        for i in range(sigmas.shape[0] - 1):
             if use_cfg:
                 denoised = self.cfg_forward(x_t, sigmas[i] * s_in, data_dict)
             else:

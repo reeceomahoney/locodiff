@@ -7,14 +7,15 @@ sigma_min: 0.001
 sigma_max: 80
 device: ${device}
 
-pred_obs_dim: ${pred_obs_dim}
+obs_dim: ${obs_dim}
 action_dim: ${action_dim}
 T: ${T}
 T_cond: ${T_cond}
 T_action: ${T_action}
+cond_lambda: ${cond_lambda}
 
 model:
-  _target_: locodiff.wrapper.GCDenoiser
+  _target_: locodiff.wrapper.ScalingWrapper
   _recursive_: false
 
   sigma_data: ${sigma_data}
@@ -22,8 +23,7 @@ model:
   inner_model:
     _target_: locodiff.transformer.DiffusionTransformer
     obs_dim: ${obs_dim}
-    pred_obs_dim: ${pred_obs_dim}
-    goal_dim: ${goal_dim}
+    skill_dim: ${skill_dim}
     act_dim: ${action_dim}
     d_model: ${hidden_dim}
     nhead: ${n_heads}
@@ -35,14 +35,16 @@ model:
     dropout: ${dropout}
 
 dataset_fn:
-  _target_: data.dataloader.get_raisim_train_val
+  _target_: locodiff.dataloader.get_dataloaders_and_scaler
   data_directory: ${data_path}
   obs_dim: ${obs_dim}
   train_fraction: 0.95
-  random_seed: ${seed}
   device: ${device}
-  window_size: ${T_cond}
-  future_seq_len: ${T}
+  T_cond: ${T_cond}
+  T: ${T}
   train_batch_size: 1024
   test_batch_size: 1024
   num_workers: 4
+  return_horizon: ${reward_horizon}
+  reward_fn: ${reward_fn}
+  scaling: ${scaling}
