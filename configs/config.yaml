@@ -24,7 +24,7 @@ obs_dim: 33
 skill_dim: 2
 
 # policy model params
-hidden_dim: 256
+hidden_dim: 128
 num_hidden_layers: 4
 weight_decay: 1e-3
 train_method: "steps"
@@ -35,7 +35,7 @@ sim_every_n_steps: 5000
 evaluating: False
 reward_horizon: 0
 reward_fn: vel_target_var
-scaling: gaussian
+scaling: linear
 
 # BESO hyperparameters
 dropout: 0.0

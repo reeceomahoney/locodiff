@@ -1,3 +1,5 @@
+import sys
+
 import hydra
 import numpy as np
 import torch
@@ -31,4 +33,6 @@ def main(cfg: DictConfig) -> None:
 
 
 if __name__ == "__main__":
+    sys.argv.append("hydra.output_subdir=null")
+    sys.argv.append("hydra.run.dir=.")
     main()

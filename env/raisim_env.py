@@ -165,6 +165,9 @@ class RaisimEnv:
                 return_dict[f"lamda_{lam}/reward_mean"] = total_rewards[
                     i * envs_per_lambda : (i + 1) * envs_per_lambda
                 ].mean()
+                return_dict[f"lamda_{lam}/height_reward_mean"] = height_rewards[
+                    i * envs_per_lambda : (i + 1) * envs_per_lambda
+                ].mean()
                 return_dict[f"lamda_{lam}/terminals_mean"] = total_dones[
                     i * envs_per_lambda : (i + 1) * envs_per_lambda
                 ].mean()
