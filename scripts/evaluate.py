@@ -33,7 +33,7 @@ def main(cfg: DictConfig) -> None:
     model_cfg.T_action = 1
     model_cfg.use_ema = False
     model_cfg.evaluating = True
-    model_cfg.env["num_envs"] = 25 * len(cfg.lambda_values)
+    model_cfg.env["num_envs"] = 100 * len(cfg.lambda_values)
     model_cfg.n_timesteps = cfg.n_inference_steps
     model_cfg.agents.output_dir = cfg.model_store_path
 
@@ -63,17 +63,19 @@ def main(cfg: DictConfig) -> None:
         )
         # returns = [v for k, v in results_dict.items() if k.endswith("/return_mean")]
         rewards = [v for k, v in results_dict.items() if k.endswith("/reward_mean")]
+        rewards_std = [v for k, v in results_dict.items() if k.endswith("/reward_std")]
         terminals = [
             v for k, v in results_dict.items() if k.endswith("/terminals_mean")
         ]
 
         print(rewards)
+        print(rewards_std)
         print(terminals)
         plt.bar(range(len(rewards)), rewards)
         plt.xticks(range(len(cfg.lambda_values)), cfg.lambda_values)
         plt.xlabel("Lambda")
         plt.ylabel("Velocity tracking return")
-        plt.show()
+        plt.savefig("rewards.png")
     if cfg["test_mse"]:
         dataloader = agent.test_loader
         batch = next(iter(dataloader))
