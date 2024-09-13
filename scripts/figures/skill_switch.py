@@ -13,7 +13,7 @@ x = np.arange(len(reward)) / 25
 window_size = 20
 reward_mean = np.convolve(reward, np.ones(window_size) / window_size, mode="valid")
 
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(36, 10), sharex=True)
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(36, 8), sharex=True)
 
 ax1.patch.set_edgecolor("black")
 ax1.patch.set_linewidth(1.5)
@@ -27,7 +27,7 @@ ax1.set_ylabel("Rewards", fontsize=24, labelpad=20)
 ax1.tick_params(labelbottom=True)
 
 ax2.plot(x, height, label="Height", color="red")
-ax2.set_xlabel("Time (s)", fontsize=24, labelpad=20)
+ax2.set_xlabel("Time (s)", fontsize=24, labelpad=5)
 ax2.set_ylabel("Height (m)", fontsize=24, labelpad=20)
 
 ax1.set_title("Velocity tracking reward during skill change", fontsize=24, pad=20)
