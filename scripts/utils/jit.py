@@ -13,7 +13,7 @@ def main(cfg: DictConfig) -> None:
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
 
-    model_path = "logs/2024-09-11/22-34-15/"
+    model_path = "logs/2024-09-12/21-26-05/"
 
     agent = hydra.utils.instantiate(cfg.agents)
     agent.load_pretrained_model(model_path)

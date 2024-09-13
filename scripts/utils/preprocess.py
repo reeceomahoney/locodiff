@@ -42,7 +42,7 @@ def split_by_vel_cmd(obs, terminals):
 
 data_dir = os.path.dirname(os.path.realpath(__file__)) + "/../../data/"
 walk_data = load_data(data_dir + "raw/walk_rand.npy")
-crawl_data = load_data(data_dir + "raw/mid_rand.npy")
+crawl_data = load_data(data_dir + "raw/mid_05.npy")
 del walk_data["rewards"]
 
 # roll actions (only need this for pmtg)
@@ -73,7 +73,7 @@ processed_data = {
 }
 
 # Save the data to a new file
-name = "walk_mid_rand"
+name = "walk_mid_05"
 print(f"Saving data to {data_dir}/{name}.npy")
 print(f"Observations shape: {obs.shape}, Actions shape: {act.shape}")
 np.save(f"{data_dir}/{name}.npy", processed_data)
