@@ -2,7 +2,7 @@ defaults:
   - agents: agent
   - _self_
 
-data_path: walk_mid_05
+data_path: walk_rand
 
 hydra:
   run:
@@ -34,7 +34,7 @@ eval_every_n_steps: 1000
 sim_every_n_steps: 5000
 evaluating: False
 reward_horizon: 0
-reward_fn: vel_target_var
+reward_fn: vel_target
 scaling: linear
 
 # BESO hyperparameters
@@ -44,7 +44,7 @@ use_ema: True
 decay: 0.999
 update_ema_every_n_steps: 1
 sigma_data: 0.5
-cond_mask_prob: 0.0
+cond_mask_prob: 0.1
 cond_lambda: 10
 n_timesteps: 3
 
