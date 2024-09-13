@@ -1,5 +1,5 @@
 defaults:
-  - agents: ddpm_agent
+  - agents: agent
   - _self_
 
 data_path: walk_rand
