@@ -396,7 +396,10 @@ class Agent:
             else:
                 denoised = self.model(x_t, sigmas[i] * s_in, data_dict)
 
-                # DPM-Solver++(2M) SDE
+            # DPM-Solver++(2M) SDE
+            if sigmas[i + 1] == 0:
+                x_t = denoised
+            else:
                 t, s = -sigmas[i].log(), -sigmas[i + 1].log()
                 h = s - t
                 eta_h = h
