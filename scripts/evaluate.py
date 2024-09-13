@@ -55,7 +55,7 @@ def main(cfg: DictConfig) -> None:
     # Evaluate
     if cfg["test_rollout"]:
         env.eval_n_times = cfg["num_runs"]
-        results_dict = env.simulate(agent, real_time=True)
+        results_dict = env.simulate(agent, real_time=True, lambda_values=[0])
         print(results_dict)
     if cfg["test_reward_lambda"]:
         results_dict = env.simulate(
