@@ -579,7 +579,7 @@ class Agent:
         gammas = torch.tensor([0.99**i for i in range(horizon)]).to(self.device)
         returns = (rewards * gammas).sum(dim=-1)
         returns = torch.exp(returns / 10)
-        returns = (returns - returns.min()) / (returns.max() - returns.min())
+        # returns = (returns - returns.min()) / (returns.max() - returns.min())
 
         # import matplotlib.pyplot as plt
         # fig, axs = plt.subplots(1, 2)
