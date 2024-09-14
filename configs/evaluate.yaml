@@ -8,7 +8,7 @@ hydra:
   run:
     dir: .
 
-model_store_path: logs/2024-09-13/21-44-55
+model_store_path: logs/2024-09-13/23-26-17
 log_wandb: True
 
 num_runs: 50
