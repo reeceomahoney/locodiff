@@ -534,8 +534,8 @@ class Agent:
         #     vel_cmd = self.sample_vel_cmd(raw_obs.shape[0])
 
         returns = batch.get("return", None)
-        # if returns is None:
-        #     returns = self.compute_returns(raw_obs, vel_cmd)
+        if returns is None:
+            returns = self.compute_returns(raw_obs, vel_cmd)
 
         rewards = batch.get("reward", None)
         if rewards is not None and returns is None:
