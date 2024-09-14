@@ -16,7 +16,7 @@ wandb:
 device: cuda
 seed: 6
 T: 4
-T_cond: 16
+T_cond: 8
 T_action: 1
 
 action_dim: 12
@@ -39,7 +39,7 @@ scaling: linear
 
 # BESO hyperparameters
 dropout: 0.0
-n_heads: 8
+n_heads: 4
 use_ema: True
 decay: 0.999
 update_ema_every_n_steps: 1
