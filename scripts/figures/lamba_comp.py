@@ -4,6 +4,8 @@ from matplotlib.ticker import MaxNLocator
 
 plt.style.use("seaborn-v0_8")
 plt.rcParams.update({"xtick.labelsize": 24, "ytick.labelsize": 24})
+plt.rcParams["pdf.fonttype"] = 42
+plt.rcParams["ps.fonttype"] = 42
 
 rewards = [
     0.55315906,
@@ -45,14 +47,14 @@ ax1.bar(
 )
 ax1.set_xlabel(r"$\lambda$", fontsize=24, labelpad=20)
 ax1.set_ylabel("Rewards", fontsize=24, labelpad=20)
-ax1.tick_params(axis="y", labelcolor=color1)
+ax1.tick_params(axis="y")
 
 # Create a secondary y-axis for terminals
 ax2 = ax1.twinx()
 color2 = "#ff7f0e"  # A complementary orange color
 ax2.bar(x + 0.2, terminals, width=0.35, color=color2, label="Terminations")
 ax2.set_ylabel("Terminations", fontsize=24, labelpad=20)
-ax2.tick_params(axis="y", labelcolor=color2)
+ax2.tick_params(axis="y")
 ax2.grid(False)
 
 # Set x-axis labels and title
@@ -94,4 +96,4 @@ ax1.patch.set_linewidth(1.5)
 
 # Tight layout and save with high DPI
 plt.tight_layout()
-plt.savefig("lambda_comp.pdf", format="pdf", dpi=300, bbox_inches="tight")
+plt.show()
