@@ -5,10 +5,11 @@
 - [x] simplify env
 - [x] refactor ddpm agent into main agent
 - [x] dont create folder in debug mode
-- [ ] Refactor initialised so everything is created in training script
+- [x] Refactor initialisation into workspace
+- [ ] clean up env config
+- [ ] Split loss and call logic into separate agent class
 - [ ] Split return calculation by episodes
 - [ ] Parallelize cfg forward
 - [ ] fix cmake stdout w/ pipenv
 - [ ] Add setup to README
 - [ ] Add max reward to wandb
-

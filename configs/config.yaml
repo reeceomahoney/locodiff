@@ -1,9 +1,9 @@
-_target_: locodiff.agent.Workspace
+_target_: locodiff.workspace.Workspace
 
 wandb_project: locodiff
 
 # training
-train_steps: 1e6
+train_steps: 5e5
 eval_every: 1000
 sim_every: 5000
 seed: 6
@@ -80,7 +80,7 @@ dataset_fn:
   evaluating: false
 
 env:
-  _target_: env.raisim_env.RaisimEnv
+  _target_: env.env.RaisimEnv
   seed: ${seed}
   T: ${T}
   T_cond: ${T_cond}

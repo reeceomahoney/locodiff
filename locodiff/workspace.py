@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 import locodiff.utils as utils
-from env.raisim_env import RaisimEnv
+from env.env import RaisimEnv
 from locodiff.transformer import DiffusionTransformer
 from locodiff.wrapper import ScalingWrapper
 
