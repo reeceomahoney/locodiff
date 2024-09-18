@@ -106,24 +106,21 @@ env:
     normalize_observation: False
 
     velocity_command:
-      limit_heading_velocity: 0.8
-      limit_lateral_velocity: 0.5
-      limit_yaw_rate: 1.0
-
-      # Less than this is considered to be a zero velocity command
-      limit_velocity_magnitude: 0.1
-
-      # These values are rescaled if their sum is not equal to 1
-      probability_zero_command: 0.2
-      probability_heading_command: 0.0
-      probability_lateral_command: 0.0
-      probability_yaw_command: 0.0
-      probability_direction_command: 0.0
-      probability_constant_command: 0.8 # includes all three velocities
-
-      # Time range in seconds when the next command is sampled
-      command_sampling_time_min: 3.0
-      command_sampling_time_max: 4.0
+      limits:
+        heading: 0.8
+        lateral: 0.5
+        yaw: 1.0
+        magnitude: 0.1 # less than is considered to be zero
+      command_probs:
+        zero: 0.2
+        heading: 0.0
+        lateral: 0.0
+        yaw: 0.0
+        direction: 0.0
+        constant: 0.8 # includes all three velocities
+      sampling_times:
+        min: 3.0
+        max: 4.0
 
 ema_helper:
   _target_: locodiff.utils.ExponentialMovingAverage

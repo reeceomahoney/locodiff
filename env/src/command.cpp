@@ -13,26 +13,26 @@ class VelocityCommand {
     controlTimeStep_ = controlTimeStep;
 
     velocityCommandLimits_[0] =
-        cfg["limit_heading_velocity"].template As<double>();
+        cfg["limits"]["heading"].template As<double>();
     velocityCommandLimits_[1] =
-        cfg["limit_lateral_velocity"].template As<double>();
-    velocityCommandLimits_[2] = cfg["limit_yaw_rate"].template As<double>();
+        cfg["limits"]["lateral"].template As<double>();
+    velocityCommandLimits_[2] = cfg["limits"]["yaw"].template As<double>();
 
     limitVelocityMagnitude_ =
-        cfg["limit_velocity_magnitude"].template As<double>();
+        cfg["limits"]["magnitude"].template As<double>();
 
     commandProbabilities_[VelocityCommandMode::Zero] =
-        cfg["probability_zero_command"].template As<double>();
+        cfg["command_probs"]["zero"].template As<double>();
     commandProbabilities_[VelocityCommandMode::Heading] =
-        cfg["probability_heading_command"].template As<double>();
+        cfg["command_probs"]["heading"].template As<double>();
     commandProbabilities_[VelocityCommandMode::Lateral] =
-        cfg["probability_lateral_command"].template As<double>();
+        cfg["command_probs"]["lateral"].template As<double>();
     commandProbabilities_[VelocityCommandMode::Yaw] =
-        cfg["probability_yaw_command"].template As<double>();
+        cfg["command_probs"]["yaw"].template As<double>();
     commandProbabilities_[VelocityCommandMode::Direction] =
-        cfg["probability_direction_command"].template As<double>();
+        cfg["command_probs"]["direction"].template As<double>();
     commandProbabilities_[VelocityCommandMode::Constant] =
-        cfg["probability_constant_command"].template As<double>();
+        cfg["command_probs"]["constant"].template As<double>();
 
     validateProbabilities();
 
@@ -48,10 +48,10 @@ class VelocityCommand {
         cbegin(commandProbabilitiesValues_), cend(commandProbabilitiesValues_));
 
     commandSamplingStepsRange_[0] = static_cast<int>(
-        floor(cfg["command_sampling_time_min"].template As<double>() /
+        floor(cfg["sampling_times"]["min"].template As<double>() /
               controlTimeStep_));
     commandSamplingStepsRange_[1] = static_cast<int>(
-        ceil(cfg["command_sampling_time_max"].template As<double>() /
+        ceil(cfg["sampling_times"]["max"].template As<double>() /
              controlTimeStep_));
 
     velocityCommand_.setZero();

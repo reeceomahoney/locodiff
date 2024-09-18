@@ -1,8 +1,3 @@
-//----------------------------//
-// This file is part of RaiSim//
-// Copyright 2020, RaiSim Tech//
-//----------------------------//
-
 #pragma once
 
 #include <cstdlib>
