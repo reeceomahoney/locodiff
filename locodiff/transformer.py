@@ -1,7 +1,11 @@
+import logging
+
 import torch
 import torch.nn as nn
 
 from .utils import SinusoidalPosEmb
+
+log = logging.getLogger(__name__)
 
 
 class DiffusionTransformer(nn.Module):
@@ -18,6 +22,7 @@ class DiffusionTransformer(nn.Module):
         device,
         cond_mask_prob,
         dropout,
+        weight_decay: float,
         ddpm: bool = False,
     ):
         super().__init__()
@@ -29,6 +34,7 @@ class DiffusionTransformer(nn.Module):
         self.num_layers = num_layers
         self.device = device
         self.cond_mask_prob = cond_mask_prob
+        self.weight_decay = weight_decay
         self.ddpm = ddpm
 
         self.action_emb = nn.Linear(self.act_dim, self.d_model)
@@ -67,6 +73,9 @@ class DiffusionTransformer(nn.Module):
 
         self.apply(self._init_weights)
         self.to(device)
+
+        total_params = sum(p.numel() for p in self.get_params())
+        log.info(f"Total parameters: {total_params:e}")
 
     def _init_weights(self, module):
         ignore_types = (
@@ -108,7 +117,7 @@ class DiffusionTransformer(nn.Module):
         else:
             raise RuntimeError("Unaccounted module {}".format(module))
 
-    def get_optim_groups(self, weight_decay: float = 1e-3):
+    def get_optim_groups(self):
         """
         This long function is unfortunately doing something very simple and is being very defensive:
         We are separating out all parameters of the model into two buckets: those that will experience
@@ -155,7 +164,7 @@ class DiffusionTransformer(nn.Module):
         optim_groups = [
             {
                 "params": [param_dict[pn] for pn in sorted(list(decay))],
-                "weight_decay": weight_decay,
+                "weight_decay": self.weight_decay,
             },
             {
                 "params": [param_dict[pn] for pn in sorted(list(no_decay))],

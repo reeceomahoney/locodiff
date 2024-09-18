@@ -5,7 +5,7 @@ import time
 
 import numpy as np
 import torch
-from omegaconf import OmegaConf
+from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
 
 from env.lib.raisim_env import RaisimWrapper
@@ -16,28 +16,39 @@ log = logging.getLogger(__name__)
 
 class RaisimEnv:
 
-    def __init__(self, cfg, seed=0):
+    def __init__(
+        self,
+        impl: DictConfig,
+        seed: int,
+        T: int,
+        T_cond: int,
+        T_action: int,
+        skill_dim: int,
+        eval_times: int,
+        eval_steps: int,
+        reward_fn: str,
+        device: str,
+    ):
         if platform.system() == "Darwin":
             os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
 
-        resource_dir = os.path.dirname(os.path.realpath(__file__)) + "/resources"
-        env_cfg = OmegaConf.to_yaml(cfg.env)
-
         # initialize environment
-        self.env = RaisimWrapper(resource_dir, env_cfg)
+        resource_dir = os.path.dirname(os.path.realpath(__file__)) + "/resources"
+        impl_cfg = OmegaConf.to_yaml(impl)
+        self.env = RaisimWrapper(resource_dir, impl_cfg)
         self.env.setSeed(seed)
         self.env.turnOnVisualization()
 
         # get environment information
         self.num_obs = self.env.getObDim()
         self.num_acts = self.env.getActionDim()
-        self.T_action = cfg.T_action
-        self.skill_dim = cfg.skill_dim
-        self.window = cfg.T_cond + cfg.T - 1
-        self.eval_n_times = cfg.env.eval_n_times
-        self.eval_n_steps = cfg.env.eval_n_steps
-        self.device = cfg.device
-        self.dataset = cfg.data_path
+        self.T_action = T_action
+        self.skill_dim = skill_dim
+        self.window = T_cond + T - 1
+        self.eval_n_times = eval_times
+        self.eval_n_steps = eval_steps
+        self.device = device
+        self.reward_fn = reward_fn
 
         # initialize variables
         self._observation = np.zeros([self.num_envs, self.num_obs], dtype=np.float32)
@@ -48,8 +59,6 @@ class RaisimEnv:
 
         self.nominal_joint_pos = np.zeros([self.num_envs, 12], dtype=np.float32)
         self.env.getNominalJointPositions(self.nominal_joint_pos)
-
-        self.reward_fn = cfg.reward_fn
 
     def step(self, action):
         self.env.step(action, self._done)

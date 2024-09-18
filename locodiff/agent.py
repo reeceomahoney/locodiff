@@ -1,119 +1,133 @@
 import logging
 import math
 import os
+import random
+import sys
+from typing import Callable, Tuple
 
-import hydra
+import numpy as np
 import torch
 import torch.nn as nn
 import wandb
-from omegaconf import DictConfig
+from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
+from hydra.core.hydra_config import HydraConfig
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 import locodiff.utils as utils
+from env.raisim_env import RaisimEnv
+from locodiff.transformer import DiffusionTransformer
+from locodiff.wrapper import ScalingWrapper
 
 # A logger for this file
 log = logging.getLogger(__name__)
 
 
-class Agent:
+class Workspace:
 
     def __init__(
         self,
-        model: DictConfig,
-        optimization: DictConfig,
-        dataset_fn: DictConfig,
+        model: DiffusionTransformer,
+        wrapper: ScalingWrapper,
+        optimizer: Callable,
+        lr_scheduler: Callable,
+        dataset_fn: Tuple[DataLoader, DataLoader, utils.Scaler],
+        env: RaisimEnv,
+        ema_helper: Callable,
+        noise_scheduler: DDPMScheduler,
+        wandb_project: str,
+        train_steps: int,
+        eval_every: int,
+        sim_every: int,
+        seed: int,
         device: str,
-        max_train_steps: int,
-        eval_every_n_steps: int,
         use_ema: bool,
-        num_sampling_steps: int,
-        lr_scheduler: DictConfig,
-        sigma_data: float,
-        sigma_min: float,
-        sigma_max: float,
-        decay: float,
-        update_ema_every_n_steps: int,
-        T: int,
-        T_cond: int,
-        T_action: int,
+        use_ddpm: bool,
         obs_dim: int,
         action_dim: int,
         skill_dim: int,
-        num_envs: int,
-        sim_every_n_steps: int,
-        weight_decay: float,
+        T: int,
+        T_cond: int,
+        T_action: int,
+        sampling_steps: int,
+        sigma_data: float,
+        sigma_min: float,
+        sigma_max: float,
         cond_lambda: int,
         cond_mask_prob: float,
-        evaluating: bool,
+        return_horizon: int,
         reward_fn: str,
-        scaling: str,
-        output_dir: str,
-        ddpm: bool = False,
-        noise_scheduler: DictConfig = None,
     ):
-        self.ddpm = ddpm
+        # debug mode
+        if sys.gettrace() is not None:
+            self.output_dir = "/tmp"
+            wandb_mode = "disabled"
+            sim_every = 10
+        else:
+            self.output_dir = HydraConfig.get().runtime.output_dir
+            wandb_mode = "online"
+
+        wandb_mode = "disabled"
+        self.output_dir = "/tmp"
+
+        # set seed
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
 
         # model
-        self.model = hydra.utils.instantiate(model).to(device)
+        self.model = wrapper(model=model)
+
+        # optimizer and lr scheduler
+        optim_groups = self.model.get_optim_groups()
+        self.optimizer = optimizer(optim_groups)
+        self.lr_scheduler = lr_scheduler(self.optimizer)
+
+        # dataloader and scaler
+        self.train_loader, self.test_loader, self.scaler = dataset_fn
+
+        # env
+        self.env = env
+        self.num_envs = env.num_envs
+
+        # ema
+        self.ema_helper = ema_helper(self.model.get_params())
+        self.use_ema = use_ema
+
+        # training
+        self.train_steps = int(train_steps)
+        self.eval_every = int(eval_every)
+        self.sim_every = int(sim_every)
+        self.device = device
+
+        # dims
+        self.obs_dim = obs_dim
+        self.action_dim = action_dim
         self.T = T
         self.T_cond = T_cond
         self.T_action = T_action
-        self.obs_hist = torch.zeros((num_envs, T_cond, obs_dim), device=device)
-        self.skill_hist = torch.zeros((num_envs, T_cond, skill_dim), device=device)
 
-        total_params = sum(p.numel() for p in self.model.get_params())
-        log.info("Parameter count: {:e}".format(total_params))
-
-        # training
-        if self.ddpm:
-            optim_groups = self.model.get_optim_groups(weight_decay)
-            self.noise_scheduler = hydra.utils.instantiate(noise_scheduler)
-        else:
-            optim_groups = self.model.inner_model.get_optim_groups(weight_decay)
-        self.optimizer = hydra.utils.instantiate(optimization, optim_groups)
-        self.lr_scheduler = hydra.utils.instantiate(
-            lr_scheduler, optimizer=self.optimizer
-        )
-        self.max_train_steps = int(max_train_steps)
-        self.eval_every_n_steps = eval_every_n_steps
-
-        # ema
-        self.ema_helper = utils.ExponentialMovingAverage(
-            self.model.get_params(), decay, device
-        )
-        self.use_ema = use_ema
-        self.decay = decay
-        self.update_ema_every_n_steps = update_ema_every_n_steps
+        self.obs_hist = torch.zeros((self.num_envs, T_cond, obs_dim), device=device)
+        self.skill_hist = torch.zeros((self.num_envs, T_cond, skill_dim), device=device)
 
         # diffusion
-        self.num_sampling_steps = num_sampling_steps
+        self.sampling_steps = sampling_steps
         self.sigma_data = sigma_data
         self.sigma_min = sigma_min
         self.sigma_max = sigma_max
         self.cond_lambda = cond_lambda
         self.cond_mask_prob = cond_mask_prob
 
-        # env
-        self.obs_dim = obs_dim
-        self.action_dim = action_dim
-        self.num_envs = num_envs
-        self.sim_every_n_steps = sim_every_n_steps
-
-        if evaluating:
-            # Load a dummy scaler for evaluation
-            x_data = torch.zeros((2, obs_dim), device=device)
-            y_data = torch.zeros((2, action_dim), device=device)
-            self.scaler = utils.Scaler(x_data, y_data, scaling, device)
-        else:
-            self.train_loader, self.test_loader, self.scaler = hydra.utils.instantiate(
-                dataset_fn
-            )
-
-        # misc
-        self.device = device
-        self.env = None
-        self.working_dir = output_dir
+        # reward
+        self.return_horizon = return_horizon
         self.reward_fn = reward_fn
+
+        # ddpm
+        self.use_ddpm = use_ddpm
+        self.noise_scheduler = noise_scheduler
+
+        # logging
+        wandb.init(project=wandb_project, mode=wandb_mode, dir=self.output_dir)
 
     def train_agent(self):
         """
@@ -123,15 +137,17 @@ class Agent:
         best_return = -1e10
         generator = iter(self.train_loader)
 
-        for step in tqdm(range(self.max_train_steps), dynamic_ncols=True):
+        for step in tqdm(range(self.train_steps), dynamic_ncols=True):
             # evaluate
-            if not step % self.eval_every_n_steps:
+            if not step % self.eval_every:
                 log_info = {
                     "total_mse": [],
                     "first_mse": [],
                     "last_mse": [],
                     "output_divergence": [],
                 }
+                log_info_means = {}
+
                 for batch in tqdm(
                     self.test_loader, desc="Evaluating", position=0, leave=True
                 ):
@@ -139,17 +155,17 @@ class Agent:
                     for key in log_info:
                         log_info[key].append(info[key])
                 for key in log_info:
-                    log_info[key] = sum(log_info[key]) / len(log_info[key])
-                if log_info["total_mse"] < best_test_mse:
+                    log_info_means[key] = sum(log_info[key]) / len(log_info[key])
+                if log_info_means["total_mse"] < best_test_mse:
                     best_test_mse = log_info["total_mse"]
-                    self.store_model_weights(self.working_dir)
+                    self.store_model_weights()
                     log.info("New best test loss. Stored weights have been updated!")
                 log_info["lr"] = self.optimizer.param_groups[0]["lr"]
 
                 wandb.log({k: v for k, v in log_info.items()}, step=step)
 
             # simulate
-            if not step % self.sim_every_n_steps:
+            if not step % self.sim_every:
                 results = self.env.simulate(self)
                 wandb.log(results, step=step)
 
@@ -159,7 +175,7 @@ class Agent:
                 max_return = max(rewards)
                 if max_return > best_return:
                     best_return = max_return
-                    self.store_model_weights(self.working_dir, best_reward=True)
+                    self.store_model_weights(best_reward=True)
                     log.info("New best reward. Stored weights have been updated!")
 
             # train
@@ -172,7 +188,7 @@ class Agent:
             if not step % 100:
                 wandb.log({"loss": batch_loss}, step=step)
 
-        self.store_model_weights(self.working_dir)
+        self.store_model_weights()
         log.info("Training done!")
 
     def train_step(self, batch: dict):
@@ -183,8 +199,8 @@ class Agent:
 
         action = data_dict["action"]
         noise = torch.randn_like(action)
-        if self.ddpm:
-            timesteps = torch.randint(0, self.num_sampling_steps, (noise.shape[0],))
+        if self.use_ddpm:
+            timesteps = torch.randint(0, self.sampling_steps, (noise.shape[0],))
             noise_trajectory = self.noise_scheduler.add_noise(action, noise, timesteps)
             timesteps = timesteps.float().to(self.device)
             pred = self.model(noise_trajectory, timesteps, data_dict)
@@ -216,8 +232,8 @@ class Agent:
 
         # get the sigma distribution for sampling based on Karras et al. 2022
         noise = torch.randn_like(data_dict["action"])
-        if self.ddpm:
-            self.noise_scheduler.set_timesteps(self.num_sampling_steps)
+        if self.use_ddpm:
+            self.noise_scheduler.set_timesteps(self.sampling_steps)
             x_0 = self.sample_ddpm(noise, data_dict)
 
             data_dict["return"] = torch.ones_like(data_dict["return"])
@@ -225,7 +241,7 @@ class Agent:
         else:
             noise = noise * self.sigma_max
             sigmas = utils.get_sigmas_exponential(
-                self.num_sampling_steps, self.sigma_min, self.sigma_max, self.device
+                self.sampling_steps, self.sigma_min, self.sigma_max, self.device
             )
             x_0 = self.sample_ddim(noise, sigmas, data_dict, predict=False)
 
@@ -272,7 +288,7 @@ class Agent:
         if new_sampling_steps is not None:
             n_sampling_steps = new_sampling_steps
         else:
-            n_sampling_steps = self.num_sampling_steps
+            n_sampling_steps = self.sampling_steps
 
         if self.use_ema:
             self.ema_helper.store(self.model.parameters())
@@ -283,7 +299,7 @@ class Agent:
         noise = torch.randn(
             (self.num_envs, self.T, self.action_dim), device=self.device
         )
-        if self.ddpm:
+        if self.use_ddpm:
             self.noise_scheduler.set_timesteps(n_sampling_steps)
             x_0 = self.sample_ddpm(noise, data_dict, predict=True)
         else:
@@ -481,19 +497,19 @@ class Agent:
 
         log.info("Loaded pre-trained model parameters and scaler")
 
-    def store_model_weights(self, store_path: str, best_reward: bool = False) -> None:
+    def store_model_weights(self, best_reward: bool = False) -> None:
         if self.use_ema:
             self.ema_helper.store(self.model.parameters())
             self.ema_helper.copy_to(self.model.parameters())
         name = (
             "model_state_dict.pth" if not best_reward else "best_model_state_dict.pth"
         )
-        torch.save(self.model.state_dict(), os.path.join(store_path, name))
+        torch.save(self.model.state_dict(), os.path.join(self.output_dir, name))
         if self.use_ema:
             self.ema_helper.restore(self.model.parameters())
         torch.save(
             self.model.state_dict(),
-            os.path.join(store_path, "non_ema_" + name),
+            os.path.join(self.output_dir, "non_ema_" + name),
         )
 
         # Save scaler attributes
@@ -508,7 +524,7 @@ class Agent:
                 "y_mean": self.scaler.y_mean,
                 "y_std": self.scaler.y_std,
             },
-            os.path.join(store_path, "scaler.pth"),
+            os.path.join(self.output_dir, "scaler.pth"),
         )
 
     @torch.no_grad()
@@ -573,10 +589,13 @@ class Agent:
 
     def compute_returns(self, obs, vel_cmd):
         rewards = utils.reward_function(obs, vel_cmd, self.reward_fn)
-        horizon = 50
-        rewards = rewards[:, self.T_cond - 1 : self.T_cond + horizon - 1] - 1
+        rewards = (
+            rewards[:, self.T_cond - 1 : self.T_cond + self.return_horizon - 1] - 1
+        )
 
-        gammas = torch.tensor([0.99**i for i in range(horizon)]).to(self.device)
+        gammas = torch.tensor([0.99**i for i in range(self.return_horizon)]).to(
+            self.device
+        )
         returns = (rewards * gammas).sum(dim=-1)
         returns = torch.exp(returns / 10)
         returns = (returns - returns.min()) / (returns.max() - returns.min())

@@ -1,3 +1,4 @@
+import logging
 import os
 
 import numpy as np
@@ -5,6 +6,8 @@ import torch
 from torch.utils.data import DataLoader, Dataset, Subset, random_split
 
 from locodiff.utils import Scaler, reward_function
+
+log = logging.getLogger(__name__)
 
 
 class ExpertDataset(Dataset):
@@ -25,13 +28,14 @@ class ExpertDataset(Dataset):
         self.device = device
 
         current_dir = os.path.dirname(os.path.realpath(__file__))
-        dataset_path = current_dir + "/../data/" + data_directory + ".npy"
+        dataset_path = current_dir + "/../data/processed/" + data_directory + ".npy"
+        log.info(f"Loading data from {data_directory}")
 
         self.data = self.load_and_process_data(dataset_path)
 
         obs_size = list(self.data["obs"].shape)
         action_size = list(self.data["action"].shape)
-        print(f"Dataset size | Observations: {obs_size} | Actions: {action_size}")
+        log.info(f"Dataset size | Observations: {obs_size} | Actions: {action_size}")
 
     # --------------
     # Initialization
@@ -210,15 +214,15 @@ class ExpertDataset(Dataset):
 
 
 class SlicerWrapper(Dataset):
-    def __init__(self, dataset: Subset, T_cond: int, T: int):
+    def __init__(self, dataset: Subset, T_cond: int, T: int, return_horizon: int):
         self.dataset = dataset
         self.T_cond = T_cond
         self.T = T
-        self.slices = self._create_slices(T_cond, T)
+        self.slices = self._create_slices(T_cond, return_horizon)
 
-    def _create_slices(self, T_cond, T):
+    def _create_slices(self, T_cond, return_horizon):
         slices = []
-        window = T_cond + 50 - 1
+        window = T_cond + return_horizon - 1
         for i in range(len(self.dataset)):
             length = len(self.dataset[i]["obs"])
             if length >= window:
@@ -250,6 +254,7 @@ class SlicerWrapper(Dataset):
 def get_dataloaders_and_scaler(
     data_directory: str,
     obs_dim: int,
+    action_dim: int,
     T_cond: int,
     T: int,
     train_fraction: float,
@@ -260,32 +265,43 @@ def get_dataloaders_and_scaler(
     return_horizon: int,
     reward_fn: str,
     scaling: str,
+    evaluating: bool,
 ):
-    # Build the datasets
-    dataset = ExpertDataset(data_directory, obs_dim, T_cond, return_horizon, reward_fn)
-    train, val = random_split(dataset, [train_fraction, 1 - train_fraction])
-    train_set = SlicerWrapper(train, T_cond, T)
-    test_set = SlicerWrapper(val, T_cond, T)
+    if evaluating:
+        # Build a dummy scaler for evaluation
+        x_data = torch.zeros((2, obs_dim), device=device)
+        y_data = torch.zeros((2, action_dim), device=device)
+        scaler = Scaler(x_data, y_data, scaling, device)
 
-    # Build the scaler
-    x_data = train_set.get_all_obs()
-    y_data = train_set.get_all_actions()
-    scaler = Scaler(x_data, y_data, scaling, device)
+        train_dataloader, test_dataloader = None, None
+    else:
+        # Build the datasets
+        dataset = ExpertDataset(
+            data_directory, obs_dim, T_cond, return_horizon, reward_fn
+        )
+        train, val = random_split(dataset, [train_fraction, 1 - train_fraction])
+        train_set = SlicerWrapper(train, T_cond, T, return_horizon)
+        test_set = SlicerWrapper(val, T_cond, T, return_horizon)
 
-    # Build the dataloaders
-    train_dataloader = DataLoader(
-        train_set,
-        batch_size=train_batch_size,
-        shuffle=True,
-        num_workers=num_workers,
-        pin_memory=True,
-    )
-    test_dataloader = DataLoader(
-        test_set,
-        batch_size=test_batch_size,
-        shuffle=True,
-        num_workers=num_workers,
-        pin_memory=True,
-    )
+        # Build the scaler
+        x_data = train_set.get_all_obs()
+        y_data = train_set.get_all_actions()
+        scaler = Scaler(x_data, y_data, scaling, device)
+
+        # Build the dataloaders
+        train_dataloader = DataLoader(
+            train_set,
+            batch_size=train_batch_size,
+            shuffle=True,
+            num_workers=num_workers,
+            pin_memory=True,
+        )
+        test_dataloader = DataLoader(
+            test_set,
+            batch_size=test_batch_size,
+            shuffle=True,
+            num_workers=num_workers,
+            pin_memory=True,
+        )
 
     return train_dataloader, test_dataloader, scaler

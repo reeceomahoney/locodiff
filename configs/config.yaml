@@ -1,85 +1,146 @@
-defaults:
-  - agents: agent
-  - _self_
+_target_: locodiff.agent.Workspace
 
-data_path: walk_mid_05
+wandb_project: locodiff
 
-hydra:
-  run:
-    dir: logs/${now:%Y-%m-%d}/${now:%H-%M-%S}
-
-wandb:
-  entity: reeceomahoney
-  project: locodiff
-
-# general params
-device: cuda
+# training
+train_steps: 1e6
+eval_every: 1000
+sim_every: 5000
 seed: 6
+device: cuda
+use_ema: True
+use_ddpm: False
+
+#dims
+obs_dim: 33
+action_dim: 12
+skill_dim: 2
 T: 4
 T_cond: 8
 T_action: 1
 
-action_dim: 12
-obs_dim: 33
-skill_dim: 2
-
-# policy model params
-hidden_dim: 128
-num_hidden_layers: 4
-weight_decay: 1e-3
-train_method: "steps"
-max_train_steps: 1e6
-max_epochs: 100
-eval_every_n_steps: 1000
-sim_every_n_steps: 5000
-evaluating: False
-reward_horizon: 0
-reward_fn: vel_target
-scaling: linear
-
-# BESO hyperparameters
-dropout: 0.0
-n_heads: 8
-use_ema: True
-decay: 0.999
-update_ema_every_n_steps: 1
+# diffusion
+sampling_steps: 3
 sigma_data: 0.5
+sigma_min: 0.001
+sigma_max: 80
+cond_lambda: 1
 cond_mask_prob: 0.1
-cond_lambda: 10
-n_timesteps: 3
+
+# reward
+return_horizon: 50
+reward_fn: vel_target
+
+model:
+  _target_: locodiff.transformer.DiffusionTransformer
+  obs_dim: ${obs_dim}
+  skill_dim: ${skill_dim}
+  act_dim: ${action_dim}
+  d_model: 128
+  nhead: 8
+  num_layers: 4
+  T: ${T}
+  T_cond: ${T_cond}
+  device: ${device}
+  cond_mask_prob: ${cond_mask_prob}
+  dropout: 0.0
+  weight_decay: 1e-3
+
+wrapper:
+  _target_: locodiff.wrapper.ScalingWrapper
+  _partial_: true
+  sigma_data: ${sigma_data}
+
+optimizer:
+  _target_: torch.optim.AdamW
+  _partial_: true
+  lr: 1e-4
+  betas: [0.9, 0.999]
+
+lr_scheduler:
+  _partial_: true
+  _target_: torch.optim.lr_scheduler.CosineAnnealingLR
+  T_max: ${train_steps}
+
+dataset_fn:
+  _target_: locodiff.dataloader.get_dataloaders_and_scaler
+  data_directory: walk_mid_05
+  obs_dim: ${obs_dim}
+  action_dim: ${action_dim}
+  train_fraction: 0.95
+  device: ${device}
+  T_cond: ${T_cond}
+  T: ${T}
+  train_batch_size: 1024
+  test_batch_size: 1024
+  num_workers: 4
+  return_horizon: ${return_horizon}
+  reward_fn: ${reward_fn}
+  scaling: linear
+  evaluating: false
 
 env:
-  render: True
-  num_envs: 125
-  num_threads: "auto"
-  simulation_dt: 0.005
-  control_dt: 0.04
-  max_time: 10000
-  enable_dynamics_randomization: True
-  action_scaling: 1.0
-  use_actuator_network: True
-  server_port: 8080
-  early_termination: True
-  normalize_observation: False
-  eval_n_times: 1
-  eval_n_steps: 250
+  _target_: env.raisim_env.RaisimEnv
+  seed: ${seed}
+  T: ${T}
+  T_cond: ${T_cond}
+  T_action: ${T_action}
+  skill_dim: ${skill_dim}
+  eval_times: 1
+  eval_steps: 250
+  reward_fn: ${reward_fn}
+  device: ${device}
 
-  velocity_command:
-    limit_heading_velocity: 0.8
-    limit_lateral_velocity: 0.5
-    limit_yaw_rate: 1.0
+  impl:
+    render: True
+    num_envs: 125
+    num_threads: "auto"
+    simulation_dt: 0.005
+    control_dt: 0.04
+    max_time: 10000
+    enable_dynamics_randomization: True
+    action_scaling: 1.0
+    use_actuator_network: True
+    server_port: 8080
+    early_termination: True
+    normalize_observation: False
 
-    # Less than this is considered to be a zero velocity command
-    limit_velocity_magnitude: 0.1
+    velocity_command:
+      limit_heading_velocity: 0.8
+      limit_lateral_velocity: 0.5
+      limit_yaw_rate: 1.0
 
-    # These values are rescaled if their sum is not equal to 1
-    probability_zero_command: 0.2
-    probability_heading_command: 0.0
-    probability_lateral_command: 0.0
-    probability_yaw_command: 0.0
-    probability_direction_command: 0.0
-    probability_constant_command: 0.8 # includes all three velocities
+      # Less than this is considered to be a zero velocity command
+      limit_velocity_magnitude: 0.1
 
-    # Time range in seconds when the next command is sampled
-    command_sampling_time_min: 3.0
-    command_sampling_time_max: 4.0
+      # These values are rescaled if their sum is not equal to 1
+      probability_zero_command: 0.2
+      probability_heading_command: 0.0
+      probability_lateral_command: 0.0
+      probability_yaw_command: 0.0
+      probability_direction_command: 0.0
+      probability_constant_command: 0.8 # includes all three velocities
+
+      # Time range in seconds when the next command is sampled
+      command_sampling_time_min: 3.0
+      command_sampling_time_max: 4.0
+
+ema_helper:
+  _target_: locodiff.utils.ExponentialMovingAverage
+  _partial_: true
+  decay: 0.999
+  device: ${device}
+
+noise_scheduler:
+  _target_: diffusers.schedulers.scheduling_ddpm.DDPMScheduler
+  num_train_timesteps: 3
+  beta_start: 0.0001
+  beta_end: 0.02
+  beta_schedule: squaredcos_cap_v2
+  variance_type: fixed_small
+  clip_sample: True
+  prediction_type: epsilon
+
+hydra:
+  run:
+    dir: logs/${now:%Y-%m-%d}/${now:%H-%M-%S}
