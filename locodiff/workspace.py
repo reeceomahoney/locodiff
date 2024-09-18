@@ -16,8 +16,7 @@ from tqdm import tqdm
 
 import locodiff.utils as utils
 from env.env import RaisimEnv
-from locodiff.transformer import DiffusionTransformer
-from locodiff.wrapper import ScalingWrapper
+from locodiff.agent import Agent
 
 # A logger for this file
 log = logging.getLogger(__name__)
@@ -27,8 +26,7 @@ class Workspace:
 
     def __init__(
         self,
-        model: DiffusionTransformer,
-        wrapper: ScalingWrapper,
+        agent: Agent,
         optimizer: Callable,
         lr_scheduler: Callable,
         dataset_fn: Tuple[DataLoader, DataLoader, utils.Scaler],
@@ -75,11 +73,11 @@ class Workspace:
         np.random.seed(seed)
         torch.manual_seed(seed)
 
-        # model
-        self.model = wrapper(model=model)
+        # agent
+        self.agent = agent
 
         # optimizer and lr scheduler
-        optim_groups = self.model.get_optim_groups()
+        optim_groups = self.agent.get_optim_groups()
         self.optimizer = optimizer(optim_groups)
         self.lr_scheduler = lr_scheduler(self.optimizer)
 
@@ -91,7 +89,7 @@ class Workspace:
         self.num_envs = env.num_envs
 
         # ema
-        self.ema_helper = ema_helper(self.model.get_params())
+        self.ema_helper = ema_helper(self.agent.get_params())
         self.use_ema = use_ema
 
         # training
@@ -129,7 +127,7 @@ class Workspace:
         # logging
         wandb.init(project=wandb_project, mode=wandb_mode, dir=self.output_dir)
 
-    def train_agent(self):
+    def train(self):
         """
         Main training loop
         """
@@ -193,28 +191,14 @@ class Workspace:
 
     def train_step(self, batch: dict):
         data_dict = self.process_batch(batch)
-
-        self.model.train()
-        self.model.training = True
-
-        action = data_dict["action"]
-        noise = torch.randn_like(action)
-        if self.use_ddpm:
-            timesteps = torch.randint(0, self.sampling_steps, (noise.shape[0],))
-            noise_trajectory = self.noise_scheduler.add_noise(action, noise, timesteps)
-            timesteps = timesteps.float().to(self.device)
-            pred = self.model(noise_trajectory, timesteps, data_dict)
-            loss = torch.nn.functional.mse_loss(pred, noise)
-        else:
-            sigma = self.make_sample_density(len(noise))
-            loss = self.model.loss(noise, sigma, data_dict)
+        loss = self.agent.loss(data_dict)
 
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
         self.lr_scheduler.step()
 
-        self.ema_helper.update(self.model.parameters())
+        self.ema_helper.update(self.agent.parameters())
         return loss.item()
 
     @torch.no_grad()
@@ -225,35 +209,14 @@ class Workspace:
         data_dict = self.process_batch(batch)
 
         if self.use_ema:
-            self.ema_helper.store(self.model.parameters())
-            self.ema_helper.copy_to(self.model.parameters())
-        self.model.eval()
-        self.model.training = False
+            self.ema_helper.store(self.agent.parameters())
+            self.ema_helper.copy_to(self.agent.parameters())
 
-        # get the sigma distribution for sampling based on Karras et al. 2022
-        noise = torch.randn_like(data_dict["action"])
-        if self.use_ddpm:
-            self.noise_scheduler.set_timesteps(self.sampling_steps)
-            x_0 = self.sample_ddpm(noise, data_dict)
-
-            data_dict["return"] = torch.ones_like(data_dict["return"])
-            x_0_max_return = self.sample_ddpm(noise, data_dict)
-        else:
-            noise = noise * self.sigma_max
-            sigmas = utils.get_sigmas_exponential(
-                self.sampling_steps, self.sigma_min, self.sigma_max, self.device
-            )
-            x_0 = self.sample_ddim(noise, sigmas, data_dict, predict=False)
-
-            # data_dict["return"] = torch.ones_like(data_dict["return"])
-            x_0_max_return = self.sample_ddim(noise, sigmas, data_dict, predict=False)
-
-        x_0 = self.scaler.inverse_scale_output(x_0)
-        x_0_max_return = self.scaler.inverse_scale_output(x_0_max_return)
-        data_dict["action"] = self.scaler.inverse_scale_output(data_dict["action"])
+        x_0, x_0_max_return = self.agent(data_dict)
 
         # calculate the MSE
-        mse = nn.functional.mse_loss(x_0, data_dict["action"], reduction="none")
+        raw_action = self.scaler.inverse_scale_output(data_dict["action"])
+        mse = nn.functional.mse_loss(x_0, raw_action, reduction="none")
         total_mse = mse.mean().item()
         first_mse = mse[:, 0, :].mean().item()
         last_mse = mse[:, -1, :].mean().item()
@@ -262,7 +225,7 @@ class Workspace:
 
         # restore the previous model parameters
         if self.use_ema:
-            self.ema_helper.restore(self.model.parameters())
+            self.ema_helper.restore(self.agent.parameters())
 
         info = {
             "total_mse": total_mse,
@@ -273,10 +236,6 @@ class Workspace:
 
         return info
 
-    def reset(self, done):
-        self.obs_hist[done] = 0
-        self.skill_hist[done] = 0
-
     @torch.no_grad()
     def predict(self, batch: dict, new_sampling_steps=None):
         """
@@ -286,44 +245,24 @@ class Workspace:
         data_dict = self.process_batch(batch)
 
         if new_sampling_steps is not None:
-            n_sampling_steps = new_sampling_steps
-        else:
-            n_sampling_steps = self.sampling_steps
+            self.agent.sampling_steps = new_sampling_steps
 
         if self.use_ema:
-            self.ema_helper.store(self.model.parameters())
-            self.ema_helper.copy_to(self.model.parameters())
-        self.model.eval()
+            self.ema_helper.store(self.agent.parameters())
+            self.ema_helper.copy_to(self.agent.parameters())
 
-        # get the sigma distribution for the desired sampling method
-        noise = torch.randn(
-            (self.num_envs, self.T, self.action_dim), device=self.device
-        )
-        if self.use_ddpm:
-            self.noise_scheduler.set_timesteps(n_sampling_steps)
-            x_0 = self.sample_ddpm(noise, data_dict, predict=True)
-        else:
-            noise *= self.sigma_max
-            sigmas = utils.get_sigmas_exponential(
-                n_sampling_steps, self.sigma_min, self.sigma_max, self.device
-            )
-            # sigmas = utils.get_sigmas_linear(
-            #     n_sampling_steps, self.sigma_min, self.sigma_max, self.device
-            # )
-
-            x_0 = self.sample_ddim(noise, sigmas, data_dict, predict=True)
-            # x_0 = self.sample_euler_ancestral(noise, sigmas, data_dict, predict=True)
-            # x_0 = self.sample_dpmpp_2m_sde(noise, sigmas, data_dict, predict=True)
-
-        # get the action for the current timestep
-        x_0 = self.scaler.clip(x_0)
-        pred_action = self.scaler.inverse_scale_output(x_0).cpu().numpy()
+        pred_action, _ = self.agent(data_dict)
+        pred_action = pred_action.cpu().numpy()
         pred_action = pred_action[:, : self.T_action].copy()
 
         if self.use_ema:
-            self.ema_helper.restore(self.model.parameters())
+            self.ema_helper.restore(self.agent.parameters())
 
         return pred_action
+
+    def reset(self, done):
+        self.obs_hist[done] = 0
+        self.skill_hist[done] = 0
 
     def stack_context(self, batch):
         self.obs_hist[:, :-1] = self.obs_hist[:, 1:].clone()
@@ -331,152 +270,10 @@ class Workspace:
         batch["obs"] = self.obs_hist.clone()
         return batch
 
-    @torch.no_grad()
-    def sample_ddim(
-        self, noise: torch.Tensor, sigmas: torch.Tensor, data_dict: dict, predict: bool
-    ):
-        """
-        Perform inference using the DDIM sampler
-        """
-        x_t = noise
-        s_in = x_t.new_ones([x_t.shape[0]])
-
-        for i in range(len(sigmas) - 1):
-            if predict:
-                denoised = self.cfg_forward(x_t, sigmas[i] * s_in, data_dict)
-            else:
-                denoised = self.model(x_t, sigmas[i] * s_in, data_dict)
-            t, t_next = -sigmas[i].log(), -sigmas[i + 1].log()
-            h = t_next - t
-            x_t = ((-t_next).exp() / (-t).exp()) * x_t - (-h).expm1() * denoised
-
-        return x_t
-
-    @torch.no_grad()
-    def sample_euler_ancestral(
-        self,
-        noise: torch.Tensor,
-        sigmas: torch.Tensor,
-        data_dict: dict,
-        predict: bool = False,
-    ):
-        """
-        Ancestral sampling with Euler method steps.
-
-        1. compute dx_{i}/dt at the current timestep
-        2. get sigma_{up} and sigma_{down} from ancestral method
-        3. compute x_{t-1} = x_{t} + dx_{t}/dt * sigma_{down}
-        4. Add additional noise after the update step x_{t-1} =x_{t-1} + z * sigma_{up}
-        """
-        x_t = noise
-        s_in = x_t.new_ones([x_t.shape[0]])
-        for i in range(len(sigmas) - 1):
-            # compute x_{t-1}
-            if predict:
-                denoised = self.cfg_forward(x_t, sigmas[i] * s_in, data_dict)
-            else:
-                denoised = self.model(x_t, sigmas[i] * s_in, data_dict)
-            # get ancestral steps
-            sigma_down, sigma_up = utils.get_ancestral_step(sigmas[i], sigmas[i + 1])
-            # compute dx/dt
-            d = (x_t - denoised) / sigmas[i]
-            # compute dt based on sigma_down value
-            dt = sigma_down - sigmas[i]
-            # update current action
-            x_t = x_t + d * dt
-            if sigma_down > 0:
-                x_t = x_t + torch.randn_like(x_t) * sigma_up
-
-        return x_t
-
-    @torch.no_grad()
-    def sample_dpmpp_2m_sde(
-        self,
-        noise: torch.Tensor,
-        sigmas: torch.Tensor,
-        data_dict: dict,
-        predict: bool = False,
-    ):
-        """DPM-Solver++(2M)."""
-        sigma_min, sigma_max = sigmas[sigmas > 0].min(), sigmas.max()
-        x_t = noise
-        noise_sampler = utils.BrownianTreeNoiseSampler(x_t, sigma_min, sigma_max)
-        s_in = x_t.new_ones([x_t.shape[0]])
-
-        old_denoised = None
-        h_last = None
-
-        for i in range(len(sigmas) - 1):
-            if predict:
-                denoised = self.cfg_forward(x_t, sigmas[i] * s_in, data_dict)
-            else:
-                denoised = self.model(x_t, sigmas[i] * s_in, data_dict)
-
-            # DPM-Solver++(2M) SDE
-            if sigmas[i + 1] == 0:
-                x_t = denoised
-            else:
-                t, s = -sigmas[i].log(), -sigmas[i + 1].log()
-                h = s - t
-                eta_h = h
-
-                x_t = (
-                    sigmas[i + 1] / sigmas[i] * (-eta_h).exp() * x_t
-                    + (-h - eta_h).expm1().neg() * denoised
-                )
-
-                if old_denoised is not None:
-                    r = h_last / h
-                    x_t = x_t + ((-h - eta_h).expm1().neg() / (-h - eta_h) + 1) * (
-                        1 / r
-                    ) * (denoised - old_denoised)
-
-                x_t = (
-                    x_t
-                    + noise_sampler(sigmas[i], sigmas[i + 1])
-                    * sigmas[i + 1]
-                    * (-2 * eta_h).expm1().neg().sqrt()
-                )
-
-            old_denoised = denoised
-            h_last = h
-        return x_t
-
-    @torch.no_grad()
-    def sample_ddpm(self, noise: torch.Tensor, data_dict: dict, predict: bool = False):
-        """
-        Perform inference using the DDPM sampler
-        """
-        x_t = noise
-
-        for t in self.noise_scheduler.timesteps:
-            t_pt = t.float().to(self.device)
-            if predict:
-                output = self.cfg_forward(x_t, t_pt.expand(x_t.shape[0]), data_dict)
-            else:
-                output = self.model(x_t, t_pt.expand(x_t.shape[0]), data_dict)
-            x_t = self.noise_scheduler.step(output, t, x_t).prev_sample
-
-        return x_t
-
-    def cfg_forward(self, x_t: torch.Tensor, sigma: torch.Tensor, data_dict: dict):
-        """
-        Classifier-free guidance sample
-        """
-        # TODO: parallelize this
-
-        out = self.model(x_t, sigma, data_dict)
-
-        if self.cond_mask_prob > 0:
-            out_uncond = self.model(x_t, sigma, data_dict, uncond=True)
-            out = out_uncond + self.cond_lambda * (out - out_uncond)
-
-        return out
-
     def load_pretrained_model(self, weights_path: str) -> None:
-        self.model.load_state_dict(
+        self.agent.load_state_dict(
             torch.load(
-                os.path.join(weights_path, "model_state_dict.pth"),
+                os.path.join(weights_path, "model/model.pt"),
                 map_location=self.device,
             ),
             strict=False,
@@ -484,7 +281,7 @@ class Workspace:
 
         # Load scaler attributes
         scaler_state = torch.load(
-            os.path.join(weights_path, "scaler.pth"), map_location=self.device
+            os.path.join(weights_path, "model/scaler.pt"), map_location=self.device
         )
         self.scaler.x_max = scaler_state["x_max"]
         self.scaler.x_min = scaler_state["x_min"]
@@ -495,21 +292,21 @@ class Workspace:
         self.scaler.y_mean = scaler_state["y_mean"]
         self.scaler.y_std = scaler_state["y_std"]
 
-        log.info("Loaded pre-trained model parameters and scaler")
+        log.info("Loaded pre-trained agent parameters and scaler")
 
     def store_model_weights(self, best_reward: bool = False) -> None:
         if self.use_ema:
-            self.ema_helper.store(self.model.parameters())
-            self.ema_helper.copy_to(self.model.parameters())
-        name = (
-            "model_state_dict.pth" if not best_reward else "best_model_state_dict.pth"
-        )
-        torch.save(self.model.state_dict(), os.path.join(self.output_dir, name))
-        if self.use_ema:
-            self.ema_helper.restore(self.model.parameters())
+            self.ema_helper.store(self.agent.parameters())
+            self.ema_helper.copy_to(self.agent.parameters())
+        name = "model.pt" if not best_reward else "best_model.pt"
         torch.save(
-            self.model.state_dict(),
-            os.path.join(self.output_dir, "non_ema_" + name),
+            self.agent.state_dict(), os.path.join(self.output_dir, "/model/", name)
+        )
+        if self.use_ema:
+            self.ema_helper.restore(self.agent.parameters())
+        torch.save(
+            self.agent.state_dict(),
+            os.path.join(self.output_dir, "/model/non_ema_" + name),
         )
 
         # Save scaler attributes
@@ -524,7 +321,7 @@ class Workspace:
                 "y_mean": self.scaler.y_mean,
                 "y_std": self.scaler.y_std,
             },
-            os.path.join(self.output_dir, "scaler.pth"),
+            os.path.join(self.output_dir, "model/scaler.pth"),
         )
 
     @torch.no_grad()
@@ -553,10 +350,6 @@ class Workspace:
         if returns is None:
             returns = self.compute_returns(raw_obs, vel_cmd)
 
-        rewards = batch.get("reward", None)
-        if rewards is not None and returns is None:
-            returns = self.compute_returns_from_rewards(rewards)
-
         obs = self.scaler.scale_input(raw_obs[:, : self.T_cond])
 
         if raw_action is None:
@@ -580,10 +373,6 @@ class Workspace:
         return {k: v.clone().to(self.device) for k, v in batch.items()}
 
     def sample_vel_cmd(self, batch_size):
-        # vel_ranges = torch.tensor([0.8, 0.5, 1.0], device=self.device)
-        # vel_cmd = torch.rand((batch_size, 3), device=self.device)
-        # vel_cmd = vel_cmd * 2 * vel_ranges - vel_ranges
-        # return vel_cmd
         vel_cmd = torch.randint(0, 2, (batch_size, 1), device=self.device).float()
         return vel_cmd * 2 - 1
 
@@ -611,15 +400,5 @@ class Workspace:
         # plt.savefig("returns.png")
         # print(returns.max())
         # exit()
-
-        return returns.unsqueeze(-1)
-
-    def compute_returns_from_rewards(self, rewards):
-        rewards = rewards.clone() - 0.22  # max reward
-        horizon = 50
-        gammas = torch.tensor([0.99**i for i in range(horizon)]).to(self.device)
-        returns = (rewards * gammas).sum(dim=-1)
-        returns = torch.exp(returns / 50)
-        returns = (returns - returns.min()) / (returns.max() - returns.min())
 
         return returns.unsqueeze(-1)

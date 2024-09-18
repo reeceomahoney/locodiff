@@ -31,25 +31,26 @@ cond_mask_prob: 0.1
 return_horizon: 50
 reward_fn: vel_target
 
-model:
-  _target_: locodiff.transformer.DiffusionTransformer
-  obs_dim: ${obs_dim}
-  skill_dim: ${skill_dim}
-  act_dim: ${action_dim}
-  d_model: 128
-  nhead: 8
-  num_layers: 4
-  T: ${T}
-  T_cond: ${T_cond}
+agent:
+  _target_: locodiff.agent.Agent
   device: ${device}
-  cond_mask_prob: ${cond_mask_prob}
-  dropout: 0.0
-  weight_decay: 1e-3
-
-wrapper:
-  _target_: locodiff.wrapper.ScalingWrapper
-  _partial_: true
-  sigma_data: ${sigma_data}
+  model:
+    _target_: locodiff.wrapper.ScalingWrapper
+    sigma_data: ${sigma_data}
+    model:
+      _target_: locodiff.transformer.DiffusionTransformer
+      obs_dim: ${obs_dim}
+      skill_dim: ${skill_dim}
+      act_dim: ${action_dim}
+      d_model: 128
+      nhead: 8
+      num_layers: 4
+      T: ${T}
+      T_cond: ${T_cond}
+      device: ${device}
+      cond_mask_prob: ${cond_mask_prob}
+      dropout: 0.0
+      weight_decay: 1e-3
 
 optimizer:
   _target_: torch.optim.AdamW

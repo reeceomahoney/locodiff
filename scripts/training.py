@@ -10,7 +10,7 @@ def main(cfg: DictConfig) -> None:
 
     wandb.config = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
     workspace = hydra.utils.instantiate(cfg)
-    workspace.train_agent()
+    workspace.train()
 
     wandb.finish()
     print("Training done!")
