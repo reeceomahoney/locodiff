@@ -35,13 +35,13 @@ agent:
   T_cond: ${T_cond}
   num_envs: ${num_envs}
   sampling_steps: ${sampling_steps}
+  sampler_type: ddim
   sigma_data: ${sigma_data}
   sigma_min: 0.001
   sigma_max: 80
   cond_lambda: 1
   cond_mask_prob: ${cond_mask_prob}
   device: ${device}
-  use_ddpm: False
   model:
     _target_: locodiff.wrapper.ScalingWrapper
     sigma_data: ${sigma_data}

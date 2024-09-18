@@ -7,7 +7,8 @@
 - [x] dont create folder in debug mode
 - [x] Refactor initialisation into workspace
 - [x] clean up env config
-- [ ] Split loss and call logic into separate agent class
+- [x] Split loss and call logic into separate agent class
+- [x] Move samplers into separate file
 - [ ] Fix jit agent
 - [ ] Split return calculation by episodes
 - [ ] Parallelize cfg forward
