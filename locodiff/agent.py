@@ -1,22 +1,65 @@
+import math
+
 import torch
 import torch.nn as nn
+from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 
 import locodiff.utils as utils
 
 
 class Agent(nn.Module):
-    def __init__(self, model, device):
+    def __init__(
+        self,
+        model,
+        noise_scheduler: DDPMScheduler,
+        action_dim: int,
+        T: int,
+        T_cond: int,
+        num_envs: int,
+        sampling_steps: int,
+        sigma_data: float,
+        sigma_min: float,
+        sigma_max: float,
+        cond_lambda: int,
+        cond_mask_prob: float,
+        device,
+        use_ddpm: bool,
+    ):
         super().__init__()
+
+        # model
         self.model = model
+        self.noise_scheduler = noise_scheduler
         self.device = device
 
-    def __call__(self, data_dict: dict) -> tuple:
-        self.model.eval()
-        self.model.training = False
+        # dims
+        self.action_dim = action_dim
+        self.T = T
+        self.T_cond = T_cond
+        self.num_envs = num_envs
 
-        noise = torch.randn(
-            (self.num_envs, self.T, self.action_dim), device=self.device
-        )
+        # diffusion
+        self.sampling_steps = sampling_steps
+        self.sigma_data = sigma_data
+        self.sigma_min = sigma_min
+        self.sigma_max = sigma_max
+        self.cond_lambda = cond_lambda
+        self.cond_mask_prob = cond_mask_prob
+
+        # ddpm
+        self.use_ddpm = use_ddpm
+        self.noise_scheduler = noise_scheduler
+
+    def __call__(self, data_dict: dict) -> tuple:
+        self.eval()
+        self.training = False
+
+        if data_dict["action"] is None:
+            batch_size = self.num_envs
+        else:
+            batch_size = data_dict["action"].shape[0]
+
+        noise = torch.randn((batch_size, self.T, self.action_dim)).to(self.device)
         if self.use_ddpm:
             self.noise_scheduler.set_timesteps(self.sampling_steps)
             x_0 = self.sample_ddpm(noise, data_dict)
@@ -39,15 +82,11 @@ class Agent(nn.Module):
             data_dict["return"] = torch.ones_like(data_dict["return"])
             x_0_max_return = self.sample_ddim(noise, sigmas, data_dict, predict=False)
 
-        x_0 = self.scaler.clip(x_0)
-        x_0 = self.scaler.inverse_scale_output(x_0)
-        x_0_max_return = self.scaler.inverse_scale_output(x_0_max_return)
-
         return x_0, x_0_max_return
 
     def loss(self, data_dict) -> torch.Tensor:
-        self.agent.train()
-        self.agent.training = True
+        self.train()
+        self.training = True
 
         action = data_dict["action"]
         noise = torch.randn_like(action)
@@ -62,6 +101,17 @@ class Agent(nn.Module):
             loss = self.model.loss(noise, sigma, data_dict)
 
         return loss
+
+    @torch.no_grad()
+    def make_sample_density(self, size):
+        """
+        Generate a density function for training sigmas
+        """
+        loc = math.log(self.sigma_data)
+        density = utils.rand_log_logistic(
+            (size,), loc, 0.5, self.sigma_min, self.sigma_max, self.device
+        )
+        return density
 
     @torch.no_grad()
     def sample_ddim(

@@ -9,7 +9,6 @@ sim_every: 5000
 seed: 6
 device: cuda
 use_ema: True
-use_ddpm: False
 
 #dims
 obs_dim: 33
@@ -18,13 +17,11 @@ skill_dim: 2
 T: 4
 T_cond: 8
 T_action: 1
+num_envs: 125
 
 # diffusion
 sampling_steps: 3
 sigma_data: 0.5
-sigma_min: 0.001
-sigma_max: 80
-cond_lambda: 1
 cond_mask_prob: 0.1
 
 # reward
@@ -33,7 +30,18 @@ reward_fn: vel_target
 
 agent:
   _target_: locodiff.agent.Agent
+  action_dim: ${action_dim}
+  T: ${T}
+  T_cond: ${T_cond}
+  num_envs: ${num_envs}
+  sampling_steps: ${sampling_steps}
+  sigma_data: ${sigma_data}
+  sigma_min: 0.001
+  sigma_max: 80
+  cond_lambda: 1
+  cond_mask_prob: ${cond_mask_prob}
   device: ${device}
+  use_ddpm: False
   model:
     _target_: locodiff.wrapper.ScalingWrapper
     sigma_data: ${sigma_data}
@@ -51,6 +59,15 @@ agent:
       cond_mask_prob: ${cond_mask_prob}
       dropout: 0.0
       weight_decay: 1e-3
+  noise_scheduler:
+    _target_: diffusers.schedulers.scheduling_ddpm.DDPMScheduler
+    num_train_timesteps: 3
+    beta_start: 0.0001
+    beta_end: 0.02
+    beta_schedule: squaredcos_cap_v2
+    variance_type: fixed_small
+    clip_sample: True
+    prediction_type: epsilon
 
 optimizer:
   _target_: torch.optim.AdamW
@@ -94,7 +111,7 @@ env:
 
   impl:
     render: True
-    num_envs: 125
+    num_envs: ${num_envs}
     num_threads: "auto"
     simulation_dt: 0.005
     control_dt: 0.04
@@ -128,16 +145,6 @@ ema_helper:
   _partial_: true
   decay: 0.999
   device: ${device}
-
-noise_scheduler:
-  _target_: diffusers.schedulers.scheduling_ddpm.DDPMScheduler
-  num_train_timesteps: 3
-  beta_start: 0.0001
-  beta_end: 0.02
-  beta_schedule: squaredcos_cap_v2
-  variance_type: fixed_small
-  clip_sample: True
-  prediction_type: epsilon
 
 hydra:
   run:

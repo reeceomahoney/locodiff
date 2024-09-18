@@ -9,7 +9,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import wandb
-from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 from hydra.core.hydra_config import HydraConfig
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -32,7 +31,6 @@ class Workspace:
         dataset_fn: Tuple[DataLoader, DataLoader, utils.Scaler],
         env: RaisimEnv,
         ema_helper: Callable,
-        noise_scheduler: DDPMScheduler,
         wandb_project: str,
         train_steps: int,
         eval_every: int,
@@ -40,18 +38,15 @@ class Workspace:
         seed: int,
         device: str,
         use_ema: bool,
-        use_ddpm: bool,
         obs_dim: int,
         action_dim: int,
         skill_dim: int,
         T: int,
         T_cond: int,
         T_action: int,
+        num_envs: int,
         sampling_steps: int,
         sigma_data: float,
-        sigma_min: float,
-        sigma_max: float,
-        cond_lambda: int,
         cond_mask_prob: float,
         return_horizon: int,
         reward_fn: str,
@@ -86,7 +81,6 @@ class Workspace:
 
         # env
         self.env = env
-        self.num_envs = env.num_envs
 
         # ema
         self.ema_helper = ema_helper(self.agent.get_params())
@@ -105,26 +99,18 @@ class Workspace:
         self.T_cond = T_cond
         self.T_action = T_action
 
-        self.obs_hist = torch.zeros((self.num_envs, T_cond, obs_dim), device=device)
-        self.skill_hist = torch.zeros((self.num_envs, T_cond, skill_dim), device=device)
+        self.obs_hist = torch.zeros((num_envs, T_cond, obs_dim), device=device)
+        self.skill_hist = torch.zeros((num_envs, T_cond, skill_dim), device=device)
 
         # diffusion
         self.sampling_steps = sampling_steps
-        self.sigma_data = sigma_data
-        self.sigma_min = sigma_min
-        self.sigma_max = sigma_max
-        self.cond_lambda = cond_lambda
-        self.cond_mask_prob = cond_mask_prob
 
         # reward
         self.return_horizon = return_horizon
         self.reward_fn = reward_fn
 
-        # ddpm
-        self.use_ddpm = use_ddpm
-        self.noise_scheduler = noise_scheduler
-
         # logging
+        os.makedirs(self.output_dir + "/model", exist_ok=True)
         wandb.init(project=wandb_project, mode=wandb_mode, dir=self.output_dir)
 
     def train(self):
@@ -214,6 +200,10 @@ class Workspace:
 
         x_0, x_0_max_return = self.agent(data_dict)
 
+        x_0 = self.scaler.clip(x_0)
+        x_0 = self.scaler.inverse_scale_output(x_0)
+        x_0_max_return = self.scaler.inverse_scale_output(x_0_max_return)
+
         # calculate the MSE
         raw_action = self.scaler.inverse_scale_output(data_dict["action"])
         mse = nn.functional.mse_loss(x_0, raw_action, reduction="none")
@@ -252,6 +242,9 @@ class Workspace:
             self.ema_helper.copy_to(self.agent.parameters())
 
         pred_action, _ = self.agent(data_dict)
+
+        pred_action = self.scaler.clip(pred_action)
+        pred_action = self.scaler.inverse_scale_output(pred_action)
         pred_action = pred_action.cpu().numpy()
         pred_action = pred_action[:, : self.T_action].copy()
 
@@ -300,13 +293,13 @@ class Workspace:
             self.ema_helper.copy_to(self.agent.parameters())
         name = "model.pt" if not best_reward else "best_model.pt"
         torch.save(
-            self.agent.state_dict(), os.path.join(self.output_dir, "/model/", name)
+            self.agent.state_dict(), os.path.join(self.output_dir, "model", name)
         )
         if self.use_ema:
             self.ema_helper.restore(self.agent.parameters())
         torch.save(
             self.agent.state_dict(),
-            os.path.join(self.output_dir, "/model/non_ema_" + name),
+            os.path.join(self.output_dir, "model/non_ema_" + name),
         )
 
         # Save scaler attributes
@@ -323,17 +316,6 @@ class Workspace:
             },
             os.path.join(self.output_dir, "model/scaler.pth"),
         )
-
-    @torch.no_grad()
-    def make_sample_density(self, size):
-        """
-        Generate a density function for training sigmas
-        """
-        loc = math.log(self.sigma_data)
-        density = utils.rand_log_logistic(
-            (size,), loc, 0.5, self.sigma_min, self.sigma_max, self.device
-        )
-        return density
 
     @torch.no_grad()
     def process_batch(self, batch: dict) -> dict:
