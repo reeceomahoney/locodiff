@@ -8,6 +8,7 @@
 - [x] Refactor initialisation into workspace
 - [x] clean up env config
 - [ ] Split loss and call logic into separate agent class
+- [ ] Fix jit agent
 - [ ] Split return calculation by episodes
 - [ ] Parallelize cfg forward
 - [ ] fix cmake stdout w/ pipenv

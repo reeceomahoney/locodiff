@@ -1,0 +1,7 @@
+_target_: locodiff.mlp.DiffusionMLPSieve
+obs_dim: ${obs_dim}
+act_dim: ${action_dim}
+T: ${T}
+T_cond: ${T_cond}
+n_emb: 256
+n_hidden: 1024
