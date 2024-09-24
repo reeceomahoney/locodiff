@@ -28,9 +28,11 @@ class RaisimEnv:
         eval_steps: int,
         reward_fn: str,
         device: str,
+        lambda_values: list,
     ):
         if platform.system() == "Darwin":
             os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
+        self.device = device
 
         # initialize environment
         resource_dir = os.path.dirname(os.path.realpath(__file__)) + "/resources"
@@ -39,26 +41,118 @@ class RaisimEnv:
         self.env.setSeed(seed)
         self.env.turnOnVisualization()
 
-        # get environment information
+        # env dims
         self.num_obs = self.env.getObDim()
         self.num_acts = self.env.getActionDim()
-        self.T_action = T_action
-        self.skill_dim = skill_dim
-        self.window = T_cond + T - 1
-        self.eval_n_times = eval_times
-        self.eval_n_steps = eval_steps
-        self.device = device
-        self.reward_fn = reward_fn
+        self.num_envs = self.env.getNumOfEnvs()
 
-        # initialize variables
+        # model dims
+        self.T_action = T_action
+        self.window = T_cond + T - 1
+        self.skill_dim = skill_dim
+
+        # initialize containers
         self._observation = np.zeros([self.num_envs, self.num_obs], dtype=np.float32)
         self._base_position = np.zeros([self.num_envs, 3], dtype=np.float32)
         self._base_orientation = np.zeros([self.num_envs, 4], dtype=np.float32)
         self._done = np.zeros(self.num_envs, dtype=bool)
         self._torques = np.zeros([self.num_envs, 12], dtype=np.float32)
-
         self.nominal_joint_pos = np.zeros([self.num_envs, 12], dtype=np.float32)
         self.env.getNominalJointPositions(self.nominal_joint_pos)
+
+        # inference
+        self.lambda_values = lambda_values
+        self.skill = torch.zeros(self.num_envs, self.skill_dim).to(self.device)
+        self.set_skill(0)
+        self.vel_cmd = (
+            torch.randint(0, 2, (self.num_envs, 1), device=self.device).float() * 2 - 1
+        )
+        self.target_returns = torch.ones((self.num_envs, 1)).to(self.device)
+
+        # misc
+        self.eval_times = eval_times
+        self.eval_steps = eval_steps
+        self.reward_fn = reward_fn
+
+    ############
+    # Main API #
+    ############
+
+    def simulate(self, ws, real_time=False, lambda_values=[]):
+        ws.agent.model.cond_lambda = self.set_lambdas(lambda_values)
+        total_rewards, total_height_rewards, total_dones = [], [], []
+        return_dict = {}
+
+        for _ in range(self.eval_times):
+            self.env.reset()
+            ws.reset(np.ones(self.num_envs, dtype=bool))
+
+            obs, vel_cmd = self.observe()
+            action = self.nominal_joint_pos
+            done = np.array([False])
+
+            t = 0
+            with trange(self.eval_steps, desc="Simulating") as pbar:
+                while t < self.eval_steps:
+                    start = time.time()
+                    if t == 125:
+                        self.set_skill(1)
+
+                    pred_action = ws(
+                        {
+                            "obs": obs,
+                            "skill": self.skill,
+                            "vel_cmd": vel_cmd,
+                            "return": self.target_returns,
+                        },
+                    )
+
+                    for i in range(self.T_action):
+                        # Apply action with delay
+                        obs, vel_cmd, rewards, done = self.step(action)
+                        action = pred_action[:, i]
+
+                        total_rewards.append(rewards[0])
+                        total_height_rewards.append(rewards[1])
+                        total_dones.append(done)
+
+                        if done.any():
+                            ws.reset(done)
+
+                        if real_time:
+                            delta = time.time() - start
+                            if delta < 0.04 and real_time:
+                                time.sleep(0.04 - delta)
+                            start = time.time()
+
+                        t += 1
+                        pbar.update(1)
+
+        total_rewards = np.array(total_rewards).T
+        total_height_rewards = np.array(total_height_rewards).T
+        total_dones = np.array(total_dones).T
+
+        # split rewards by lambda
+        # TODO: also compute the max reward
+        for i, lam in enumerate(lambda_values):
+            return_dict[f"lamda_{lam}/reward_mean"] = total_rewards[
+                i * self.envs_per_lambda : (i + 1) * self.envs_per_lambda
+            ].mean()
+            return_dict[f"lamda_{lam}/reward_std"] = total_rewards[
+                i * self.envs_per_lambda : (i + 1) * self.envs_per_lambda
+            ].std()
+            return_dict[f"lamda_{lam}/height_reward_mean"] = total_height_rewards[
+                i * self.envs_per_lambda : (i + 1) * self.envs_per_lambda
+            ].mean()
+            return_dict[f"lamda_{lam}/terminals_mean"] = total_dones[
+                i * self.envs_per_lambda : (i + 1) * self.envs_per_lambda
+            ].mean()
+
+        return return_dict
+
+    #########################
+    # Environment interface #
+    #########################
 
     def step(self, action):
         self.env.step(action, self._done)
@@ -84,133 +178,6 @@ class RaisimEnv:
 
         return self.observe()
 
-    def simulate(self, agent, real_time=False, lambda_values=None):
-        returns = torch.ones((self.num_envs, 1)).to(self.device)
-
-        self.vel_cmd = torch.randint(
-            0, 2, (self.num_envs, 1), device=self.device
-        ).float()
-        self.vel_cmd = self.vel_cmd * 2 - 1
-
-        cond_lambdas = (
-            lambda_values if lambda_values is not None else [0, 1, 1.2, 1.5, 2]
-        )
-        assert self.num_envs % len(cond_lambdas) == 0
-
-        # For parallel evaluation
-        lambda_tensor = torch.zeros(self.num_envs, 1, 1).to(self.device)
-        envs_per_lambda = self.num_envs // len(cond_lambdas)
-        for i, lam in enumerate(cond_lambdas):
-            lambda_tensor[i * envs_per_lambda : (i + 1) * envs_per_lambda] = lam
-        agent.cond_lambda = lambda_tensor
-
-        return_dict = {}
-
-        for _ in range(self.eval_n_times):
-            total_rewards = np.zeros(
-                (self.num_envs, self.eval_n_steps), dtype=np.float32
-            )
-            height_rewards = np.zeros(self.num_envs, dtype=np.float32)
-            total_dones = np.zeros(self.num_envs, dtype=np.int64)
-            self.skill = torch.zeros(self.num_envs, self.skill_dim).to(self.device)
-            self.skill[:, 0] = 1
-
-            action = self.nominal_joint_pos
-            done = np.array([False])
-
-            self.env.reset()
-            agent.reset(np.ones(self.num_envs, dtype=bool))
-
-            obs, vel_cmd = self.observe()
-
-            for n in trange(self.eval_n_steps, desc="Simulating"):
-                start = time.time()
-
-                if done.any():
-                    total_dones += done
-                    agent.reset(done)
-
-                if n == 125:
-                    self.skill = torch.zeros(self.num_envs, self.skill_dim).to(
-                        self.device
-                    )
-                    self.skill[:, 1] = 1
-
-                pred_action = agent(
-                    {
-                        "obs": obs,
-                        "skill": self.skill,
-                        "vel_cmd": vel_cmd,
-                        "return": returns,
-                    },
-                )
-
-                for i in range(self.T_action):
-                    obs, vel_cmd, rewards, done = self.step(action)
-                    total_rewards[:, n] = rewards[0]
-                    height_rewards += rewards[1]
-                    action = pred_action[:, i]
-
-                    if real_time:
-                        delta = time.time() - start
-                        if delta < 0.04 and real_time:
-                            time.sleep(0.04 - delta)
-                        start = time.time()
-
-            returns = self.compute_returns(total_rewards)
-
-            # split rewards by lambda
-            # total_rewards /= self.eval_n_steps
-            height_rewards /= self.eval_n_steps
-            for i, lam in enumerate(cond_lambdas):
-                return_dict[f"lamda_{lam}/reward_mean"] = total_rewards[
-                    i * envs_per_lambda : (i + 1) * envs_per_lambda
-                ].mean()
-                return_dict[f"lamda_{lam}/reward_std"] = total_rewards[
-                    i * envs_per_lambda : (i + 1) * envs_per_lambda
-                ].std()
-                return_dict[f"lamda_{lam}/height_reward_mean"] = height_rewards[
-                    i * envs_per_lambda : (i + 1) * envs_per_lambda
-                ].mean()
-                return_dict[f"lamda_{lam}/terminals_mean"] = total_dones[
-                    i * envs_per_lambda : (i + 1) * envs_per_lambda
-                ].mean()
-
-        return return_dict
-
-    def compute_reward(self, obs, vel_cmds):
-        rewards = reward_function(obs, vel_cmds, self.reward_fn)
-        rewards = rewards.cpu().numpy()
-
-        # height reward
-        height = torch.from_numpy(self.get_base_position()[:, -1])
-        if self.skill[0, 0] == 1:
-            height_reward = torch.exp(-100 * (height - 0.6).pow(2))
-        elif self.skill[0, 1] == 1:
-            height_reward = torch.exp(-100 * (height - 0.5).pow(2))
-        height_reward = height_reward.cpu().numpy()
-
-        return rewards, height_reward
-
-    def compute_returns(self, rewards):
-        # TODO split epsideos by dones
-        rewards = rewards.copy() - 1
-
-        horizon = 50
-        gammas = np.array([0.99**i for i in range(horizon)])
-        returns = np.zeros_like(rewards[:, :-horizon])
-
-        for i in range(returns.shape[1]):
-            returns[:, i] = (rewards[:, i : i + horizon] * gammas).sum(axis=-1)
-
-        returns = np.exp(returns / 10)
-        returns = returns.mean(axis=1)
-        returns = (returns - 0.550) / (0.914 - 0.550)
-        # returns += 0.3
-        # returns = returns.clip(0, 1)
-
-        return returns
-
     def get_base_position(self):
         self.env.getBasePosition(self._base_position)
         return self._base_position
@@ -218,13 +185,6 @@ class RaisimEnv:
     def get_base_orientation(self):
         self.env.getBaseOrientation(self._base_orientation)
         return self._base_orientation
-
-    def set_goal(self, goal):
-        self.env.setGoal(goal)
-
-    def get_torques(self):
-        self.env.getTorques(self._torques)
-        return torch.from_numpy(self._torques).to(self.device)
 
     def seed(self, seed=None):
         self.env.setSeed(seed)
@@ -235,6 +195,44 @@ class RaisimEnv:
     def turn_off_visualization(self):
         self.env.turnOffVisualization()
 
-    @property
-    def num_envs(self):
-        return self.env.getNumOfEnvs()
+    ####################
+    # Helper functions #
+    ####################
+
+    def set_lambdas(self, lambda_values: list):
+        """
+        Set lambda to a tensor of values for parallel evaluation
+        """
+        if len(lambda_values) == 0:
+            lambda_values = self.lambda_values
+
+        assert self.num_envs % len(lambda_values) == 0
+
+        lambda_tensor = torch.zeros(self.num_envs, 1, 1).to(self.device)
+        self.envs_per_lambda = self.num_envs // len(lambda_values)
+
+        for i, lam in enumerate(lambda_values):
+            lambda_tensor[i * self.envs_per_lambda : (i + 1) * self.envs_per_lambda] = (
+                lam
+            )
+
+        return lambda_tensor
+
+    def set_skill(self, idx: int):
+        self.skill.fill_(0)
+        self.skill[:, idx] = 1
+
+    def compute_reward(self, obs: torch.Tensor, vel_cmds: torch.Tensor):
+        rewards = reward_function(obs, vel_cmds, self.reward_fn)
+        rewards = rewards.cpu().numpy()
+
+        # height reward
+        height = torch.from_numpy(self.get_base_position()[:, -1])
+        if self.skill[0, 0] == 1:
+            height_reward = torch.exp(-100 * (height - 0.6).pow(2))
+        elif self.skill[0, 1] == 1:
+            height_reward = torch.exp(-100 * (height - 0.5).pow(2))
+        else:
+            height_reward = torch.zeros_like(height)
+
+        return rewards, height_reward.cpu().numpy()
