@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset, Subset, random_split
 
-from locodiff.utils import Scaler, reward_function
+from locodiff.utils import Scaler
 
 log = logging.getLogger(__name__)
 
@@ -69,19 +69,6 @@ class ExpertDataset(Dataset):
 
         masks = self.create_masks(obs_splits, max_len)
 
-        # vel_cmds = self.sample_vel_cmd(obs.shape[0])
-        # vel_cmds = self.random_vel_cmd(vel_cmds)
-
-        # Compute returns
-        # if self.return_horizon > 0:
-        #     returns = self.compute_returns(obs, vel_cmds, masks)
-
-        #     # Remove last steps if return horizon is set
-        #     obs = obs[:, : -self.return_horizon]
-        #     actions = actions[:, : -self.return_horizon]
-        #     terminals = terminals[:, : -self.return_horizon]
-        #     masks = masks[:, : -self.return_horizon]
-
         processed_data = {
             "obs": obs,
             "action": actions,
@@ -89,9 +76,6 @@ class ExpertDataset(Dataset):
             "skill": skills,
             "mask": masks,
         }
-
-        # if self.return_horizon > 0:
-        #     processed_data["return"] = returns
 
         return processed_data
 
@@ -167,46 +151,6 @@ class ExpertDataset(Dataset):
         masks = np.concatenate([masks_pad, masks], axis=1)
 
         return torch.from_numpy(masks).to(self.device).float()
-
-    def sample_vel_cmd(self, batch_size):
-        vel_cmd = torch.randint(0, 2, (batch_size, 1), device=self.device).float()
-        return vel_cmd
-
-    def random_vel_cmd(self, vel_cmds):
-        # replace half of the vel_cmds with random values
-        vel_limits = [0.8, 0.5, 1.0]
-        rand_cmds = torch.rand_like(vel_cmds)
-        for i in range(3):
-            rand_cmds[:, i] = rand_cmds[:, i] * 2 * vel_limits[i] - vel_limits[i]
-
-        mask = torch.rand(vel_cmds.shape[0], 1)
-        mask = mask < 0.5
-        mask = mask.expand_as(vel_cmds)
-        vel_cmds[mask] = rand_cmds[mask]
-
-        return vel_cmds
-
-    def compute_returns(self, obs, vel_cmds, masks):
-        rewards = reward_function(obs, vel_cmds, self.reward_fn)
-        rewards -= rewards.max()
-        self.rewards = rewards  # for plotting
-
-        horizon = self.return_horizon
-        gammas = torch.tensor([0.99**i for i in range(horizon)]).to(self.device)
-        returns = torch.zeros_like(rewards[:, :-horizon])
-
-        for i in range(masks.shape[0]):
-            T = int(masks[i].sum().item())
-            for t in range(T - horizon):
-                returns[i, t] = (rewards[i, t : t + horizon] * gammas).sum()
-
-        returns = torch.exp(returns / 10)
-
-        # shift max return to 1
-        returns = torch.where(returns == 1, -1, returns)
-        returns = returns - returns.max() + 1
-
-        return returns.unsqueeze(-1)
 
 
 class SlicerWrapper(Dataset):
