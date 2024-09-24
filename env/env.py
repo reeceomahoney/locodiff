@@ -85,8 +85,6 @@ class RaisimEnv:
         return self.observe()
 
     def simulate(self, agent, real_time=False, lambda_values=None):
-        log.info("Starting trained model evaluation")
-
         returns = torch.ones((self.num_envs, 1)).to(self.device)
 
         self.vel_cmd = torch.randint(
@@ -138,7 +136,7 @@ class RaisimEnv:
                     )
                     self.skill[:, 1] = 1
 
-                pred_action = agent.predict(
+                pred_action = agent(
                     {
                         "obs": obs,
                         "skill": self.skill,
@@ -165,12 +163,6 @@ class RaisimEnv:
             # total_rewards /= self.eval_n_steps
             height_rewards /= self.eval_n_steps
             for i, lam in enumerate(cond_lambdas):
-                # return_dict[f"lamda_{lam}/return_mean"] = returns[
-                #     i * envs_per_lambda : (i + 1) * envs_per_lambda
-                # ].mean()
-                # return_dict[f"lamda_{lam}/return_std"] = returns[
-                #     i * envs_per_lambda : (i + 1) * envs_per_lambda
-                # ].std()
                 return_dict[f"lamda_{lam}/reward_mean"] = total_rewards[
                     i * envs_per_lambda : (i + 1) * envs_per_lambda
                 ].mean()

@@ -113,12 +113,15 @@ class Workspace:
         wandb.init(project=wandb_project, mode=wandb_mode, dir=self.output_dir)
         self.eval_keys = ["total_mse", "first_mse", "last_mse", "output_divergence"]
 
+    ############
+    # Training #
+    ############
+
     def train(self):
         """
         Main training loop
         """
         best_total_mse = 1e10
-        best_reward = -1e10
         generator = iter(self.train_loader)
 
         for step in trange(self.train_steps, desc="Training", dynamic_ncols=True):
@@ -139,7 +142,7 @@ class Workspace:
                 # save model if it has improved mse
                 if log_info["total_mse"] < best_total_mse:
                     best_total_mse = log_info["total_mse"]
-                    self.store_model_weights()
+                    self.save()
                     log.info("New best test loss. Stored weights have been updated!")
 
                 # log to wandb
@@ -147,18 +150,7 @@ class Workspace:
 
             # simulate
             if not step % self.sim_every:
-                # run simulation
                 results = self.env.simulate(self)
-
-                # save the model if it has improved reward
-                rewards = [v for k, v in results.items() if k.endswith("/reward_mean")]
-                max_reward = max(rewards)
-                if max_reward > best_reward:
-                    best_reward = max_reward
-                    self.store_model_weights(best_reward=True)
-                    log.info("New best reward. Stored weights have been updated!")
-
-                # log to wandb
                 wandb.log(results, step=step)
 
             # train
@@ -171,7 +163,7 @@ class Workspace:
             if not step % 100:
                 wandb.log({"loss": batch_loss}, step=step)
 
-        self.store_model_weights()
+        self.save()
         log.info("Training done!")
 
     def train_step(self, batch: dict):
@@ -188,9 +180,6 @@ class Workspace:
 
     @torch.no_grad()
     def evaluate(self, batch: dict) -> dict:
-        """
-        Calculate model prediction error
-        """
         data_dict = self.process_batch(batch)
 
         if self.use_ema:
@@ -225,12 +214,13 @@ class Workspace:
 
         return info
 
+    ##############
+    # Inference #
+    ##############
+
     @torch.no_grad()
-    def predict(self, batch: dict, new_sampling_steps=None):
-        """
-        Inference method
-        """
-        batch = self.stack_context(batch)
+    def __call__(self, batch: dict, new_sampling_steps=None):
+        batch = self.update_history(batch)
         data_dict = self.process_batch(batch)
 
         if new_sampling_steps is not None:
@@ -256,65 +246,48 @@ class Workspace:
         self.obs_hist[done] = 0
         self.skill_hist[done] = 0
 
-    def stack_context(self, batch):
-        self.obs_hist[:, :-1] = self.obs_hist[:, 1:].clone()
-        self.obs_hist[:, -1] = batch["obs"]
-        batch["obs"] = self.obs_hist.clone()
-        return batch
+    ######################
+    # Saving and Loading #
+    ######################
 
-    def load_pretrained_model(self, weights_path: str) -> None:
+    def load(self, weights_path: str) -> None:
+        model_dir = os.path.join(weights_path, "model")
+
         self.agent.load_state_dict(
-            torch.load(
-                os.path.join(weights_path, "model/model.pt"),
-                map_location=self.device,
-            ),
+            torch.load(os.path.join(model_dir, "model.pt"), map_location=self.device),
             strict=False,
         )
 
         # Load scaler attributes
         scaler_state = torch.load(
-            os.path.join(weights_path, "model/scaler.pt"), map_location=self.device
+            os.path.join(model_dir, "scaler.pt"), map_location=self.device
         )
-        self.scaler.x_max = scaler_state["x_max"]
-        self.scaler.x_min = scaler_state["x_min"]
-        self.scaler.y_max = scaler_state["y_max"]
-        self.scaler.y_min = scaler_state["y_min"]
-        self.scaler.x_mean = scaler_state["x_mean"]
-        self.scaler.x_std = scaler_state["x_std"]
-        self.scaler.y_mean = scaler_state["y_mean"]
-        self.scaler.y_std = scaler_state["y_std"]
+        for attr, value in scaler_state.items():
+            setattr(self.scaler, attr, value)
 
         log.info("Loaded pre-trained agent parameters and scaler")
 
-    def store_model_weights(self, best_reward: bool = False) -> None:
+    def save(self) -> None:
+        model_dir = os.path.join(self.output_dir, "model")
+
         if self.use_ema:
             self.ema_helper.store(self.agent.parameters())
             self.ema_helper.copy_to(self.agent.parameters())
-        name = "model.pt" if not best_reward else "best_model.pt"
-        torch.save(
-            self.agent.state_dict(), os.path.join(self.output_dir, "model", name)
-        )
+
+        torch.save(self.agent.state_dict(), os.path.join(model_dir, "model.pt"))
+
         if self.use_ema:
             self.ema_helper.restore(self.agent.parameters())
-        torch.save(
-            self.agent.state_dict(),
-            os.path.join(self.output_dir, "model/non_ema_" + name),
-        )
 
         # Save scaler attributes
+        scaler_state = ["x_max", "x_min", "y_max", "y_min", "x_mean", "x_std", "y_mean"]
         torch.save(
-            {
-                "x_max": self.scaler.x_max,
-                "x_min": self.scaler.x_min,
-                "y_max": self.scaler.y_max,
-                "y_min": self.scaler.y_min,
-                "x_mean": self.scaler.x_mean,
-                "x_std": self.scaler.x_std,
-                "y_mean": self.scaler.y_mean,
-                "y_std": self.scaler.y_std,
-            },
-            os.path.join(self.output_dir, "model/scaler.pth"),
+            {k: getattr(self.scaler, k) for k in scaler_state}, model_dir + "/scaler.pt"
         )
+
+    ###################
+    # Data Processing #
+    ###################
 
     @torch.no_grad()
     def process_batch(self, batch: dict) -> dict:
@@ -323,9 +296,10 @@ class Workspace:
         raw_obs = batch["obs"]
         raw_action = batch.get("action", None)
         skill = batch["skill"]
+
         vel_cmd = batch.get("vel_cmd", None)
-        # if vel_cmd is None:
-        #     vel_cmd = self.sample_vel_cmd(raw_obs.shape[0])
+        if vel_cmd is None:
+            vel_cmd = self.sample_vel_cmd(raw_obs.shape[0])
 
         returns = batch.get("return", None)
         if returns is None:
@@ -350,6 +324,12 @@ class Workspace:
 
         return processed_batch
 
+    def update_history(self, batch):
+        self.obs_hist[:, :-1] = self.obs_hist[:, 1:].clone()
+        self.obs_hist[:, -1] = batch["obs"]
+        batch["obs"] = self.obs_hist.clone()
+        return batch
+
     def dict_to_device(self, batch):
         return {k: v.clone().to(self.device) for k, v in batch.items()}
 
@@ -369,17 +349,5 @@ class Workspace:
         returns = (rewards * gammas).sum(dim=-1)
         returns = torch.exp(returns / 10)
         returns = (returns - returns.min()) / (returns.max() - returns.min())
-
-        # import matplotlib.pyplot as plt
-        # fig, axs = plt.subplots(1, 2)
-        # axs[0].hist(rewards.flatten().cpu().numpy(), bins=20)
-        # axs[0].set_xlabel("Rewards")
-        # axs[0].set_ylabel("Frequency")
-        # axs[1].hist(returns.flatten().cpu().numpy(), bins=20)
-        # axs[1].set_xlabel("Returns")
-        # axs[1].set_ylabel("Frequency")
-        # plt.savefig("returns.png")
-        # print(returns.max())
-        # exit()
 
         return returns.unsqueeze(-1)
