@@ -43,7 +43,7 @@ agent:
   cond_mask_prob: ${cond_mask_prob}
   device: ${device}
   model:
-    _target_: locodiff.wrapper.ScalingWrapper
+    _target_: locodiff.wrappers.ScalingWrapper
     sigma_data: ${sigma_data}
     model:
       _target_: locodiff.transformer.DiffusionTransformer

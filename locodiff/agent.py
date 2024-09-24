@@ -6,36 +6,7 @@ from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 
 import locodiff.utils as utils
 from locodiff.samplers import get_sampler
-
-
-class CFGWrapper(nn.Module):
-    """
-    Classifier-free guidance wrapper
-    """
-
-    def __init__(self, model, cond_lambda: int, cond_mask_prob: float):
-        super().__init__()
-        self.model = model
-        self.cond_lambda = cond_lambda
-        self.cond_mask_prob = cond_mask_prob
-
-    def __call__(self, x_t: torch.Tensor, sigma: torch.Tensor, data_dict: dict):
-        # TODO: parallelize this
-
-        out = self.model(x_t, sigma, data_dict)
-        out_uncond = self.model(x_t, sigma, data_dict, uncond=True)
-        out = out_uncond + self.cond_lambda * (out - out_uncond)
-
-        return out
-
-    def loss(self, noise, sigma, data_dict):
-        return self.model.loss(noise, sigma, data_dict)
-
-    def get_params(self):
-        return self.model.get_params()
-
-    def get_optim_groups(self):
-        return self.model.get_optim_groups()
+from locodiff.wrappers import CFGWrapper
 
 
 class Agent(nn.Module):
@@ -85,7 +56,6 @@ class Agent(nn.Module):
 
     def __call__(self, data_dict: dict) -> tuple:
         self.eval()
-        self.training = False
 
         if data_dict["action"] is None:
             batch_size = self.num_envs
@@ -111,7 +81,6 @@ class Agent(nn.Module):
 
     def loss(self, data_dict) -> torch.Tensor:
         self.train()
-        self.training = True
 
         action = data_dict["action"]
         noise = torch.randn_like(action)

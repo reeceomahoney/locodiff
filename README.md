@@ -10,8 +10,7 @@
 - [x] Split loss and call logic into separate agent class
 - [x] Move samplers into separate file
 - [ ] Fix jit agent
-- [ ] Split return calculation by episodes
-- [ ] Parallelize cfg forward
+- [ ] Move reward calculation into dataloader
 - [ ] fix cmake stdout w/ pipenv
 - [ ] Add setup to README
 - [ ] Add max reward to wandb

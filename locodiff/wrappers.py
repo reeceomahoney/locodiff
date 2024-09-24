@@ -1,4 +1,33 @@
+import torch
 import torch.nn as nn
+
+
+class CFGWrapper(nn.Module):
+    """
+    Classifier-free guidance wrapper
+    """
+
+    def __init__(self, model, cond_lambda: int, cond_mask_prob: float):
+        super().__init__()
+        self.model = model
+        self.cond_lambda = cond_lambda
+        self.cond_mask_prob = cond_mask_prob
+
+    def __call__(self, x_t: torch.Tensor, sigma: torch.Tensor, data_dict: dict):
+        out = self.model(x_t, sigma, data_dict)
+        out_uncond = self.model(x_t, sigma, data_dict, uncond=True)
+        out = out_uncond + self.cond_lambda * (out - out_uncond)
+
+        return out
+
+    def loss(self, noise, sigma, data_dict):
+        return self.model.loss(noise, sigma, data_dict)
+
+    def get_params(self):
+        return self.model.get_params()
+
+    def get_optim_groups(self):
+        return self.model.get_optim_groups()
 
 
 class ScalingWrapper(nn.Module):
