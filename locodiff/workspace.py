@@ -10,7 +10,7 @@ import torch.nn as nn
 import wandb
 from hydra.core.hydra_config import HydraConfig
 from torch.utils.data import DataLoader
-from tqdm import tqdm
+from tqdm import tqdm, trange
 
 import locodiff.utils as utils
 from env.env import RaisimEnv
@@ -111,55 +111,55 @@ class Workspace:
         # logging
         os.makedirs(self.output_dir + "/model", exist_ok=True)
         wandb.init(project=wandb_project, mode=wandb_mode, dir=self.output_dir)
+        self.eval_keys = ["total_mse", "first_mse", "last_mse", "output_divergence"]
 
     def train(self):
         """
         Main training loop
         """
-        best_test_mse = 1e10
-        best_return = -1e10
+        best_total_mse = 1e10
+        best_reward = -1e10
         generator = iter(self.train_loader)
 
-        for step in tqdm(range(self.train_steps), dynamic_ncols=True):
+        for step in trange(self.train_steps, desc="Training", dynamic_ncols=True):
             # evaluate
             if not step % self.eval_every:
-                log_info = {
-                    "total_mse": [],
-                    "first_mse": [],
-                    "last_mse": [],
-                    "output_divergence": [],
-                }
-                log_info_means = {}
+                # reset the log_info
+                log_info = {k: [] for k in self.eval_keys}
 
-                for batch in tqdm(
-                    self.test_loader, desc="Evaluating", position=0, leave=True
-                ):
+                # run evaluation
+                for batch in tqdm(self.test_loader, desc="Evaluating"):
                     info = self.evaluate(batch)
-                    for key in log_info:
-                        log_info[key].append(info[key])
-                for key in log_info:
-                    log_info_means[key] = sum(log_info[key]) / len(log_info[key])
-                if log_info_means["total_mse"] < best_test_mse:
-                    best_test_mse = log_info["total_mse"]
-                    self.store_model_weights()
-                    log.info("New best test loss. Stored weights have been updated!")
+                    log_info = {k: v + [info[k]] for k, v in log_info.items()}
+
+                # calculate the means and lr
+                log_info = {k: sum(v) / len(v) for k, v in log_info.items()}
                 log_info["lr"] = self.optimizer.param_groups[0]["lr"]
 
+                # save model if it has improved mse
+                if log_info["total_mse"] < best_total_mse:
+                    best_total_mse = log_info["total_mse"]
+                    self.store_model_weights()
+                    log.info("New best test loss. Stored weights have been updated!")
+
+                # log to wandb
                 wandb.log({k: v for k, v in log_info.items()}, step=step)
 
             # simulate
             if not step % self.sim_every:
+                # run simulation
                 results = self.env.simulate(self)
-                wandb.log(results, step=step)
 
-                # save the best model by reward
-                # returns = [v for k, v in results.items() if k.endswith("/return_mean")]
+                # save the model if it has improved reward
                 rewards = [v for k, v in results.items() if k.endswith("/reward_mean")]
-                max_return = max(rewards)
-                if max_return > best_return:
-                    best_return = max_return
+                max_reward = max(rewards)
+                if max_reward > best_reward:
+                    best_reward = max_reward
                     self.store_model_weights(best_reward=True)
                     log.info("New best reward. Stored weights have been updated!")
+
+                # log to wandb
+                wandb.log(results, step=step)
 
             # train
             try:

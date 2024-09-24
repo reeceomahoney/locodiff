@@ -9,6 +9,10 @@ from locodiff.samplers import get_sampler
 
 
 class CFGWrapper(nn.Module):
+    """
+    Classifier-free guidance wrapper
+    """
+
     def __init__(self, model, cond_lambda: int, cond_mask_prob: float):
         super().__init__()
         self.model = model
@@ -16,9 +20,6 @@ class CFGWrapper(nn.Module):
         self.cond_mask_prob = cond_mask_prob
 
     def __call__(self, x_t: torch.Tensor, sigma: torch.Tensor, data_dict: dict):
-        """
-        Classifier-free guidance sample
-        """
         # TODO: parallelize this
 
         out = self.model(x_t, sigma, data_dict)

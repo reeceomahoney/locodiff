@@ -6,7 +6,7 @@ import time
 import numpy as np
 import torch
 from omegaconf import DictConfig, OmegaConf
-from tqdm import tqdm
+from tqdm import trange
 
 from env.lib.raisim_env import RaisimWrapper
 from locodiff.utils import reward_function
@@ -125,7 +125,7 @@ class RaisimEnv:
 
             obs, vel_cmd = self.observe()
 
-            for n in tqdm(range(self.eval_n_steps)):
+            for n in trange(self.eval_n_steps, desc="Simulating"):
                 start = time.time()
 
                 if done.any():
