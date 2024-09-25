@@ -18,8 +18,6 @@ parameters:
     values: [0.1, 0.2, 0.25]
   return_horizon:
     values: [10, 20, 50, 100]
-  agent.sampler_type:
-    values: [ddim, dpmpp_2m_sde, euler_ancestral]
   agent.sigma_min:
     values: [0.001, 0.005, 0.4]
   agent.sigma_max:
