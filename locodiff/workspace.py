@@ -59,9 +59,6 @@ class Workspace:
             self.output_dir = HydraConfig.get().runtime.output_dir
             wandb_mode = "online"
 
-        wandb_mode = "disabled"
-        self.output_dir = "/tmp"
-
         # set seed
         random.seed(seed)
         np.random.seed(seed)

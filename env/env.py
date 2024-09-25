@@ -79,7 +79,8 @@ class RaisimEnv:
     ############
 
     def simulate(self, ws, real_time=False, lambda_values=[]):
-        ws.agent.model.cond_lambda = self.set_lambdas(lambda_values)
+        lambda_tensor, lambda_values = self.set_lambdas(lambda_values)
+        ws.agent.model.cond_lambda = lambda_tensor
         total_rewards, total_height_rewards, total_dones = [], [], []
         return_dict = {}
 
@@ -133,7 +134,6 @@ class RaisimEnv:
         total_dones = np.array(total_dones).T
 
         # split rewards by lambda
-        # TODO: also compute the max reward
         for i, lam in enumerate(lambda_values):
             return_dict[f"lamda_{lam}/reward_mean"] = total_rewards[
                 i * self.envs_per_lambda : (i + 1) * self.envs_per_lambda
@@ -147,6 +147,13 @@ class RaisimEnv:
             return_dict[f"lamda_{lam}/terminals_mean"] = total_dones[
                 i * self.envs_per_lambda : (i + 1) * self.envs_per_lambda
             ].mean()
+
+        # compute the max reward mean
+        reward_means = {
+            k: v for k, v in return_dict.items() if k.endswith("/reward_mean")
+        }
+        max_reward_mean = max(reward_means.values())
+        return_dict["max_reward_mean"] = max_reward_mean
 
         return return_dict
 
@@ -216,7 +223,7 @@ class RaisimEnv:
                 lam
             )
 
-        return lambda_tensor
+        return lambda_tensor, lambda_values
 
     def set_skill(self, idx: int):
         self.skill.fill_(0)
