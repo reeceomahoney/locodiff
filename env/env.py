@@ -80,6 +80,7 @@ class RaisimEnv:
 
     def simulate(self, ws, real_time=False, lambda_values=[]):
         lambda_tensor, lambda_values = self.set_lambdas(lambda_values)
+        prev_lambda = ws.agent.model.cond_lambda
         ws.agent.model.cond_lambda = lambda_tensor
         total_rewards, total_height_rewards, total_dones = [], [], []
         return_dict = {}
@@ -154,6 +155,9 @@ class RaisimEnv:
         }
         max_reward_mean = max(reward_means.values())
         return_dict["max_reward_mean"] = max_reward_mean
+
+        # reset cond_lambda
+        ws.agent.model.cond_lambda = prev_lambda
 
         return return_dict
 
