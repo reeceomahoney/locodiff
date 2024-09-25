@@ -38,7 +38,7 @@ class DiffusionTransformer(nn.Module):
         self.ddpm = ddpm
 
         self.action_emb = nn.Linear(self.act_dim, self.d_model)
-        self.obs_emb = nn.Linear(self.obs_dim + 2, self.d_model)
+        self.obs_emb = nn.Linear(self.obs_dim + 1, self.d_model)
         self.sigma_emb = nn.Linear(1, self.d_model)
         self.vel_cmd_emb = nn.Linear(3, self.d_model)
         self.return_emb = nn.Linear(1, self.d_model)
@@ -186,8 +186,9 @@ class DiffusionTransformer(nn.Module):
         # vel_cmd_emb = self.vel_cmd_emb(data_dict["vel_cmd"]).unsqueeze(1)
 
         obs = data_dict["obs"]
-        skill = data_dict["skill"].unsqueeze(1).expand(-1, obs.shape[1], -1)
-        obs = torch.cat([obs, skill], dim=-1)
+        # skill = data_dict["skill"].unsqueeze(1).expand(-1, obs.shape[1], -1)
+        vel_cmd = data_dict["vel_cmd"].unsqueeze(1).expand(-1, obs.shape[1], -1)
+        obs = torch.cat([obs, vel_cmd], dim=-1)
         obs_emb = self.obs_emb(obs)
 
         returns = self.mask_cond(data_dict["return"], uncond)
