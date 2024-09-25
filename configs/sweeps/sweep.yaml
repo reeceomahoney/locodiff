@@ -6,7 +6,7 @@ metric:
   goal: maximize
   name: max_reward_mean
 parameters:
-  max_train_steps:
+  train_steps:
     value: 1e5
   T:
     values: [1, 2, 4, 8, 16, 32]
