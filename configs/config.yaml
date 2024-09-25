@@ -82,7 +82,7 @@ lr_scheduler:
 
 dataset_fn:
   _target_: locodiff.dataloader.get_dataloaders_and_scaler
-  data_directory: walk_mid_05
+  data_directory: walk_rand
   obs_dim: ${obs_dim}
   action_dim: ${action_dim}
   train_fraction: 0.95
