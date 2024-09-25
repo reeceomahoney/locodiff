@@ -3,7 +3,7 @@ _target_: locodiff.workspace.Workspace
 wandb_project: locodiff
 
 # training
-train_steps: 5e5
+train_steps: 1e6
 eval_every: 1000
 sim_every: 5000
 seed: 6
