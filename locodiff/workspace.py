@@ -100,6 +100,7 @@ class Workspace:
 
         # diffusion
         self.sampling_steps = sampling_steps
+        self.cond_mask_prob = cond_mask_prob
 
         # reward
         self.return_horizon = return_horizon
@@ -108,7 +109,9 @@ class Workspace:
         # logging
         os.makedirs(self.output_dir + "/model", exist_ok=True)
         wandb.init(project=wandb_project, mode=wandb_mode, dir=self.output_dir)
-        self.eval_keys = ["total_mse", "first_mse", "last_mse", "output_divergence"]
+        self.eval_keys = ["total_mse", "first_mse", "last_mse"]
+        if self.cond_mask_prob > 0:
+            self.eval_keys.append("output_divergence")
 
     ############
     # Training #
@@ -177,17 +180,27 @@ class Workspace:
 
     @torch.no_grad()
     def evaluate(self, batch: dict) -> dict:
+        info = {}
         data_dict = self.process_batch(batch)
 
         if self.use_ema:
             self.ema_helper.store(self.agent.parameters())
             self.ema_helper.copy_to(self.agent.parameters())
 
-        x_0, x_0_max_return = self.agent(data_dict)
+        if self.cond_mask_prob > 0:
+            x_0, x_0_max_return = self.agent(data_dict)
+            x_0 = self.scaler.clip(x_0)
+            x_0 = self.scaler.inverse_scale_output(x_0)
 
-        x_0 = self.scaler.clip(x_0)
-        x_0 = self.scaler.inverse_scale_output(x_0)
-        x_0_max_return = self.scaler.inverse_scale_output(x_0_max_return)
+            # divergence between normal and max_return outputs
+            x_0_max_return = self.scaler.clip(x_0_max_return)
+            x_0_max_return = self.scaler.inverse_scale_output(x_0_max_return)
+            output_divergence = torch.abs(x_0 - x_0_max_return).mean().item()
+            info["output_divergence"] = output_divergence
+        else:
+            x_0 = self.agent(data_dict)
+            x_0 = self.scaler.clip(x_0)
+            x_0 = self.scaler.inverse_scale_output(x_0)
 
         # calculate the MSE
         raw_action = self.scaler.inverse_scale_output(data_dict["action"])
@@ -196,18 +209,13 @@ class Workspace:
         first_mse = mse[:, 0, :].mean().item()
         last_mse = mse[:, -1, :].mean().item()
 
-        output_divergence = torch.abs(x_0 - x_0_max_return).mean().item()
-
         # restore the previous model parameters
         if self.use_ema:
             self.ema_helper.restore(self.agent.parameters())
 
-        info = {
-            "total_mse": total_mse,
-            "first_mse": first_mse,
-            "last_mse": last_mse,
-            "output_divergence": output_divergence,
-        }
+        info["total_mse"] = total_mse
+        info["first_mse"] = first_mse
+        info["last_mse"] = last_mse
 
         return info
 
@@ -227,7 +235,10 @@ class Workspace:
             self.ema_helper.store(self.agent.parameters())
             self.ema_helper.copy_to(self.agent.parameters())
 
-        pred_action, _ = self.agent(data_dict)
+        if self.cond_mask_prob > 0:
+            pred_action, _ = self.agent(data_dict)
+        else:
+            pred_action = self.agent(data_dict)
 
         pred_action = self.scaler.clip(pred_action)
         pred_action = self.scaler.inverse_scale_output(pred_action)
