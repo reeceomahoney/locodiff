@@ -7,12 +7,12 @@ from typing import Callable, Tuple
 import numpy as np
 import torch
 import torch.nn as nn
-import wandb
 from hydra.core.hydra_config import HydraConfig
 from torch.utils.data import DataLoader
 from tqdm import tqdm, trange
 
 import locodiff.utils as utils
+import wandb
 from env.env import RaisimEnv
 from locodiff.agent import Agent
 

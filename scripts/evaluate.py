@@ -8,8 +8,6 @@ import numpy as np
 import torch
 from omegaconf import DictConfig, OmegaConf
 
-from env.raisim_env import RaisimEnv
-
 log = logging.getLogger(__name__)
 
 
@@ -27,15 +25,13 @@ def main(cfg: DictConfig) -> None:
     )
     model_cfg = OmegaConf.load(cfg_store_path)
     model_cfg.device = cfg.device
-    model_cfg.agents["device"] = cfg.device
-    model_cfg.env["server_port"] = cfg.server_port
-    model_cfg.env["max_time"] = 100
+    model_cfg.env.impl.server_port = cfg.server_port
+    model_cfg.env.impl.max_time = 100
     model_cfg.T_action = 1
     model_cfg.use_ema = False
-    model_cfg.evaluating = True
-    model_cfg.env["num_envs"] = 100 * len(cfg.lambda_values)
-    model_cfg.n_timesteps = cfg.n_inference_steps
-    model_cfg.agents.output_dir = cfg.model_store_path
+    model_cfg.num_envs = 25 * len(cfg.lambda_values)
+    model_cfg.env.impl.num_envs = 25 * len(cfg.lambda_values)
+    model_cfg.sampling_steps = cfg.sampling_steps
 
     # set seeds
     np.random.seed(model_cfg.seed)
@@ -43,23 +39,24 @@ def main(cfg: DictConfig) -> None:
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
 
-    agent = hydra.utils.instantiate(model_cfg.agents)
-    agent.load_pretrained_model(cfg.model_store_path)
+    workspace = hydra.utils.instantiate(model_cfg)
+    workspace.load(cfg.model_store_path)
     # agent = torch.jit.load(f"data/models/policy_{cfg.device}.pt")
-    env = RaisimEnv(model_cfg)
 
     # set new noise limits
-    agent.sigma_max = cfg.sigma_max
-    agent.sigma_min = cfg.sigma_min
+    workspace.sigma_max = cfg.sigma_max
+    workspace.sigma_min = cfg.sigma_min
 
     # Evaluate
     if cfg["test_rollout"]:
-        env.eval_n_times = cfg["num_runs"]
-        results_dict = env.simulate(agent, real_time=True, lambda_values=[0])
+        workspace.env.eval_n_times = cfg["num_runs"]
+        results_dict = workspace.env.simulate(
+            workspace, real_time=True, lambda_values=[0]
+        )
         print(results_dict)
     if cfg["test_reward_lambda"]:
-        results_dict = env.simulate(
-            agent, real_time=False, lambda_values=cfg.lambda_values
+        results_dict = workspace.env.simulate(
+            workspace, real_time=False, lambda_values=cfg.lambda_values
         )
         # returns = [v for k, v in results_dict.items() if k.endswith("/return_mean")]
         rewards = [v for k, v in results_dict.items() if k.endswith("/reward_mean")]
@@ -75,12 +72,12 @@ def main(cfg: DictConfig) -> None:
         plt.xticks(range(len(cfg.lambda_values)), cfg.lambda_values)
         plt.xlabel("Lambda")
         plt.ylabel("Velocity tracking return")
-        plt.savefig("rewards.png")
+        plt.show()
     if cfg["test_mse"]:
-        dataloader = agent.test_loader
+        dataloader = workspace.test_loader
         batch = next(iter(dataloader))
         batch = {k: v.to(cfg.device) for k, v in batch.items()}
-        info = agent.evaluate(batch)
+        info = workspace.evaluate(batch)
         print(info["total_mse"])
 
 
