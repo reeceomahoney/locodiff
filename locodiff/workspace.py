@@ -299,8 +299,8 @@ class Workspace:
             vel_cmd = self.sample_vel_cmd(raw_obs.shape[0])
 
         returns = batch.get("return", None)
-        if returns is None:
-            returns = self.compute_returns(raw_obs, vel_cmd)
+        # if returns is None:
+        #     returns = self.compute_returns(raw_obs, vel_cmd)
 
         obs = self.scaler.scale_input(raw_obs[:, : self.T_cond])
 
