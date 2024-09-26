@@ -4,8 +4,7 @@ import torch
 import torch.nn as nn
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 
-import locodiff.utils as utils
-from locodiff.samplers import get_sampler
+from locodiff.samplers import get_sampler, get_sigmas_exponential, rand_log_logistic
 from locodiff.wrappers import CFGWrapper
 
 
@@ -69,7 +68,7 @@ class Agent(nn.Module):
             kwargs = {"noise_scheduler": self.noise_scheduler}
         else:
             noise = noise * self.sigma_max
-            sigmas = utils.get_sigmas_exponential(
+            sigmas = get_sigmas_exponential(
                 self.sampling_steps, self.sigma_min, self.sigma_max, self.device
             )
             kwargs = {"sigmas": sigmas}
@@ -105,7 +104,7 @@ class Agent(nn.Module):
         Generate a density function for training sigmas
         """
         loc = math.log(self.sigma_data)
-        density = utils.rand_log_logistic(
+        density = rand_log_logistic(
             (size,), loc, 0.5, self.sigma_min, self.sigma_max, self.device
         )
         return density
