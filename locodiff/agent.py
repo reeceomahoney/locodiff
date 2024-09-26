@@ -50,6 +50,7 @@ class Agent(nn.Module):
         self.sigma_data = sigma_data
         self.sigma_min = sigma_min
         self.sigma_max = sigma_max
+        self.cond_mask_prob = cond_mask_prob
 
         # ddpm
         self.noise_scheduler = noise_scheduler
@@ -74,10 +75,12 @@ class Agent(nn.Module):
             kwargs = {"sigmas": sigmas}
         x_0 = self.sampler(self.model, noise, data_dict, **kwargs)
 
-        data_dict["return"] = torch.ones_like(data_dict["return"])
-        x_0_max_return = self.sampler(self.model, noise, data_dict, **kwargs)
-
-        return x_0, x_0_max_return
+        if self.cond_mask_prob > 0:
+            data_dict["return"] = torch.ones_like(data_dict["return"])
+            x_0_max_return = self.sampler(self.model, noise, data_dict, **kwargs)
+            return x_0, x_0_max_return
+        else:
+            return x_0
 
     def loss(self, data_dict) -> torch.Tensor:
         self.train()
