@@ -14,7 +14,7 @@ use_ema: True
 obs_dim: 33
 action_dim: 12
 skill_dim: 2
-T: 4
+T: 50
 T_cond: 8
 T_action: 1
 num_envs: 125
@@ -30,6 +30,7 @@ reward_fn: fwd_bwd
 
 agent:
   _target_: locodiff.agent.Agent
+  obs_dim: ${obs_dim}
   action_dim: ${action_dim}
   T: ${T}
   T_cond: ${T_cond}

@@ -13,6 +13,7 @@ class Agent(nn.Module):
         self,
         model,
         noise_scheduler: DDPMScheduler,
+        obs_dim: int,
         action_dim: int,
         T: int,
         T_cond: int,
@@ -38,6 +39,7 @@ class Agent(nn.Module):
         self.device = device
 
         # dims
+        self.obs_dim = obs_dim
         self.action_dim = action_dim
         self.T = T
         self.T_cond = T_cond
@@ -62,7 +64,9 @@ class Agent(nn.Module):
         else:
             batch_size = data_dict["action"].shape[0]
 
-        noise = torch.randn((batch_size, self.T, self.action_dim)).to(self.device)
+        noise = torch.randn((batch_size, self.T, self.obs_dim + self.action_dim)).to(
+            self.device
+        )
         if self.sampler_type == "ddpm":
             self.noise_scheduler.set_timesteps(self.sampling_steps)
             kwargs = {"noise_scheduler": self.noise_scheduler}
