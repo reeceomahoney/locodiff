@@ -164,7 +164,8 @@ class RaisimEnv:
             # reset cond_lambda
             ws.agent.model.cond_lambda = prev_lambda
         else:
-            return_dict["max_reward_mean"] = total_rewards.mean()
+            return_dict["reward_mean"] = total_rewards.mean()
+            return_dict["terminals_mean"] = total_dones.mean()
 
         return return_dict
 
