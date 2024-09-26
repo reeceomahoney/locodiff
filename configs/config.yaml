@@ -22,7 +22,7 @@ num_envs: 125
 # diffusion
 sampling_steps: 3
 sigma_data: 0.5
-cond_mask_prob: 0.1
+cond_mask_prob: 0.0
 
 # reward
 return_horizon: 50
@@ -109,6 +109,7 @@ env:
   reward_fn: ${reward_fn}
   device: ${device}
   lambda_values: [0, 1, 1.2, 1.5, 2]
+  cond_mask_prob: ${cond_mask_prob}
 
   impl:
     render: True

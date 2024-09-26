@@ -29,6 +29,7 @@ class RaisimEnv:
         reward_fn: str,
         device: str,
         lambda_values: list,
+        cond_mask_prob: float,
     ):
         if platform.system() == "Darwin":
             os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
@@ -73,15 +74,18 @@ class RaisimEnv:
         self.eval_times = eval_times
         self.eval_steps = eval_steps
         self.reward_fn = reward_fn
+        self.cond_mask_prob = cond_mask_prob
 
     ############
     # Main API #
     ############
 
     def simulate(self, ws, real_time=False, lambda_values=[]):
-        lambda_tensor, lambda_values = self.set_lambdas(lambda_values)
-        prev_lambda = ws.agent.model.cond_lambda
-        ws.agent.model.cond_lambda = lambda_tensor
+        if self.cond_mask_prob > 0:
+            lambda_tensor, lambda_values = self.set_lambdas(lambda_values)
+            prev_lambda = ws.agent.model.cond_lambda
+            ws.agent.model.cond_lambda = lambda_tensor
+
         total_rewards, total_height_rewards, total_dones = [], [], []
         return_dict = {}
 
@@ -135,29 +139,32 @@ class RaisimEnv:
         total_dones = np.array(total_dones).T
 
         # split rewards by lambda
-        for i, lam in enumerate(lambda_values):
-            return_dict[f"lamda_{lam}/reward_mean"] = total_rewards[
-                i * self.envs_per_lambda : (i + 1) * self.envs_per_lambda
-            ].mean()
-            return_dict[f"lamda_{lam}/reward_std"] = total_rewards[
-                i * self.envs_per_lambda : (i + 1) * self.envs_per_lambda
-            ].std()
-            return_dict[f"lamda_{lam}/height_reward_mean"] = total_height_rewards[
-                i * self.envs_per_lambda : (i + 1) * self.envs_per_lambda
-            ].mean()
-            return_dict[f"lamda_{lam}/terminals_mean"] = total_dones[
-                i * self.envs_per_lambda : (i + 1) * self.envs_per_lambda
-            ].mean()
+        if self.cond_mask_prob > 0:
+            for i, lam in enumerate(lambda_values):
+                return_dict[f"lamda_{lam}/reward_mean"] = total_rewards[
+                    i * self.envs_per_lambda : (i + 1) * self.envs_per_lambda
+                ].mean()
+                return_dict[f"lamda_{lam}/reward_std"] = total_rewards[
+                    i * self.envs_per_lambda : (i + 1) * self.envs_per_lambda
+                ].std()
+                return_dict[f"lamda_{lam}/height_reward_mean"] = total_height_rewards[
+                    i * self.envs_per_lambda : (i + 1) * self.envs_per_lambda
+                ].mean()
+                return_dict[f"lamda_{lam}/terminals_mean"] = total_dones[
+                    i * self.envs_per_lambda : (i + 1) * self.envs_per_lambda
+                ].mean()
 
-        # compute the max reward mean
-        reward_means = {
-            k: v for k, v in return_dict.items() if k.endswith("/reward_mean")
-        }
-        max_reward_mean = max(reward_means.values())
-        return_dict["max_reward_mean"] = max_reward_mean
+            # compute the max reward mean
+            reward_means = {
+                k: v for k, v in return_dict.items() if k.endswith("/reward_mean")
+            }
+            max_reward_mean = max(reward_means.values())
+            return_dict["max_reward_mean"] = max_reward_mean
 
-        # reset cond_lambda
-        ws.agent.model.cond_lambda = prev_lambda
+            # reset cond_lambda
+            ws.agent.model.cond_lambda = prev_lambda
+        else:
+            return_dict["max_reward_mean"] = total_rewards.mean()
 
         return return_dict
 
