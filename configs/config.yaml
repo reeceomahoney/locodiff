@@ -17,7 +17,7 @@ skill_dim: 2
 T: 4
 T_cond: 8
 T_action: 1
-num_envs: 125
+num_envs: 50
 
 # diffusion
 sampling_steps: 3
