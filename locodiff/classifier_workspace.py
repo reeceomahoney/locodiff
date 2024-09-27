@@ -152,21 +152,10 @@ class ClassifierWorkspace:
 
     def train_step(self, batch: dict):
         data_dict = self.process_batch(batch)
-
-        # add random noise
-        noise = torch.randn_like(data_dict["action"])
-        sigmas = rand_log_logistic(
-            (data_dict["action"].shape[0],),
-            math.log(self.sigma_data),
-            0.5,
-            self.sigma_min,
-            self.sigma_max,
-            self.device,
-        )
-        data_dict["action"] = data_dict["action"] + noise * sigmas.view(-1, 1, 1)
+        noised_action, sigmas = self.add_noise(data_dict)
 
         # calculate loss
-        pred_return = self.classifier(data_dict)
+        pred_return = self.classifier(noised_action, sigmas, data_dict)
         loss = nn.functional.mse_loss(pred_return, data_dict["return"])
 
         self.optimizer.zero_grad()
@@ -179,7 +168,10 @@ class ClassifierWorkspace:
     @torch.no_grad()
     def evaluate(self, batch: dict) -> dict:
         data_dict = self.process_batch(batch)
-        pred_return = self.classifier(data_dict)
+        noised_action, sigmas = self.add_noise(data_dict)
+
+        pred_return = self.classifier(noised_action, sigmas, data_dict)
+        print(pred_return.shape, data_dict["return"].shape)
         mse = nn.functional.mse_loss(pred_return, data_dict["return"], reduction="none")
         return {"mse": mse.mean().item()}
 
@@ -290,3 +282,17 @@ class ClassifierWorkspace:
         returns = (returns - returns.min()) / (returns.max() - returns.min())
 
         return returns.unsqueeze(-1)
+
+    def add_noise(self, data_dict):
+        action = data_dict["action"].clone()
+        noise = torch.randn_like(action)
+        sigmas = rand_log_logistic(
+            (action.shape[0],),
+            math.log(self.sigma_data),
+            0.5,
+            self.sigma_min,
+            self.sigma_max,
+            self.device,
+        )
+        action += noise * sigmas.view(-1, 1, 1)
+        return action, sigmas

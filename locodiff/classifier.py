@@ -52,7 +52,6 @@ class ClassifierTransformer(nn.Module):
         T,
         T_cond,
         device,
-        cond_mask_prob,
         dropout,
         weight_decay: float,
         ddpm: bool = False,
@@ -65,7 +64,6 @@ class ClassifierTransformer(nn.Module):
         self.nhead = nhead
         self.num_layers = num_layers
         self.device = device
-        self.cond_mask_prob = cond_mask_prob
         self.weight_decay = weight_decay
         self.ddpm = ddpm
 
