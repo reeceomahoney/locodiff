@@ -13,7 +13,7 @@ device: cuda
 obs_dim: 33
 action_dim: 12
 skill_dim: 2
-T: 50
+T: 4
 T_cond: 8
 T_action: 1
 num_envs: 125
@@ -34,8 +34,8 @@ classifier:
   skill_dim: ${skill_dim}
   act_dim: ${action_dim}
   d_model: 128
-  nhead: 8
-  num_layers: 4
+  nhead: 4
+  num_layers: 2
   T: ${T}
   T_cond: ${T_cond}
   device: ${device}

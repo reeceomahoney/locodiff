@@ -171,7 +171,6 @@ class ClassifierWorkspace:
         noised_action, sigmas = self.add_noise(data_dict)
 
         pred_return = self.classifier(noised_action, sigmas, data_dict)
-        print(pred_return.shape, data_dict["return"].shape)
         mse = nn.functional.mse_loss(pred_return, data_dict["return"], reduction="none")
         return {"mse": mse.mean().item()}
 
@@ -270,16 +269,17 @@ class ClassifierWorkspace:
 
     def compute_returns(self, obs, vel_cmd):
         rewards = utils.reward_function(obs, vel_cmd, self.reward_fn)
-        rewards = (
-            rewards[:, self.T_cond - 1 : self.T_cond + self.return_horizon - 1] - 1
-        )
+        rewards = rewards[:, self.T_cond - 1 :] - 1
 
         gammas = torch.tensor([0.99**i for i in range(self.return_horizon)]).to(
             self.device
         )
-        returns = (rewards * gammas).sum(dim=-1)
-        returns = torch.exp(returns / 10)
-        returns = (returns - returns.min()) / (returns.max() - returns.min())
+        returns = torch.zeros((obs.shape[0], self.T)).to(self.device)
+        for i in range(self.T):
+            ret = (rewards[:, i:i + self.return_horizon] * gammas).sum(dim=-1)
+            ret = torch.exp(ret / 10)
+            ret = (ret - ret.min()) / (ret.max() - ret.min())
+            returns[:, i] = ret
 
         return returns.unsqueeze(-1)
 
