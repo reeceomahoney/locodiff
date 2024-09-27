@@ -1,37 +1,154 @@
-hydra:
-  run:
-    dir: logs/classifier/${now:%Y-%m-%d}/${now:%H-%M-%S}
+_target_: locodiff.classifier_workspace.ClassifierWorkspace
 
-wandb:
-  entity: reeceomahoney
-  project: locodiff_classifier
+wandb_project: locodiff_classifier
+wandb_mode: online
 
-model_store_path: logs/2024-05-03/22-08-03
-train_steps: 5e4
-test_interval: 5e2
-log_interval: 1e2
-save_interval: 1e3
-inference_steps: 10
+# training
+train_steps: 5e5
+eval_every: 1000
+seed: 6
+device: cuda
 
-classifier:
-  _target_: locodiff.classifier.Classifier
-  input_dim: 48
-  d_model: 256
-  nhead: 4
-  num_layers: 2
-  T: 125
-  T_cond: 2
-  value_mean: 60
-  value_std: 22
-  device: cuda
-# classifier:
-#   _target_: locodiff.classifier.ClassifierMLP
-#   input_dim: 122
-#   hidden_dims: [256, 256]
-#   value_mean: 60
-#   value_std: 22
-#   device: cuda
+#dims
+obs_dim: 33
+action_dim: 12
+skill_dim: 2
+T: 50
+T_cond: 8
+T_action: 1
+num_envs: 125
+
+# diffusion
+sampling_steps: 3
+sigma_data: 0.5
+sigma_min: 0.001
+sigma_max: 80
+
+# reward
+return_horizon: 50
+reward_fn: fwd_bwd
+
+agent:
+  _target_: locodiff.agent.Agent
+  obs_dim: ${obs_dim}
+  action_dim: ${action_dim}
+  T: ${T}
+  T_cond: ${T_cond}
+  num_envs: ${num_envs}
+  sampling_steps: ${sampling_steps}
+  sampler_type: ddim
+  sigma_data: ${sigma_data}
+  sigma_min: 0.001
+  sigma_max: 80
+  cond_lambda: 1
+  cond_mask_prob: ${cond_mask_prob}
+  device: ${device}
+  model:
+    _target_: locodiff.wrappers.ScalingWrapper
+    sigma_data: ${sigma_data}
+    model:
+      _target_: locodiff.transformer.DiffusionTransformer
+      obs_dim: ${obs_dim}
+      skill_dim: ${skill_dim}
+      act_dim: ${action_dim}
+      d_model: 128
+      nhead: 8
+      num_layers: 4
+      T: ${T}
+      T_cond: ${T_cond}
+      device: ${device}
+      cond_mask_prob: ${cond_mask_prob}
+      dropout: 0.0
+      weight_decay: 1e-3
+  noise_scheduler:
+    _target_: diffusers.schedulers.scheduling_ddpm.DDPMScheduler
+    num_train_timesteps: 3
+    beta_start: 0.0001
+    beta_end: 0.02
+    beta_schedule: squaredcos_cap_v2
+    variance_type: fixed_small
+    clip_sample: True
+    prediction_type: epsilon
+
 optimizer:
   _target_: torch.optim.AdamW
+  _partial_: true
   lr: 1e-4
   betas: [0.9, 0.999]
+
+lr_scheduler:
+  _partial_: true
+  _target_: torch.optim.lr_scheduler.CosineAnnealingLR
+  T_max: ${train_steps}
+
+dataset_fn:
+  _target_: locodiff.dataloader.get_dataloaders_and_scaler
+  data_directory: walk_rand
+  obs_dim: ${obs_dim}
+  action_dim: ${action_dim}
+  train_fraction: 0.95
+  device: ${device}
+  T_cond: ${T_cond}
+  T: ${T}
+  train_batch_size: 1024
+  test_batch_size: 1024
+  num_workers: 4
+  return_horizon: ${return_horizon}
+  reward_fn: ${reward_fn}
+  scaling: linear
+  evaluating: false
+
+env:
+  _target_: env.env.RaisimEnv
+  seed: ${seed}
+  T: ${T}
+  T_cond: ${T_cond}
+  T_action: ${T_action}
+  skill_dim: ${skill_dim}
+  eval_times: 1
+  eval_steps: 250
+  reward_fn: ${reward_fn}
+  device: ${device}
+  lambda_values: [0, 1, 1.2, 1.5, 2]
+  cond_mask_prob: ${cond_mask_prob}
+
+  impl:
+    render: True
+    num_envs: ${num_envs}
+    num_threads: "auto"
+    simulation_dt: 0.005
+    control_dt: 0.04
+    max_time: 10000
+    enable_dynamics_randomization: True
+    action_scaling: 1.0
+    use_actuator_network: True
+    server_port: 8080
+    early_termination: True
+    normalize_observation: False
+
+    velocity_command:
+      limits:
+        heading: 0.8
+        lateral: 0.5
+        yaw: 1.0
+        magnitude: 0.1 # less than is considered to be zero
+      command_probs:
+        zero: 0.2
+        heading: 0.0
+        lateral: 0.0
+        yaw: 0.0
+        direction: 0.0
+        constant: 0.8 # includes all three velocities
+      sampling_times:
+        min: 3.0
+        max: 4.0
+
+ema_helper:
+  _target_: locodiff.utils.ExponentialMovingAverage
+  _partial_: true
+  decay: 0.999
+  device: ${device}
+
+hydra:
+  run:
+    dir: logs/${now:%Y-%m-%d}/${now:%H-%M-%S}

@@ -1,6 +1,7 @@
 _target_: locodiff.workspace.Workspace
 
 wandb_project: locodiff
+wandb_mode: online
 
 # training
 train_steps: 5e5
