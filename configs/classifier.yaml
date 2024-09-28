@@ -28,6 +28,51 @@ sigma_max: 80
 return_horizon: 50
 reward_fn: fwd_bwd
 
+agent_path: logs/2024-09-27/16-20-36/
+
+agent:
+  _target_: locodiff.agent.Agent
+  obs_dim: ${obs_dim}
+  action_dim: ${action_dim}
+  T: ${T}
+  T_cond: ${T_cond}
+  num_envs: ${num_envs}
+  sampling_steps: ${sampling_steps}
+  sampler_type: ddim
+  sigma_data: ${sigma_data}
+  sigma_min: 0.001
+  sigma_max: 80
+  cond_lambda: 1
+  cond_mask_prob: 0.0
+  device: ${device}
+  model:
+    _target_: locodiff.wrappers.ScalingWrapper
+    sigma_data: ${sigma_data}
+    model:
+      _target_: locodiff.transformer.DiffusionTransformer
+      obs_dim: ${obs_dim}
+      skill_dim: ${skill_dim}
+      act_dim: ${action_dim}
+      d_model: 128
+      nhead: 4
+      num_layers: 2
+      T: ${T}
+      T_cond: ${T_cond}
+      device: ${device}
+      cond_mask_prob: 0.0
+      dropout: 0.0
+      weight_decay: 1e-3
+  noise_scheduler:
+    _target_: diffusers.schedulers.scheduling_ddpm.DDPMScheduler
+    num_train_timesteps: 3
+    beta_start: 0.0001
+    beta_end: 0.02
+    beta_schedule: squaredcos_cap_v2
+    variance_type: fixed_small
+    clip_sample: True
+    prediction_type: epsilon
+
+
 classifier:
   _target_: locodiff.classifier.ClassifierTransformer
   obs_dim: ${obs_dim}

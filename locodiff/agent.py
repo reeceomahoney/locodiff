@@ -56,7 +56,7 @@ class Agent(nn.Module):
         # ddpm
         self.noise_scheduler = noise_scheduler
 
-    def __call__(self, data_dict: dict) -> tuple:
+    def __call__(self, data_dict: dict, **kwargs) -> tuple:
         self.eval()
 
         if data_dict["action"] is None:

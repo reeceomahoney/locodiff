@@ -84,7 +84,9 @@ def sample_ddim(model, noise: torch.Tensor, data_dict: dict, **kwargs):
     x_t = noise
     s_in = x_t.new_ones([x_t.shape[0]])
 
-    for i in range(len(sigmas) - 1):
+    num_steps = kwargs.get("num_steps", len(sigmas) - 1)
+
+    for i in range(num_steps):
         denoised = model(x_t, sigmas[i] * s_in, data_dict)
         t, t_next = -sigmas[i].log(), -sigmas[i + 1].log()
         h = t_next - t

@@ -69,10 +69,6 @@ class ClassifierTransformer(nn.Module):
 
         self.action_emb = nn.Linear(self.obs_dim + self.act_dim, self.d_model)
         self.obs_emb = nn.Linear(self.obs_dim + 1, self.d_model)
-        self.sigma_emb = nn.Linear(1, self.d_model)
-        self.vel_cmd_emb = nn.Linear(3, self.d_model)
-        self.return_emb = nn.Linear(1, self.d_model)
-        self.skill_emb = nn.Linear(skill_dim, self.d_model)
 
         self.drop = nn.Dropout(dropout)
 
@@ -80,7 +76,7 @@ class ClassifierTransformer(nn.Module):
             SinusoidalPosEmb(d_model)(torch.arange(T)).unsqueeze(0).to(device)
         )
         self.cond_pos_emb = (
-            SinusoidalPosEmb(d_model)(torch.arange(T_cond + 1)).unsqueeze(0).to(device)
+            SinusoidalPosEmb(d_model)(torch.arange(T_cond)).unsqueeze(0).to(device)
         )
 
         self.decoder = nn.TransformerDecoder(
@@ -203,12 +199,7 @@ class ClassifierTransformer(nn.Module):
         ]
         return optim_groups
 
-    def forward(self, noised_action, sigma, data_dict):
-        # diffusion timestep
-        if not self.ddpm:
-            sigma = sigma.log() / 4
-        sigma_emb = self.sigma_emb(sigma.view(-1, 1, 1))
-
+    def forward(self, noised_action, data_dict):
         # embeddings
         obs = data_dict["obs"]
         vel_cmd = data_dict["vel_cmd"].unsqueeze(1).expand(-1, obs.shape[1], -1)
@@ -216,7 +207,7 @@ class ClassifierTransformer(nn.Module):
         obs_emb = self.obs_emb(obs)
         action_emb = self.action_emb(noised_action)
 
-        cond = torch.cat([sigma_emb, obs_emb], dim=1)
+        cond = obs_emb
         cond += self.cond_pos_emb
         cond = self.drop(cond)
 

@@ -8,12 +8,13 @@ from typing import Callable, Tuple
 import numpy as np
 import torch
 import torch.nn as nn
-import wandb
 from hydra.core.hydra_config import HydraConfig
 from torch.utils.data import DataLoader
 from tqdm import tqdm, trange
 
 import locodiff.utils as utils
+import wandb
+from locodiff.agent import Agent
 from locodiff.samplers import rand_log_logistic
 
 # A logger for this file
@@ -24,10 +25,12 @@ class ClassifierWorkspace:
 
     def __init__(
         self,
+        agent: Agent,
         classifier: nn.Module,
         optimizer: Callable,
         lr_scheduler: Callable,
         dataset_fn: Tuple[DataLoader, DataLoader, utils.Scaler],
+        agent_path: str,
         wandb_project: str,
         wandb_mode: str,
         train_steps: int,
@@ -61,6 +64,23 @@ class ClassifierWorkspace:
         np.random.seed(seed)
         torch.manual_seed(seed)
 
+        # training
+        self.train_steps = int(train_steps)
+        self.eval_every = int(eval_every)
+        self.device = device
+
+        # dataloader and scaler
+        self.train_loader, self.test_loader, self.scaler = dataset_fn
+
+        # agent
+        self.agent = agent
+        self.agent.load_state_dict(
+            torch.load(
+                os.path.join(agent_path, "model", "model.pt"), map_location=self.device
+            ),
+            strict=False,
+        )
+
         # classifier
         self.classifier = classifier
 
@@ -68,14 +88,6 @@ class ClassifierWorkspace:
         optim_groups = self.classifier.get_optim_groups()
         self.optimizer = optimizer(optim_groups)
         self.lr_scheduler = lr_scheduler(self.optimizer)
-
-        # dataloader and scaler
-        self.train_loader, self.test_loader, self.scaler = dataset_fn
-
-        # training
-        self.train_steps = int(train_steps)
-        self.eval_every = int(eval_every)
-        self.device = device
 
         # dims
         self.obs_dim = obs_dim
@@ -99,7 +111,12 @@ class ClassifierWorkspace:
 
         # logging
         os.makedirs(self.output_dir + "/model", exist_ok=True)
-        wandb.init(project=wandb_project, mode=wandb_mode, dir=self.output_dir, config=wandb.config)
+        wandb.init(
+            project=wandb_project,
+            mode=wandb_mode,
+            dir=self.output_dir,
+            config=wandb.config,
+        )
         self.eval_keys = ["mse"]
 
     ############
@@ -152,10 +169,11 @@ class ClassifierWorkspace:
 
     def train_step(self, batch: dict):
         data_dict = self.process_batch(batch)
-        noised_action, sigmas = self.add_noise(data_dict)
+        num_steps = random.randint(0, self.sampling_steps - 1)
+        x_0 = self.agent(data_dict, num_steps=num_steps)
 
         # calculate loss
-        pred_return = self.classifier(noised_action, sigmas, data_dict)
+        pred_return = self.classifier(x_0, data_dict)
         loss = nn.functional.mse_loss(pred_return, data_dict["return"])
 
         self.optimizer.zero_grad()
@@ -168,9 +186,10 @@ class ClassifierWorkspace:
     @torch.no_grad()
     def evaluate(self, batch: dict) -> dict:
         data_dict = self.process_batch(batch)
-        noised_action, sigmas = self.add_noise(data_dict)
+        num_steps = random.randint(0, self.sampling_steps - 1)
+        x_0 = self.agent(data_dict, num_steps=num_steps)
 
-        pred_return = self.classifier(noised_action, sigmas, data_dict)
+        pred_return = self.classifier(x_0, data_dict)
         mse = nn.functional.mse_loss(pred_return, data_dict["return"], reduction="none")
         return {"mse": mse.mean().item()}
 
@@ -276,23 +295,9 @@ class ClassifierWorkspace:
         )
         returns = torch.zeros((obs.shape[0], self.T)).to(self.device)
         for i in range(self.T):
-            ret = (rewards[:, i:i + self.return_horizon] * gammas).sum(dim=-1)
+            ret = (rewards[:, i : i + self.return_horizon] * gammas).sum(dim=-1)
             ret = torch.exp(ret / 10)
             ret = (ret - ret.min()) / (ret.max() - ret.min())
             returns[:, i] = ret
 
         return returns.unsqueeze(-1)
-
-    def add_noise(self, data_dict):
-        action = data_dict["action"].clone()
-        noise = torch.randn_like(action)
-        sigmas = rand_log_logistic(
-            (action.shape[0],),
-            math.log(self.sigma_data),
-            0.5,
-            self.sigma_min,
-            self.sigma_max,
-            self.device,
-        )
-        action += noise * sigmas.view(-1, 1, 1)
-        return action, sigmas
