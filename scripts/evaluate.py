@@ -8,6 +8,8 @@ import numpy as np
 import torch
 from omegaconf import DictConfig, OmegaConf
 
+from locodiff.classifier import ClassifierGuidedSampleModel
+
 log = logging.getLogger(__name__)
 
 
@@ -18,8 +20,6 @@ torch.cuda.empty_cache()
 @hydra.main(config_path="../configs", config_name="evaluate.yaml", version_base=None)
 def main(cfg: DictConfig) -> None:
     # config
-    if sys.gettrace() is not None:
-        cfg.model_store_path = "../" + cfg.model_store_path
     cfg_store_path = os.path.join(
         os.getcwd(), cfg.model_store_path, ".hydra/config.yaml"
     )
@@ -42,10 +42,6 @@ def main(cfg: DictConfig) -> None:
     workspace = hydra.utils.instantiate(model_cfg)
     workspace.load(cfg.model_store_path)
     # agent = torch.jit.load(f"data/models/policy_{cfg.device}.pt")
-
-    # set new noise limits
-    workspace.sigma_max = cfg.sigma_max
-    workspace.sigma_min = cfg.sigma_min
 
     # Evaluate
     if cfg["test_rollout"]:
@@ -79,6 +75,35 @@ def main(cfg: DictConfig) -> None:
         batch = {k: v.to(cfg.device) for k, v in batch.items()}
         info = workspace.evaluate(batch)
         print(info["total_mse"])
+    if cfg["test_classifier_guidance"]:
+        classifier = hydra.utils.instantiate(cfg.classifier)
+        classifier.load_state_dict(
+            torch.load(
+                os.path.join(cfg.classifier_path, "model", "classifier.pt"),
+                map_location=cfg.device,
+            )
+        )
+        workspace.env.cond_mask_prob = 0.1
+
+        workspace.agent.model = ClassifierGuidedSampleModel(workspace.agent.model, classifier, 1)
+        results_dict = workspace.env.simulate(
+            workspace, real_time=False, lambda_values=cfg.lambda_values
+        )
+
+        rewards = [v for k, v in results_dict.items() if k.endswith("/reward_mean")]
+        rewards_std = [v for k, v in results_dict.items() if k.endswith("/reward_std")]
+        terminals = [
+            v for k, v in results_dict.items() if k.endswith("/terminals_mean")
+        ]
+
+        print(rewards)
+        print(rewards_std)
+        print(terminals)
+        plt.bar(range(len(rewards)), rewards)
+        plt.xticks(range(len(cfg.lambda_values)), cfg.lambda_values)
+        plt.xlabel("Lambda")
+        plt.ylabel("Velocity tracking return")
+        plt.show()
 
 
 if __name__ == "__main__":

@@ -261,24 +261,23 @@ class ClassifierGuidedSampleModel(nn.Module):
 
     """
 
-    def __init__(self, model, cond_func, cond_lambda: float = 2):
+    def __init__(self, model, cond_func, cond_lambda):
         super().__init__()
         self.model = model
         self.guide = cond_func
         self.cond_lambda = cond_lambda
 
-    def forward(self, x_t, cond, sigma, **kwargs):
-        cond_lambda = kwargs.get("cond_lambda", self.cond_lambda)
-        out = self.model(x_t, cond, sigma, **kwargs)
+    def forward(self, noised_action, sigma, data_dict):
+        out = self.model(noised_action, sigma, data_dict)
         with torch.enable_grad():
             x = out.clone().requires_grad_(True)
-            q_value = self.guide.predict(x, cond, kwargs["goal"])
+            q_value = self.guide(x, sigma, data_dict)
             grads = torch.autograd.grad(
                 q_value, x, grad_outputs=torch.ones_like(q_value)
             )[0]
             grads = grads.detach()
 
-        return out + cond_lambda * grads * (sigma**2).view(-1, 1, 1)
+        return out + self.cond_lambda * grads * (sigma**2).view(-1, 1, 1)
 
     def get_params(self):
         return self.model.get_params()
