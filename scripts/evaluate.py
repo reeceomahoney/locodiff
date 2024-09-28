@@ -100,11 +100,11 @@ def main(cfg: DictConfig) -> None:
         print(rewards)
         print(rewards_std)
         print(terminals)
-        plt.bar(range(len(rewards)), rewards)
-        plt.xticks(range(len(cfg.lambda_values)), cfg.lambda_values)
-        plt.xlabel("Lambda")
-        plt.ylabel("Velocity tracking return")
-        plt.show()
+        # plt.bar(range(len(rewards)), rewards)
+        # plt.xticks(range(len(cfg.lambda_values)), cfg.lambda_values)
+        # plt.xlabel("Lambda")
+        # plt.ylabel("Velocity tracking return")
+        # plt.show()
 
 
 if __name__ == "__main__":

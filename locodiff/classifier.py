@@ -262,7 +262,7 @@ class ClassifierGuidedSampleModel(nn.Module):
         out = self.model(noised_action, sigma, data_dict)
         with torch.enable_grad():
             x = out.clone().requires_grad_(True)
-            q_value = self.guide(x, sigma, data_dict)
+            q_value = self.guide(x, data_dict)
             grads = torch.autograd.grad(
                 q_value, x, grad_outputs=torch.ones_like(q_value)
             )[0]

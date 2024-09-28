@@ -9,12 +9,12 @@ hydra:
     dir: .
 
 model_store_path: logs/2024-09-27/16-20-36/
-classifier_path: logs/2024-09-27/16-27-51/
+classifier_path: logs/2024-09-28/14-11-47/
 log_wandb: True
 
 num_runs: 50
 sampling_steps: 3
-lambda_values: [0, 1, 1.2, 1.5, 2, 5, 10]
+lambda_values: [0, 1e-4, 2e-4, 3e-4, 4e-4, 5e-4]
 device: cuda
 server_port: 8080
 num_envs: 125

@@ -1,5 +1,4 @@
 import logging
-import math
 import os
 import random
 import sys
@@ -15,7 +14,6 @@ from tqdm import tqdm, trange
 import locodiff.utils as utils
 import wandb
 from locodiff.agent import Agent
-from locodiff.samplers import rand_log_logistic
 
 # A logger for this file
 log = logging.getLogger(__name__)
@@ -80,6 +78,7 @@ class ClassifierWorkspace:
             ),
             strict=False,
         )
+        self.agent.sampling_steps = sampling_steps
 
         # classifier
         self.classifier = classifier
