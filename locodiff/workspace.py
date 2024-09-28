@@ -54,11 +54,9 @@ class Workspace:
         # debug mode
         if sys.gettrace() is not None:
             self.output_dir = "/tmp"
-            wandb_mode = "disabled"
             sim_every = 10
         else:
             self.output_dir = HydraConfig.get().runtime.output_dir
-            wandb_mode = "online"
 
         # set seed
         random.seed(seed)

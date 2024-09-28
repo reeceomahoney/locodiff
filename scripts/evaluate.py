@@ -32,6 +32,7 @@ def main(cfg: DictConfig) -> None:
     model_cfg.num_envs = 25 * len(cfg.lambda_values)
     model_cfg.env.impl.num_envs = 25 * len(cfg.lambda_values)
     model_cfg.sampling_steps = cfg.sampling_steps
+    model_cfg.wandb_mode = "disabled"
 
     # set seeds
     np.random.seed(model_cfg.seed)
