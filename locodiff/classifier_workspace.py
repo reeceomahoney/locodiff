@@ -7,37 +7,34 @@ from typing import Callable, Tuple
 import numpy as np
 import torch
 import torch.nn as nn
-import wandb
 from hydra.core.hydra_config import HydraConfig
 from torch.utils.data import DataLoader
 from tqdm import tqdm, trange
 
 import locodiff.utils as utils
-from env.env import RaisimEnv
+import wandb
 from locodiff.agent import Agent
 
 # A logger for this file
 log = logging.getLogger(__name__)
 
 
-class Workspace:
+class ClassifierWorkspace:
 
     def __init__(
         self,
         agent: Agent,
+        classifier: nn.Module,
         optimizer: Callable,
         lr_scheduler: Callable,
         dataset_fn: Tuple[DataLoader, DataLoader, utils.Scaler],
-        env: RaisimEnv,
-        ema_helper: Callable,
+        agent_path: str,
         wandb_project: str,
         wandb_mode: str,
         train_steps: int,
         eval_every: int,
-        sim_every: int,
         seed: int,
         device: str,
-        use_ema: bool,
         obs_dim: int,
         action_dim: int,
         skill_dim: int,
@@ -47,45 +44,49 @@ class Workspace:
         num_envs: int,
         sampling_steps: int,
         sigma_data: float,
-        cond_mask_prob: float,
+        sigma_min: float,
+        sigma_max: float,
         return_horizon: int,
         reward_fn: str,
     ):
         # debug mode
         if sys.gettrace() is not None:
             self.output_dir = "/tmp"
-            sim_every = 10
+            wandb_mode = "disabled"
         else:
             self.output_dir = HydraConfig.get().runtime.output_dir
+            wandb_mode = "online"
 
         # set seed
         random.seed(seed)
         np.random.seed(seed)
         torch.manual_seed(seed)
 
-        # agent
-        self.agent = agent
-
-        # optimizer and lr scheduler
-        optim_groups = self.agent.get_optim_groups()
-        self.optimizer = optimizer(optim_groups)
-        self.lr_scheduler = lr_scheduler(self.optimizer)
+        # training
+        self.train_steps = int(train_steps)
+        self.eval_every = int(eval_every)
+        self.device = device
 
         # dataloader and scaler
         self.train_loader, self.test_loader, self.scaler = dataset_fn
 
-        # env
-        self.env = env
+        # agent
+        self.agent = agent
+        self.agent.load_state_dict(
+            torch.load(
+                os.path.join(agent_path, "model", "model.pt"), map_location=self.device
+            ),
+            strict=False,
+        )
+        self.agent.sampling_steps = sampling_steps
 
-        # ema
-        self.ema_helper = ema_helper(self.agent.get_params())
-        self.use_ema = use_ema
+        # classifier
+        self.classifier = classifier
 
-        # training
-        self.train_steps = int(train_steps)
-        self.eval_every = int(eval_every)
-        self.sim_every = int(sim_every)
-        self.device = device
+        # optimizer and lr scheduler
+        optim_groups = self.classifier.get_optim_groups()
+        self.optimizer = optimizer(optim_groups)
+        self.lr_scheduler = lr_scheduler(self.optimizer)
 
         # dims
         self.obs_dim = obs_dim
@@ -99,7 +100,9 @@ class Workspace:
 
         # diffusion
         self.sampling_steps = sampling_steps
-        self.cond_mask_prob = cond_mask_prob
+        self.sigma_data = sigma_data
+        self.sigma_min = sigma_min
+        self.sigma_max = sigma_max
 
         # reward
         self.return_horizon = return_horizon
@@ -107,10 +110,13 @@ class Workspace:
 
         # logging
         os.makedirs(self.output_dir + "/model", exist_ok=True)
-        wandb.init(project=wandb_project, mode=wandb_mode, dir=self.output_dir, config=wandb.config)
-        self.eval_keys = ["total_mse", "first_mse", "last_mse"]
-        if self.cond_mask_prob > 0:
-            self.eval_keys.append("output_divergence")
+        wandb.init(
+            project=wandb_project,
+            mode=wandb_mode,
+            dir=self.output_dir,
+            config=wandb.config,
+        )
+        self.eval_keys = ["mse"]
 
     ############
     # Training #
@@ -139,18 +145,13 @@ class Workspace:
                 log_info["lr"] = self.optimizer.param_groups[0]["lr"]
 
                 # save model if it has improved mse
-                if log_info["total_mse"] < best_total_mse:
-                    best_total_mse = log_info["total_mse"]
+                if log_info["mse"] < best_total_mse:
+                    best_total_mse = log_info["mse"]
                     self.save()
                     log.info("New best test loss. Stored weights have been updated!")
 
                 # log to wandb
                 wandb.log({k: v for k, v in log_info.items()}, step=step)
-
-            # simulate
-            if not step % self.sim_every:
-                results = self.env.simulate(self)
-                wandb.log(results, step=step)
 
             # train
             try:
@@ -167,91 +168,29 @@ class Workspace:
 
     def train_step(self, batch: dict):
         data_dict = self.process_batch(batch)
-        loss = self.agent.loss(data_dict)
+        num_steps = random.randint(0, self.sampling_steps - 1)
+        x_0 = self.agent(data_dict, num_steps=num_steps)
+
+        # calculate loss
+        pred_return = self.classifier(x_0, data_dict)
+        loss = nn.functional.mse_loss(pred_return, data_dict["return"])
 
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
         self.lr_scheduler.step()
 
-        self.ema_helper.update(self.agent.parameters())
         return loss.item()
 
     @torch.no_grad()
     def evaluate(self, batch: dict) -> dict:
-        info = {}
         data_dict = self.process_batch(batch)
+        num_steps = random.randint(0, self.sampling_steps - 1)
+        x_0 = self.agent(data_dict, num_steps=num_steps)
 
-        if self.use_ema:
-            self.ema_helper.store(self.agent.parameters())
-            self.ema_helper.copy_to(self.agent.parameters())
-
-        if self.cond_mask_prob > 0:
-            x_0, x_0_max_return = self.agent(data_dict)
-            x_0 = self.scaler.clip(x_0)
-            x_0 = self.scaler.inverse_scale_output(x_0)
-
-            # divergence between normal and max_return outputs
-            x_0_max_return = self.scaler.clip(x_0_max_return)
-            x_0_max_return = self.scaler.inverse_scale_output(x_0_max_return)
-            output_divergence = torch.abs(x_0 - x_0_max_return).mean().item()
-            info["output_divergence"] = output_divergence
-        else:
-            x_0 = self.agent(data_dict)
-            x_0 = self.scaler.clip(x_0)
-            x_0 = self.scaler.inverse_scale_output(x_0)
-
-        # calculate the MSE
-        raw_action = self.scaler.inverse_scale_output(data_dict["action"])
-        mse = nn.functional.mse_loss(x_0, raw_action, reduction="none")
-        total_mse = mse.mean().item()
-        first_mse = mse[:, 0, :].mean().item()
-        last_mse = mse[:, -1, :].mean().item()
-
-        # restore the previous model parameters
-        if self.use_ema:
-            self.ema_helper.restore(self.agent.parameters())
-
-        info["total_mse"] = total_mse
-        info["first_mse"] = first_mse
-        info["last_mse"] = last_mse
-
-        return info
-
-    ##############
-    # Inference #
-    ##############
-
-    @torch.no_grad()
-    def __call__(self, batch: dict, new_sampling_steps=None):
-        batch = self.update_history(batch)
-        data_dict = self.process_batch(batch)
-
-        if new_sampling_steps is not None:
-            self.agent.sampling_steps = new_sampling_steps
-
-        if self.use_ema:
-            self.ema_helper.store(self.agent.parameters())
-            self.ema_helper.copy_to(self.agent.parameters())
-
-        if self.cond_mask_prob > 0:
-            pred_action, _ = self.agent(data_dict)
-        else:
-            pred_action = self.agent(data_dict)
-
-        pred_action = self.scaler.clip(pred_action)
-        pred_action = self.scaler.inverse_scale_output(pred_action)
-        pred_action = pred_action.cpu().numpy()
-        pred_action = pred_action[:, : self.T_action].copy()
-
-        if self.use_ema:
-            self.ema_helper.restore(self.agent.parameters())
-
-        return pred_action
-
-    def reset(self, done):
-        self.obs_hist[done] = 0
-        self.skill_hist[done] = 0
+        pred_return = self.classifier(x_0, data_dict)
+        mse = nn.functional.mse_loss(pred_return, data_dict["return"], reduction="none")
+        return {"mse": mse.mean().item()}
 
     ######################
     # Saving and Loading #
@@ -260,8 +199,10 @@ class Workspace:
     def load(self, weights_path: str) -> None:
         model_dir = os.path.join(weights_path, "model")
 
-        self.agent.load_state_dict(
-            torch.load(os.path.join(model_dir, "model.pt"), map_location=self.device),
+        self.classifier.load_state_dict(
+            torch.load(
+                os.path.join(model_dir, "classifier.pt"), map_location=self.device
+            ),
             strict=False,
         )
 
@@ -276,15 +217,9 @@ class Workspace:
 
     def save(self) -> None:
         model_dir = os.path.join(self.output_dir, "model")
-
-        if self.use_ema:
-            self.ema_helper.store(self.agent.parameters())
-            self.ema_helper.copy_to(self.agent.parameters())
-
-        torch.save(self.agent.state_dict(), os.path.join(model_dir, "model.pt"))
-
-        if self.use_ema:
-            self.ema_helper.restore(self.agent.parameters())
+        torch.save(
+            self.classifier.state_dict(), os.path.join(model_dir, "classifier.pt")
+        )
 
         # Save scaler attributes
         scaler_state = ["x_max", "x_min", "y_max", "y_min", "x_mean", "x_std", "y_mean"]
@@ -320,7 +255,7 @@ class Workspace:
             action = self.scaler.scale_output(
                 torch.cat(
                     [
-                        # raw_obs[:, self.T_cond - 1 : self.T_cond + self.T - 1],
+                        raw_obs[:, self.T_cond - 1 : self.T_cond + self.T - 1],
                         raw_action[:, self.T_cond - 1 : self.T_cond + self.T - 1],
                     ],
                     dim=-1,
@@ -352,15 +287,16 @@ class Workspace:
 
     def compute_returns(self, obs, vel_cmd):
         rewards = utils.reward_function(obs, vel_cmd, self.reward_fn)
-        rewards = (
-            rewards[:, self.T_cond - 1 : self.T_cond + self.return_horizon - 1] - 1
-        )
+        rewards = rewards[:, self.T_cond - 1 :] - 1
 
         gammas = torch.tensor([0.99**i for i in range(self.return_horizon)]).to(
             self.device
         )
-        returns = (rewards * gammas).sum(dim=-1)
-        returns = torch.exp(returns / 10)
-        returns = (returns - returns.min()) / (returns.max() - returns.min())
+        returns = torch.zeros((obs.shape[0], self.T)).to(self.device)
+        for i in range(self.T):
+            ret = (rewards[:, i : i + self.return_horizon] * gammas).sum(dim=-1)
+            ret = torch.exp(ret / 10)
+            ret = (ret - ret.min()) / (ret.max() - ret.min())
+            returns[:, i] = ret
 
         return returns.unsqueeze(-1)

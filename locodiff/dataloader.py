@@ -158,11 +158,11 @@ class SlicerWrapper(Dataset):
         self.dataset = dataset
         self.T_cond = T_cond
         self.T = T
-        self.slices = self._create_slices(T_cond, return_horizon)
+        self.slices = self._create_slices(T_cond, T, return_horizon)
 
-    def _create_slices(self, T_cond, return_horizon):
+    def _create_slices(self, T_cond, T, return_horizon):
         slices = []
-        window = T_cond + return_horizon - 1
+        window = T_cond + T + return_horizon - 1
         for i in range(len(self.dataset)):
             length = len(self.dataset[i]["obs"])
             if length >= window:
@@ -226,6 +226,9 @@ def get_dataloaders_and_scaler(
         # Build the scaler
         x_data = train_set.get_all_obs()
         y_data = train_set.get_all_actions()
+        # y_data = torch.cat(
+        #     [train_set.get_all_obs(), train_set.get_all_actions()], dim=-1
+        # )
         scaler = Scaler(x_data, y_data, scaling, device)
 
         # Build the dataloaders
