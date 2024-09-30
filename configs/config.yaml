@@ -52,9 +52,9 @@ agent:
       obs_dim: ${obs_dim}
       skill_dim: ${skill_dim}
       act_dim: ${action_dim}
-      d_model: 128
-      nhead: 4
-      num_layers: 2
+      d_model: 256
+      nhead: 8
+      num_layers: 4
       T: ${T}
       T_cond: ${T_cond}
       device: ${device}
