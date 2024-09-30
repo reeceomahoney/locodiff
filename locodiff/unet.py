@@ -289,14 +289,10 @@ class ConditionalUnet1D(nn.Module):
 
         obs = data_dict["obs"]
         vel_cmd = data_dict["vel_cmd"].unsqueeze(1).expand(-1, obs.shape[1], -1)
-        obs = torch.cat([obs, vel_cmd], dim=-1)
-        # obs_emb = self.obs_emb(obs)
+        local_cond = torch.cat([obs, vel_cmd], dim=-1)
 
         returns = self.mask_cond(data_dict["return"], uncond)
-        return_emb = self.return_emb(returns)
-
-        local_cond = obs
-        global_cond = return_emb
+        global_cond = self.return_emb(returns)
 
         # 1. time
         timesteps = sigma

@@ -1,6 +1,6 @@
 _target_: locodiff.workspace.Workspace
 defaults:
-  - model: unet
+  - model: transformer
   - _self_
 
 wandb_project: locodiff
