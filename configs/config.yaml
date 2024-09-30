@@ -47,26 +47,26 @@ agent:
   model:
     _target_: locodiff.wrappers.ScalingWrapper
     sigma_data: ${sigma_data}
-    # model:
-    #   _target_: locodiff.transformer.DiffusionTransformer
-    #   obs_dim: ${obs_dim}
-    #   skill_dim: ${skill_dim}
-    #   act_dim: ${action_dim}
-    #   d_model: 128
-    #   nhead: 4
-    #   num_layers: 2
-    #   T: ${T}
-    #   T_cond: ${T_cond}
-    #   device: ${device}
-    #   cond_mask_prob: ${cond_mask_prob}
-    #   dropout: 0.0
-    #   weight_decay: 1e-3
     model:
-      _target_: locodiff.unet.ConditionalUnet1D
+      _target_: locodiff.transformer.DiffusionTransformer
       obs_dim: ${obs_dim}
-      input_dim: ${action_dim}
+      skill_dim: ${skill_dim}
+      act_dim: ${action_dim}
+      d_model: 128
+      nhead: 4
+      num_layers: 2
+      T: ${T}
+      T_cond: ${T_cond}
       device: ${device}
       cond_mask_prob: ${cond_mask_prob}
+      dropout: 0.0
+      weight_decay: 1e-3
+    # model:
+    #   _target_: locodiff.unet.ConditionalUnet1D
+    #   obs_dim: ${obs_dim}
+    #   input_dim: ${action_dim}
+    #   device: ${device}
+    #   cond_mask_prob: ${cond_mask_prob}
   noise_scheduler:
     _target_: diffusers.schedulers.scheduling_ddpm.DDPMScheduler
     num_train_timesteps: 3

@@ -8,22 +8,22 @@ hydra:
   run:
     dir: .
 
-model_store_path: logs/2024-09-27/16-20-36/
+model_store_path: logs/2024-09-30/12-18-21/
 classifier_path: logs/2024-09-28/19-48-56/
 log_wandb: True
 
 num_runs: 50
 sampling_steps: 10
-lambda_values: [0, 1e-4, 2e-4, 3e-4, 4e-4, 5e-4, 1e-3]
+lambda_values: [0, 1, 1.2, 1.5, 2, 5, 10]
 device: cuda
 server_port: 8080
 num_envs: 125
 
 # chose what to evaluate
 test_rollout: False
-test_reward_lambda: False
+test_reward_lambda: True
 test_mse: False
-test_classifier_guidance: True
+test_classifier_guidance: False
 
 classifier:
   _target_: locodiff.classifier.ClassifierTransformer
