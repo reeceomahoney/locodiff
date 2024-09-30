@@ -1,4 +1,7 @@
 _target_: locodiff.workspace.Workspace
+defaults:
+  - model: transformer
+  - _self_
 
 wandb_project: locodiff
 wandb_mode: online
@@ -29,8 +32,14 @@ cond_mask_prob: 0.1
 return_horizon: 50
 reward_fn: fwd_bwd
 
+wrapper:
+  _target_: locodiff.wrappers.ScalingWrapper
+  _partial_: true
+  sigma_data: ${sigma_data}
+
 agent:
   _target_: locodiff.agent.Agent
+  _partial_: true
   obs_dim: ${obs_dim}
   action_dim: ${action_dim}
   T: ${T}
@@ -44,29 +53,6 @@ agent:
   cond_lambda: 1
   cond_mask_prob: ${cond_mask_prob}
   device: ${device}
-  model:
-    _target_: locodiff.wrappers.ScalingWrapper
-    sigma_data: ${sigma_data}
-    model:
-      _target_: locodiff.transformer.DiffusionTransformer
-      obs_dim: ${obs_dim}
-      skill_dim: ${skill_dim}
-      act_dim: ${action_dim}
-      d_model: 256
-      nhead: 8
-      num_layers: 4
-      T: ${T}
-      T_cond: ${T_cond}
-      device: ${device}
-      cond_mask_prob: ${cond_mask_prob}
-      dropout: 0.0
-      weight_decay: 1e-3
-    # model:
-    #   _target_: locodiff.unet.ConditionalUnet1D
-    #   obs_dim: ${obs_dim}
-    #   input_dim: ${action_dim}
-    #   device: ${device}
-    #   cond_mask_prob: ${cond_mask_prob}
   noise_scheduler:
     _target_: diffusers.schedulers.scheduling_ddpm.DDPMScheduler
     num_train_timesteps: 3

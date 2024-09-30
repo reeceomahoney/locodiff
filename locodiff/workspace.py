@@ -24,7 +24,9 @@ class Workspace:
 
     def __init__(
         self,
-        agent: Agent,
+        model,
+        wrapper: Callable,
+        agent: Callable,
         optimizer: Callable,
         lr_scheduler: Callable,
         dataset_fn: Tuple[DataLoader, DataLoader, utils.Scaler],
@@ -64,7 +66,7 @@ class Workspace:
         torch.manual_seed(seed)
 
         # agent
-        self.agent = agent
+        self.agent = agent(model=wrapper(model=model))
 
         # optimizer and lr scheduler
         optim_groups = self.agent.get_optim_groups()
@@ -107,7 +109,12 @@ class Workspace:
 
         # logging
         os.makedirs(self.output_dir + "/model", exist_ok=True)
-        wandb.init(project=wandb_project, mode=wandb_mode, dir=self.output_dir, config=wandb.config)
+        wandb.init(
+            project=wandb_project,
+            mode=wandb_mode,
+            dir=self.output_dir,
+            config=wandb.config,
+        )
         self.eval_keys = ["total_mse", "first_mse", "last_mse"]
         if self.cond_mask_prob > 0:
             self.eval_keys.append("output_divergence")
