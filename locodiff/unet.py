@@ -115,11 +115,14 @@ class ConditionalResidualBlock1D(nn.Module):
 class ConditionalUnet1D(nn.Module):
     def __init__(
         self,
+        obs_dim,
         input_dim,
+        device,
+        cond_mask_prob,
         local_cond_dim=None,
         global_cond_dim=None,
-        diffusion_step_embed_dim=256,
-        down_dims=[256, 512, 1024],
+        diffusion_step_embed_dim=128,
+        down_dims=[128, 256, 512],
         kernel_size=3,
         n_groups=8,
         cond_predict_scale=False,
@@ -136,11 +139,13 @@ class ConditionalUnet1D(nn.Module):
             nn.Linear(dsed * 4, dsed),
         )
         cond_dim = dsed
+        global_cond_dim = 128
         if global_cond_dim is not None:
             cond_dim += global_cond_dim
 
         in_out = list(zip(all_dims[:-1], all_dims[1:]))
 
+        local_cond_dim = obs_dim + 1
         local_cond_encoder = None
         if local_cond_dim is not None:
             _, dim_out = in_out[0]
@@ -249,13 +254,18 @@ class ConditionalUnet1D(nn.Module):
             nn.Conv1d(start_dim, input_dim, 1),
         )
 
-        self.obs_emb = nn.Linear(obs_dim, start_dim)
+        self.obs_emb = nn.Linear(obs_dim + 1, start_dim)
+        self.return_emb = nn.Linear(1, start_dim)
+
+        self.cond_mask_prob = cond_mask_prob
 
         self.diffusion_step_encoder = diffusion_step_encoder
         self.local_cond_encoder = local_cond_encoder
         self.up_modules = up_modules
         self.down_modules = down_modules
         self.final_conv = final_conv
+
+        self.to(device)
 
         logger.info(
             "number of parameters: %e", sum(p.numel() for p in self.parameters())
@@ -275,17 +285,18 @@ class ConditionalUnet1D(nn.Module):
         global_cond: (B,global_cond_dim)
         output: (B,T,input_dim)
         """
-        sample = noised_action
+        sample = einops.rearrange(noised_action, "b t h -> b h t")
 
         obs = data_dict["obs"]
         vel_cmd = data_dict["vel_cmd"].unsqueeze(1).expand(-1, obs.shape[1], -1)
         obs = torch.cat([obs, vel_cmd], dim=-1)
-        obs_emb = self.obs_emb(obs)
+        # obs_emb = self.obs_emb(obs)
 
         returns = self.mask_cond(data_dict["return"], uncond)
-        return_emb = self.return_emb(returns).unsqueeze(1)
+        return_emb = self.return_emb(returns)
 
-        global_cond = torch.cat([return_emb, obs_emb], dim=1)
+        local_cond = obs
+        global_cond = return_emb
 
         # 1. time
         timesteps = sigma
@@ -303,10 +314,22 @@ class ConditionalUnet1D(nn.Module):
 
         global_feature = torch.cat([global_feature, global_cond], dim=-1)
 
+        # encode local features
+        h_local = list()
+        if self.local_cond_encoder is not None:
+            local_cond = einops.rearrange(local_cond, "b t h -> b h t")
+            resnet, resnet2 = self.local_cond_encoder
+            x = resnet(local_cond, global_feature)
+            h_local.append(x)
+            x = resnet2(local_cond, global_feature)
+            h_local.append(x)
+
         x = sample
         h = []
         for idx, (resnet, resnet2, downsample) in enumerate(self.down_modules):
             x = resnet(x, global_feature)
+            if idx == 0 and len(h_local) > 0:
+                x = x + h_local[0]
             x = resnet2(x, global_feature)
             h.append(x)
             x = downsample(x)
@@ -317,16 +340,14 @@ class ConditionalUnet1D(nn.Module):
         for idx, (resnet, resnet2, upsample) in enumerate(self.up_modules):
             x = torch.cat((x, h.pop()), dim=1)
             x = resnet(x, global_feature)
-            # The correct condition should be:
-            # if idx == (len(self.up_modules)-1) and len(h_local) > 0:
-            # However this change will break compatibility with published checkpoints.
-            # Therefore it is left as a comment.
+            if idx == (len(self.up_modules)) and len(h_local) > 0:
+                x = x + h_local[1]
             x = resnet2(x, global_feature)
             x = upsample(x)
 
         x = self.final_conv(x)
 
-        x = einops.rearrange(x, "b t h -> b h t")
+        x = einops.rearrange(x, "b h t -> b t h")
         return x
 
     def mask_cond(self, cond, force_mask=False):
@@ -341,3 +362,9 @@ class ConditionalUnet1D(nn.Module):
             return cond
         else:
             return cond
+
+    def get_optim_groups(self):
+        return [{"params": self.parameters(), "weight_decay": 0.0}]
+
+    def get_params(self):
+        return self.parameters()

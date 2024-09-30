@@ -242,7 +242,7 @@ class Workspace:
         pred_action = self.scaler.clip(pred_action)
         pred_action = self.scaler.inverse_scale_output(pred_action)
         pred_action = pred_action.cpu().numpy()
-        pred_action = pred_action[:, : self.T_action, self.obs_dim :].copy()
+        pred_action = pred_action[:, : self.T_action].copy()
 
         if self.use_ema:
             self.ema_helper.restore(self.agent.parameters())
@@ -309,8 +309,8 @@ class Workspace:
             vel_cmd = self.sample_vel_cmd(raw_obs.shape[0])
 
         returns = batch.get("return", None)
-        # if returns is None:
-        #     returns = self.compute_returns(raw_obs, vel_cmd)
+        if returns is None:
+            returns = self.compute_returns(raw_obs, vel_cmd)
 
         obs = self.scaler.scale_input(raw_obs[:, : self.T_cond])
 
@@ -320,7 +320,7 @@ class Workspace:
             action = self.scaler.scale_output(
                 torch.cat(
                     [
-                        raw_obs[:, self.T_cond - 1 : self.T_cond + self.T - 1],
+                        # raw_obs[:, self.T_cond - 1 : self.T_cond + self.T - 1],
                         raw_action[:, self.T_cond - 1 : self.T_cond + self.T - 1],
                     ],
                     dim=-1,
