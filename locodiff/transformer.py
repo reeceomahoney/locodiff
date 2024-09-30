@@ -37,7 +37,7 @@ class DiffusionTransformer(nn.Module):
         self.weight_decay = weight_decay
         self.ddpm = ddpm
 
-        self.action_emb = nn.Linear(self.obs_dim + self.act_dim, self.d_model)
+        self.action_emb = nn.Linear(self.act_dim, self.d_model)
         self.obs_emb = nn.Linear(self.obs_dim + 1, self.d_model)
         self.sigma_emb = nn.Linear(1, self.d_model)
         self.vel_cmd_emb = nn.Linear(3, self.d_model)
@@ -69,7 +69,7 @@ class DiffusionTransformer(nn.Module):
         self.register_buffer("mask", mask)
 
         self.ln_f = nn.LayerNorm(self.d_model)
-        self.action_pred = nn.Linear(d_model, self.obs_dim + self.act_dim)
+        self.action_pred = nn.Linear(d_model, self.act_dim)
 
         self.apply(self._init_weights)
         self.to(device)
