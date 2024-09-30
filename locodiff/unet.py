@@ -139,7 +139,7 @@ class ConditionalUnet1D(nn.Module):
             nn.Linear(dsed * 4, dsed),
         )
         cond_dim = dsed
-        global_cond_dim = 128
+        global_cond_dim = diffusion_step_embed_dim
         if global_cond_dim is not None:
             cond_dim += global_cond_dim
 
