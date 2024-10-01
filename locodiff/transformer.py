@@ -81,7 +81,7 @@ class DiffusionTransformer(nn.Module):
         mask = self.generate_mask(T)
         self.register_buffer("mask", mask)
 
-        encoder_mask = self.generate_mask(T_cond + 1)
+        encoder_mask = self.generate_mask(T_cond + 2)
         self.register_buffer("encoder_mask", encoder_mask)
 
         self.ln_f = nn.LayerNorm(self.d_model)
