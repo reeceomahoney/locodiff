@@ -117,13 +117,13 @@ class ConditionalUnet1D(nn.Module):
         self,
         obs_dim,
         input_dim,
-        diffusion_step_embed_dim,
+        T_cond,
+        cond_embed_dim,
         down_dims,
         device,
         cond_mask_prob,
         weight_decay: float,
         local_cond_dim=None,
-        global_cond_dim=None,
         kernel_size=3,
         n_groups=8,
         cond_predict_scale=False,
@@ -131,18 +131,7 @@ class ConditionalUnet1D(nn.Module):
         super().__init__()
         all_dims = [input_dim] + list(down_dims)
         start_dim = down_dims[0]
-
-        dsed = diffusion_step_embed_dim
-        diffusion_step_encoder = nn.Sequential(
-            SinusoidalPosEmb(dsed),
-            nn.Linear(dsed, dsed * 4),
-            nn.Mish(),
-            nn.Linear(dsed * 4, dsed),
-        )
-        cond_dim = dsed
-        global_cond_dim = 2*dsed
-        if global_cond_dim is not None:
-            cond_dim += global_cond_dim
+        cond_dim = (2 + T_cond) * cond_embed_dim
 
         in_out = list(zip(all_dims[:-1], all_dims[1:]))
 
@@ -255,13 +244,19 @@ class ConditionalUnet1D(nn.Module):
             nn.Conv1d(start_dim, input_dim, 1),
         )
 
-        self.obs_emb = nn.Linear(2*(obs_dim + 1), dsed)
-        self.return_emb = nn.Linear(1, dsed)
+        self.obs_emb = nn.Linear(obs_dim + 1, cond_embed_dim)
+        self.return_emb = nn.Linear(1, cond_embed_dim)
+
+        self.sigma_encoder = nn.Sequential(
+            SinusoidalPosEmb(cond_embed_dim),
+            nn.Linear(cond_embed_dim, cond_embed_dim * 4),
+            nn.Mish(),
+            nn.Linear(cond_embed_dim * 4, cond_embed_dim),
+        )
 
         self.cond_mask_prob = cond_mask_prob
         self.weight_decay = weight_decay
 
-        self.diffusion_step_encoder = diffusion_step_encoder
         self.local_cond_encoder = local_cond_encoder
         self.up_modules = up_modules
         self.down_modules = down_modules
@@ -292,18 +287,17 @@ class ConditionalUnet1D(nn.Module):
         obs = data_dict["obs"]
         vel_cmd = data_dict["vel_cmd"].unsqueeze(1).expand(-1, obs.shape[1], -1)
         obs = torch.cat([obs, vel_cmd], dim=-1)
-        obs_emb = self.obs_emb(obs.reshape(obs.shape[0], -1))
-        # local_cond = torch.cat([obs, vel_cmd], dim=-1)
+        obs_emb = self.obs_emb(obs).reshape(obs.shape[0], -1)
 
         returns = self.mask_cond(data_dict["return"], uncond)
-        global_cond = self.return_emb(returns)
-        global_cond = torch.cat([global_cond, obs_emb], dim=-1)
+        return_emb = self.return_emb(returns)
 
-        global_feature = self.diffusion_step_encoder(sigma)
-        global_feature = torch.cat([global_feature, global_cond], dim=-1)
+        sigma_emb = self.sigma_encoder(sigma)
+        global_feature = torch.cat([sigma_emb, return_emb, obs_emb], dim=-1)
 
         # encode local features
         h_local = list()
+        local_cond = None
         if self.local_cond_encoder is not None:
             local_cond = einops.rearrange(local_cond, "b t h -> b h t")
             resnet, resnet2 = self.local_cond_encoder
