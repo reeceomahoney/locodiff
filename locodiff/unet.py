@@ -140,13 +140,13 @@ class ConditionalUnet1D(nn.Module):
             nn.Linear(dsed * 4, dsed),
         )
         cond_dim = dsed
-        global_cond_dim = diffusion_step_embed_dim
+        global_cond_dim = 2*dsed
         if global_cond_dim is not None:
             cond_dim += global_cond_dim
 
         in_out = list(zip(all_dims[:-1], all_dims[1:]))
 
-        local_cond_dim = obs_dim + 1
+        # local_cond_dim = obs_dim + 1
         local_cond_encoder = None
         if local_cond_dim is not None:
             _, dim_out = in_out[0]
@@ -255,7 +255,7 @@ class ConditionalUnet1D(nn.Module):
             nn.Conv1d(start_dim, input_dim, 1),
         )
 
-        self.obs_emb = nn.Linear(obs_dim + 1, start_dim)
+        self.obs_emb = nn.Linear(2*(obs_dim + 1), dsed)
         self.return_emb = nn.Linear(1, dsed)
 
         self.cond_mask_prob = cond_mask_prob
@@ -291,10 +291,13 @@ class ConditionalUnet1D(nn.Module):
 
         obs = data_dict["obs"]
         vel_cmd = data_dict["vel_cmd"].unsqueeze(1).expand(-1, obs.shape[1], -1)
-        local_cond = torch.cat([obs, vel_cmd], dim=-1)
+        obs = torch.cat([obs, vel_cmd], dim=-1)
+        obs_emb = self.obs_emb(obs.reshape(obs.shape[0], -1))
+        # local_cond = torch.cat([obs, vel_cmd], dim=-1)
 
         returns = self.mask_cond(data_dict["return"], uncond)
         global_cond = self.return_emb(returns)
+        global_cond = torch.cat([global_cond, obs_emb], dim=-1)
 
         global_feature = self.diffusion_step_encoder(sigma)
         global_feature = torch.cat([global_feature, global_cond], dim=-1)
