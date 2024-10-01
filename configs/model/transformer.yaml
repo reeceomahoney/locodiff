@@ -2,9 +2,9 @@ _target_: locodiff.transformer.DiffusionTransformer
 obs_dim: ${obs_dim}
 skill_dim: ${skill_dim}
 act_dim: ${action_dim}
-d_model: 1024
-nhead: 16
-num_layers: 6
+d_model: 128
+nhead: 4
+num_layers: 2
 T: ${T}
 T_cond: ${T_cond}
 device: ${device}
