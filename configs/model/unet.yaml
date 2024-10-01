@@ -3,7 +3,7 @@ obs_dim: ${obs_dim}
 input_dim: ${action_dim}
 T_cond: ${T_cond}
 cond_embed_dim: 128
-down_dims: [128, 256, 512]
+down_dims: [64, 128, 256, 512]
 device: ${device}
 cond_mask_prob: ${cond_mask_prob}
 weight_decay: 1e-6
