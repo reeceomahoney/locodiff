@@ -96,6 +96,8 @@ class DiffusionTransformer(nn.Module):
     def _init_weights(self, module):
         ignore_types = (
             nn.Dropout,
+            nn.TransformerEncoderLayer,
+            nn.TransformerEncoder,
             nn.TransformerDecoderLayer,
             nn.TransformerDecoder,
             nn.ModuleList,
