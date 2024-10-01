@@ -1,7 +1,8 @@
 _target_: locodiff.unet.ConditionalUnet1D
 obs_dim: ${obs_dim}
 input_dim: ${action_dim}
-diffusion_step_embed_dim: 64
-down_dims: [64, 128, 256]
+diffusion_step_embed_dim: 128
+down_dims: [128, 256, 512]
 device: ${device}
 cond_mask_prob: ${cond_mask_prob}
+weight_decay: 1e-3

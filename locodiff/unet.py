@@ -121,6 +121,7 @@ class ConditionalUnet1D(nn.Module):
         down_dims,
         device,
         cond_mask_prob,
+        weight_decay: float,
         local_cond_dim=None,
         global_cond_dim=None,
         kernel_size=3,
@@ -255,15 +256,10 @@ class ConditionalUnet1D(nn.Module):
         )
 
         self.obs_emb = nn.Linear(obs_dim + 1, start_dim)
-        self.return_emb = nn.Sequential(
-            nn.Linear(1, dsed),
-            nn.Mish(),
-            nn.Linear(dsed, dsed * 4),
-            nn.Mish(),
-            nn.Linear(dsed * 4, dsed),
-        )
+        self.return_emb = nn.Linear(1, dsed)
 
         self.cond_mask_prob = cond_mask_prob
+        self.weight_decay = weight_decay
 
         self.diffusion_step_encoder = diffusion_step_encoder
         self.local_cond_encoder = local_cond_encoder
@@ -366,7 +362,7 @@ class ConditionalUnet1D(nn.Module):
             return cond
 
     def get_optim_groups(self):
-        return [{"params": self.parameters(), "weight_decay": 0.0}]
+        return [{"params": self.parameters(), "weight_decay": self.weight_decay}]
 
     def get_params(self):
         return self.parameters()
