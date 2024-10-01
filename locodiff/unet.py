@@ -78,7 +78,9 @@ class ConditionalResidualBlock1D(nn.Module):
         self.out_channels = out_channels
         self.cond_encoder = nn.Sequential(
             nn.Mish(),
-            nn.Linear(cond_dim, cond_channels),
+            nn.Linear(cond_dim, 512),
+            nn.Mish(),
+            nn.Linear(512, cond_channels),
             Rearrange("batch t -> batch t 1"),
         )
 
