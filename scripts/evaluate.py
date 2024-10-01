@@ -54,7 +54,6 @@ def main(cfg: DictConfig) -> None:
         results_dict = workspace.env.simulate(
             workspace, real_time=False, lambda_values=cfg.lambda_values
         )
-        # returns = [v for k, v in results_dict.items() if k.endswith("/return_mean")]
         rewards = [v for k, v in results_dict.items() if k.endswith("/reward_mean")]
         rewards_std = [v for k, v in results_dict.items() if k.endswith("/reward_std")]
         terminals = [
@@ -62,7 +61,6 @@ def main(cfg: DictConfig) -> None:
         ]
 
         print(rewards)
-        print(rewards_std)
         print(terminals)
         plt.bar(range(len(rewards)), rewards)
         plt.xticks(range(len(cfg.lambda_values)), cfg.lambda_values)
