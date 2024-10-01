@@ -255,7 +255,7 @@ class ConditionalUnet1D(nn.Module):
         )
 
         self.obs_emb = nn.Linear(obs_dim + 1, start_dim)
-        self.return_emb = nn.Linear(1, start_dim)
+        self.return_emb = nn.Linear(1, diffusion_step_embed_dim)
 
         self.cond_mask_prob = cond_mask_prob
 
