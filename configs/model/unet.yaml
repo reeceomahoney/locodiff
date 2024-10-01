@@ -5,4 +5,4 @@ diffusion_step_embed_dim: 128
 down_dims: [128, 256, 512]
 device: ${device}
 cond_mask_prob: ${cond_mask_prob}
-weight_decay: 1e-3
+weight_decay: 1e-6
