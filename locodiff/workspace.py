@@ -1,10 +1,8 @@
 import logging
 import os
-import random
 import sys
 from typing import Callable, Tuple
 
-import numpy as np
 import torch
 import torch.nn as nn
 import wandb
