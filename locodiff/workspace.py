@@ -34,7 +34,6 @@ class Workspace:
         train_steps: int,
         eval_every: int,
         sim_every: int,
-        seed: int,
         device: str,
         use_ema: bool,
         obs_dim: int,

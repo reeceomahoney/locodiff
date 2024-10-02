@@ -11,9 +11,9 @@ from omegaconf import DictConfig, OmegaConf
 @hydra.main(version_base=None, config_path="../configs", config_name="config.yaml")
 def main(cfg: DictConfig) -> None:
     # set seed
-    random.seed(cfg.seed)
-    np.random.seed(cfg.seed)
-    torch.manual_seed(cfg.seed)
+    random.seed(cfg.env.seed)
+    np.random.seed(cfg.env.seed)
+    torch.manual_seed(cfg.env.seed)
 
     # debug mode
     if sys.gettrace() is not None:

@@ -10,7 +10,6 @@ wandb_mode: online
 train_steps: 5e5
 eval_every: 1000
 sim_every: 5000
-seed: 6
 device: cuda
 use_ema: True
 
@@ -92,7 +91,7 @@ dataset_fn:
 
 env:
   _target_: env.env.RaisimEnv
-  seed: ${seed}
+  seed: 6
   T: ${T}
   T_cond: ${T_cond}
   T_action: ${T_action}
