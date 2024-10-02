@@ -30,7 +30,7 @@ cond_mask_prob: 0.1
 
 # reward
 return_horizon: 50
-reward_fn: fwd_bwd
+reward_fn: vel_target_var
 
 wrapper:
   _target_: locodiff.wrappers.ScalingWrapper

@@ -245,7 +245,7 @@ class ConditionalUnet1D(nn.Module):
             nn.Conv1d(start_dim, input_dim, 1),
         )
 
-        self.obs_emb = nn.Linear(obs_dim + 1, cond_embed_dim)
+        self.obs_emb = nn.Linear(obs_dim + 3, cond_embed_dim)
         self.return_emb = nn.Linear(1, cond_embed_dim)
 
         self.sigma_encoder = nn.Sequential(
