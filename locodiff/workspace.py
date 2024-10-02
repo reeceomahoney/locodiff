@@ -312,8 +312,8 @@ class Workspace:
         skill = batch["skill"]
 
         vel_cmd = batch.get("vel_cmd", None)
-        # if vel_cmd is None:
-        #     vel_cmd = self.sample_vel_cmd(raw_obs.shape[0])
+        if vel_cmd is None:
+            vel_cmd = self.sample_vel_cmd(raw_obs.shape[0])
 
         returns = batch.get("return", None)
         if returns is None:
@@ -354,8 +354,15 @@ class Workspace:
         return {k: v.clone().to(self.device) for k, v in batch.items()}
 
     def sample_vel_cmd(self, batch_size):
-        vel_cmd = torch.randint(0, 2, (batch_size, 1), device=self.device).float()
-        return vel_cmd * 2 - 1
+        # vel_cmd = torch.randint(0, 2, (batch_size, 1), device=self.device).float()
+        # return vel_cmd * 2 - 1
+        vel_limits = [0.8, 0.5, 1.0]
+        vel_cmd = torch.rand(batch_size, 3, device=self.device)
+
+        for i in range(3):
+            vel_cmd[i] = vel_cmd[i] * 2 * vel_limits[i] - vel_limits[i]
+
+        return vel_cmd
 
     def compute_returns(self, obs, vel_cmd):
         rewards = utils.reward_function(obs, vel_cmd, self.reward_fn)
