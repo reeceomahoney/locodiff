@@ -25,7 +25,6 @@ num_envs: 150
 
 # diffusion
 sampling_steps: 3
-sigma_data: 0.5
 cond_mask_prob: 0.1
 
 # reward
@@ -35,7 +34,7 @@ reward_fn: vel_target_var
 wrapper:
   _target_: locodiff.wrappers.ScalingWrapper
   _partial_: true
-  sigma_data: ${sigma_data}
+  sigma_data: ${agent.sigma_data}
 
 agent:
   _target_: locodiff.agent.Agent
@@ -47,7 +46,7 @@ agent:
   num_envs: ${num_envs}
   sampling_steps: ${sampling_steps}
   sampler_type: ddim
-  sigma_data: ${sigma_data}
+  sigma_data: 0.5
   sigma_min: 0.001
   sigma_max: 80
   cond_lambda: 1

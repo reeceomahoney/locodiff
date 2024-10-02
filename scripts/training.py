@@ -1,12 +1,20 @@
+import random
 import sys
 
 import hydra
+import numpy as np
+import torch
 import wandb
 from omegaconf import DictConfig, OmegaConf
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="config.yaml")
 def main(cfg: DictConfig) -> None:
+    # set seed
+    random.seed(cfg.seed)
+    np.random.seed(cfg.seed)
+    torch.manual_seed(cfg.seed)
+
     # debug mode
     if sys.gettrace() is not None:
         cfg.wandb_mode = "disabled"

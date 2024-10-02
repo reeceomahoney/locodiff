@@ -14,7 +14,6 @@ from tqdm import tqdm, trange
 
 import locodiff.utils as utils
 from env.env import RaisimEnv
-from locodiff.agent import Agent
 
 # A logger for this file
 log = logging.getLogger(__name__)
@@ -48,7 +47,6 @@ class Workspace:
         T_action: int,
         num_envs: int,
         sampling_steps: int,
-        sigma_data: float,
         cond_mask_prob: float,
         return_horizon: int,
         reward_fn: str,
@@ -59,12 +57,6 @@ class Workspace:
             sim_every = 10
         else:
             self.output_dir = HydraConfig.get().runtime.output_dir
-
-        # set seed
-        random.seed(seed)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        torch.backends.cudnn.deterministic = True
 
         # agent
         self.agent = agent(model=wrapper(model=model))
