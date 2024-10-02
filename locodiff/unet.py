@@ -132,7 +132,7 @@ class ConditionalUnet1D(nn.Module):
         super().__init__()
         all_dims = [input_dim] + list(down_dims)
         start_dim = down_dims[0]
-        cond_dim = (2 + T_cond) * cond_embed_dim
+        cond_dim = (3 + T_cond) * cond_embed_dim
 
         in_out = list(zip(all_dims[:-1], all_dims[1:]))
 
@@ -245,7 +245,8 @@ class ConditionalUnet1D(nn.Module):
             nn.Conv1d(start_dim, input_dim, 1),
         )
 
-        self.obs_emb = nn.Linear(obs_dim + 3, cond_embed_dim)
+        self.obs_emb = nn.Linear(obs_dim, cond_embed_dim)
+        self.vel_cmd_emb = nn.Linear(3, cond_embed_dim)
         self.return_emb = nn.Linear(1, cond_embed_dim)
 
         self.sigma_encoder = nn.Sequential(
@@ -286,15 +287,16 @@ class ConditionalUnet1D(nn.Module):
         sample = einops.rearrange(noised_action, "b t h -> b h t")
 
         obs = data_dict["obs"]
-        vel_cmd = data_dict["vel_cmd"].unsqueeze(1).expand(-1, obs.shape[1], -1)
-        obs = torch.cat([obs, vel_cmd], dim=-1)
+        # vel_cmd = data_dict["vel_cmd"].unsqueeze(1).expand(-1, obs.shape[1], -1)
+        # obs = torch.cat([obs, vel_cmd], dim=-1)
         obs_emb = self.obs_emb(obs).reshape(obs.shape[0], -1)
+        vel_cmd_emb = self.vel_cmd_emb(data_dict["vel_cmd"]).reshape(obs.shape[0], -1)
 
         returns = self.mask_cond(data_dict["return"], uncond)
         return_emb = self.return_emb(returns)
 
         sigma_emb = self.sigma_encoder(sigma)
-        global_feature = torch.cat([sigma_emb, return_emb, obs_emb], dim=-1)
+        global_feature = torch.cat([sigma_emb, return_emb, vel_cmd_emb, obs_emb], dim=-1)
 
         # encode local features
         h_local = list()

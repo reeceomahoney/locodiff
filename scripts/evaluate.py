@@ -34,8 +34,8 @@ def main(cfg: DictConfig) -> None:
     model_cfg.wandb_mode = "disabled"
 
     # set seeds
-    np.random.seed(model_cfg.seed)
-    torch.manual_seed(model_cfg.seed)
+    np.random.seed(model_cfg.env.seed)
+    torch.manual_seed(model_cfg.env.seed)
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
 
