@@ -7,4 +7,4 @@ down_dims: [256, 512, 1024]
 device: ${device}
 cond_mask_prob: ${cond_mask_prob}
 weight_decay: 1e-6
-cond_predict_scale: False
+cond_predict_scale: True

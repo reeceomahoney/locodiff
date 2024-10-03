@@ -78,9 +78,7 @@ class ConditionalResidualBlock1D(nn.Module):
         self.out_channels = out_channels
         self.cond_encoder = nn.Sequential(
             nn.Mish(),
-            nn.Linear(cond_dim, 512),
-            nn.Mish(),
-            nn.Linear(512, cond_channels),
+            nn.Linear(cond_dim, cond_channels),
             Rearrange("batch t -> batch t 1"),
         )
 
@@ -132,7 +130,9 @@ class ConditionalUnet1D(nn.Module):
         super().__init__()
         all_dims = [input_dim] + list(down_dims)
         start_dim = down_dims[0]
-        cond_dim = (3 + T_cond) * cond_embed_dim
+
+        # diffusion step embedding, observations, vel_cmd, return
+        cond_dim = cond_embed_dim + (obs_dim * T_cond) + 4
 
         in_out = list(zip(all_dims[:-1], all_dims[1:]))
 
@@ -245,9 +245,9 @@ class ConditionalUnet1D(nn.Module):
             nn.Conv1d(start_dim, input_dim, 1),
         )
 
-        self.obs_emb = nn.Linear(obs_dim, cond_embed_dim)
-        self.vel_cmd_emb = nn.Linear(3, cond_embed_dim)
-        self.return_emb = nn.Linear(1, cond_embed_dim)
+        # self.obs_emb = nn.Linear(obs_dim, cond_embed_dim)
+        # self.vel_cmd_emb = nn.Linear(3, cond_embed_dim)
+        # self.return_emb = nn.Linear(1, cond_embed_dim)
 
         self.sigma_encoder = nn.Sequential(
             SinusoidalPosEmb(cond_embed_dim),
@@ -286,17 +286,12 @@ class ConditionalUnet1D(nn.Module):
         """
         sample = einops.rearrange(noised_action, "b t h -> b h t")
 
-        obs = data_dict["obs"]
-        # vel_cmd = data_dict["vel_cmd"].unsqueeze(1).expand(-1, obs.shape[1], -1)
-        # obs = torch.cat([obs, vel_cmd], dim=-1)
-        obs_emb = self.obs_emb(obs).reshape(obs.shape[0], -1)
-        vel_cmd_emb = self.vel_cmd_emb(data_dict["vel_cmd"]).reshape(obs.shape[0], -1)
-
+        obs = data_dict["obs"].reshape(sample.shape[0], -1)
+        vel_cmd = data_dict["vel_cmd"]
         returns = self.mask_cond(data_dict["return"], uncond)
-        return_emb = self.return_emb(returns)
-
         sigma_emb = self.sigma_encoder(sigma)
-        global_feature = torch.cat([sigma_emb, return_emb, vel_cmd_emb, obs_emb], dim=-1)
+
+        global_feature = torch.cat([sigma_emb, returns, vel_cmd, obs], dim=-1)
 
         # encode local features
         h_local = list()
