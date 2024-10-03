@@ -1,4 +1,5 @@
 import logging
+from functools import partial
 
 import einops
 import torch
@@ -135,6 +136,13 @@ class ConditionalUnet1D(nn.Module):
         cond_dim = cond_embed_dim + (obs_dim * T_cond) + 4
 
         in_out = list(zip(all_dims[:-1], all_dims[1:]))
+        CondResBlock = partial(
+            ConditionalResidualBlock1D,
+            cond_dim=cond_dim,
+            kernel_size=kernel_size,
+            n_groups=n_groups,
+            cond_predict_scale=cond_predict_scale,
+        )
 
         # local_cond_dim = obs_dim + 1
         local_cond_encoder = None
@@ -142,48 +150,12 @@ class ConditionalUnet1D(nn.Module):
             _, dim_out = in_out[0]
             dim_in = local_cond_dim
             local_cond_encoder = nn.ModuleList(
-                [
-                    # down encoder
-                    ConditionalResidualBlock1D(
-                        dim_in,
-                        dim_out,
-                        cond_dim=cond_dim,
-                        kernel_size=kernel_size,
-                        n_groups=n_groups,
-                        cond_predict_scale=cond_predict_scale,
-                    ),
-                    # up encoder
-                    ConditionalResidualBlock1D(
-                        dim_in,
-                        dim_out,
-                        cond_dim=cond_dim,
-                        kernel_size=kernel_size,
-                        n_groups=n_groups,
-                        cond_predict_scale=cond_predict_scale,
-                    ),
-                ]
+                [CondResBlock(dim_in, dim_out), CondResBlock(dim_in, dim_out)]
             )
 
         mid_dim = all_dims[-1]
         self.mid_modules = nn.ModuleList(
-            [
-                ConditionalResidualBlock1D(
-                    mid_dim,
-                    mid_dim,
-                    cond_dim=cond_dim,
-                    kernel_size=kernel_size,
-                    n_groups=n_groups,
-                    cond_predict_scale=cond_predict_scale,
-                ),
-                ConditionalResidualBlock1D(
-                    mid_dim,
-                    mid_dim,
-                    cond_dim=cond_dim,
-                    kernel_size=kernel_size,
-                    n_groups=n_groups,
-                    cond_predict_scale=cond_predict_scale,
-                ),
-            ]
+            [CondResBlock(mid_dim, mid_dim), CondResBlock(mid_dim, mid_dim)]
         )
 
         down_modules = nn.ModuleList([])
@@ -192,22 +164,8 @@ class ConditionalUnet1D(nn.Module):
             down_modules.append(
                 nn.ModuleList(
                     [
-                        ConditionalResidualBlock1D(
-                            dim_in,
-                            dim_out,
-                            cond_dim=cond_dim,
-                            kernel_size=kernel_size,
-                            n_groups=n_groups,
-                            cond_predict_scale=cond_predict_scale,
-                        ),
-                        ConditionalResidualBlock1D(
-                            dim_out,
-                            dim_out,
-                            cond_dim=cond_dim,
-                            kernel_size=kernel_size,
-                            n_groups=n_groups,
-                            cond_predict_scale=cond_predict_scale,
-                        ),
+                        CondResBlock(dim_in, dim_out),
+                        CondResBlock(dim_out, dim_out),
                         Downsample1d(dim_out) if not is_last else nn.Identity(),
                     ]
                 )
@@ -219,22 +177,8 @@ class ConditionalUnet1D(nn.Module):
             up_modules.append(
                 nn.ModuleList(
                     [
-                        ConditionalResidualBlock1D(
-                            dim_out * 2,
-                            dim_in,
-                            cond_dim=cond_dim,
-                            kernel_size=kernel_size,
-                            n_groups=n_groups,
-                            cond_predict_scale=cond_predict_scale,
-                        ),
-                        ConditionalResidualBlock1D(
-                            dim_in,
-                            dim_in,
-                            cond_dim=cond_dim,
-                            kernel_size=kernel_size,
-                            n_groups=n_groups,
-                            cond_predict_scale=cond_predict_scale,
-                        ),
+                        CondResBlock(dim_out * 2, dim_in),
+                        CondResBlock(dim_in, dim_in),
                         Upsample1d(dim_in) if not is_last else nn.Identity(),
                     ]
                 )
