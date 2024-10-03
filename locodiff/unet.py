@@ -131,11 +131,11 @@ class ConditionalUnet1D(nn.Module):
         super().__init__()
         all_dims = [input_dim] + list(down_dims)
         start_dim = down_dims[0]
+        in_out = list(zip(all_dims[:-1], all_dims[1:]))
 
         # diffusion step embedding, observations, vel_cmd, return
         cond_dim = cond_embed_dim + (obs_dim * T_cond) + 4
 
-        in_out = list(zip(all_dims[:-1], all_dims[1:]))
         CondResBlock = partial(
             ConditionalResidualBlock1D,
             cond_dim=cond_dim,
@@ -144,7 +144,6 @@ class ConditionalUnet1D(nn.Module):
             cond_predict_scale=cond_predict_scale,
         )
 
-        # local_cond_dim = obs_dim + 1
         local_cond_encoder = None
         if local_cond_dim is not None:
             _, dim_out = in_out[0]
