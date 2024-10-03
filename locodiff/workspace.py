@@ -1,4 +1,5 @@
 import logging
+import matplotlib.pyplot as plt
 import os
 import sys
 from typing import Callable, Tuple
@@ -364,7 +365,15 @@ class Workspace:
             self.device
         )
         returns = (rewards * gammas).sum(dim=-1)
-        returns = torch.exp(returns / 10)
+        returns = torch.exp(returns / 50)
         returns = (returns - returns.min()) / (returns.max() - returns.min())
 
+        # self.plot_returns(returns)
+
         return returns.unsqueeze(-1)
+    
+    def plot_returns(self, returns):
+        plt.figure(figsize=(10, 5))
+        plt.hist(returns.cpu().numpy(), bins=20)
+        plt.show()
+        exit()
