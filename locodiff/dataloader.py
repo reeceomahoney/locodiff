@@ -225,10 +225,10 @@ def get_dataloaders_and_scaler(
 
         # Build the scaler
         x_data = train_set.get_all_obs()
-        y_data = train_set.get_all_actions()
-        # y_data = torch.cat(
-        #     [train_set.get_all_obs(), train_set.get_all_actions()], dim=-1
-        # )
+        # y_data = train_set.get_all_actions()
+        y_data = torch.cat(
+            [train_set.get_all_obs(), train_set.get_all_actions()], dim=-1
+        )
         scaler = Scaler(x_data, y_data, scaling, device)
 
         # Build the dataloaders

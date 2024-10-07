@@ -17,14 +17,14 @@ use_ema: True
 obs_dim: 33
 action_dim: 12
 skill_dim: 2
-T: 4
+T: 7
 T_cond: 2
 T_action: 1
 num_envs: 150
 
 # diffusion
 sampling_steps: 3
-cond_mask_prob: 0.1
+cond_mask_prob: 0.0
 
 # reward
 return_horizon: 50

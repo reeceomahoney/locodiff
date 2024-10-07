@@ -300,15 +300,15 @@ class Workspace:
 
         raw_obs = batch["obs"]
         raw_action = batch.get("action", None)
-        skill = batch["skill"]
+        # skill = batch["skill"]
 
-        vel_cmd = batch.get("vel_cmd", None)
-        if vel_cmd is None:
-            vel_cmd = self.sample_vel_cmd(raw_obs.shape[0])
+        # vel_cmd = batch.get("vel_cmd", None)
+        # if vel_cmd is None:
+        #     vel_cmd = self.sample_vel_cmd(raw_obs.shape[0])
 
-        returns = batch.get("return", None)
-        if returns is None:
-            returns = self.compute_returns(raw_obs, vel_cmd)
+        # returns = batch.get("return", None)
+        # if returns is None:
+        #     returns = self.compute_returns(raw_obs, vel_cmd)
 
         obs = self.scaler.scale_input(raw_obs[:, : self.T_cond])
 
@@ -318,8 +318,8 @@ class Workspace:
             action = self.scaler.scale_output(
                 torch.cat(
                     [
-                        # raw_obs[:, self.T_cond - 1 : self.T_cond + self.T - 1],
-                        raw_action[:, self.T_cond - 1 : self.T_cond + self.T - 1],
+                        raw_obs[:, : self.T_cond + self.T - 1],
+                        raw_action[:, : self.T_cond + self.T - 1],
                     ],
                     dim=-1,
                 )
@@ -328,9 +328,9 @@ class Workspace:
         processed_batch = {
             "obs": obs,
             "action": action,
-            "vel_cmd": vel_cmd,
-            "skill": skill,
-            "return": returns,
+            # "vel_cmd": vel_cmd,
+            # "skill": skill,
+            # "return": returns,
         }
 
         return processed_batch

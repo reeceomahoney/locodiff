@@ -129,12 +129,14 @@ class ConditionalUnet1D(nn.Module):
         cond_predict_scale=False,
     ):
         super().__init__()
+        input_dim += obs_dim
         all_dims = [input_dim] + list(down_dims)
         start_dim = down_dims[0]
         in_out = list(zip(all_dims[:-1], all_dims[1:]))
 
         # diffusion step embedding, observations, vel_cmd, return
-        cond_dim = cond_embed_dim + (obs_dim * T_cond) + 4
+        # cond_dim = cond_embed_dim + (obs_dim * T_cond) + 4
+        cond_dim = cond_embed_dim
 
         CondResBlock = partial(
             ConditionalResidualBlock1D,
@@ -188,10 +190,6 @@ class ConditionalUnet1D(nn.Module):
             nn.Conv1d(start_dim, input_dim, 1),
         )
 
-        # self.obs_emb = nn.Linear(obs_dim, cond_embed_dim)
-        # self.vel_cmd_emb = nn.Linear(3, cond_embed_dim)
-        # self.return_emb = nn.Linear(1, cond_embed_dim)
-
         self.sigma_encoder = nn.Sequential(
             SinusoidalPosEmb(cond_embed_dim),
             nn.Linear(cond_embed_dim, cond_embed_dim * 4),
@@ -229,12 +227,12 @@ class ConditionalUnet1D(nn.Module):
         """
         sample = einops.rearrange(noised_action, "b t h -> b h t")
 
-        obs = data_dict["obs"].reshape(sample.shape[0], -1)
-        vel_cmd = data_dict["vel_cmd"]
-        returns = self.mask_cond(data_dict["return"], uncond)
+        # obs = data_dict["obs"].reshape(sample.shape[0], -1)
+        # vel_cmd = data_dict["vel_cmd"]
+        # returns = self.mask_cond(data_dict["return"], uncond)
         sigma_emb = self.sigma_encoder(sigma)
 
-        global_feature = torch.cat([sigma_emb, returns, vel_cmd, obs], dim=-1)
+        global_feature = sigma_emb
 
         # encode local features
         h_local = list()
