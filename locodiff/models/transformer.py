@@ -3,7 +3,7 @@ import logging
 import torch
 import torch.nn as nn
 
-from .utils import SinusoidalPosEmb
+from locodiff.utils import SinusoidalPosEmb
 
 log = logging.getLogger(__name__)
 

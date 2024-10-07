@@ -1,4 +1,4 @@
-_target_: locodiff.transformer.DiffusionTransformer
+_target_: locodiff.models.transformer.DiffusionTransformer
 obs_dim: ${obs_dim}
 skill_dim: ${skill_dim}
 act_dim: ${action_dim}

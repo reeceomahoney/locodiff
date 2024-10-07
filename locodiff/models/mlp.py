@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from .utils import SinusoidalPosEmb
+from locodiff.utils import SinusoidalPosEmb
 
 
 class DiffusionMLPSieve(nn.Module):
