@@ -1,0 +1,3 @@
+[submodule "env/dependencies/raisimLib"]
+	path = env/dependencies/raisimLib
+	url = git@github.com:raisimTech/raisimLib.git

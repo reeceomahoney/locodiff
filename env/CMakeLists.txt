@@ -8,7 +8,7 @@ set(CMAKE_BUILD_TYPE Release)
 # ##############################################################################
 
 # raisim
-list(APPEND CMAKE_PREFIX_PATH "~/ws/lib/raisimLib/raisim/linux")
+list(APPEND CMAKE_PREFIX_PATH "dependencies/raisimLib/raisim/linux")
 find_package(raisim CONFIG REQUIRED)
 
 # openmp
