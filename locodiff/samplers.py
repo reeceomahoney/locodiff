@@ -89,10 +89,9 @@ def sample_ddim(model, noise: torch.Tensor, data_dict: dict, **kwargs):
     num_steps = kwargs.get("num_steps", len(sigmas) - 1)
 
     # apply conditioning
-    x_t[:, : obs.shape[1], : obs.shape[2]] = obs #+ torch.randn_like(obs) * sigmas[i]
+    x_t[:, : obs.shape[1], : obs.shape[2]] = obs
 
     for i in range(num_steps):
-
         denoised = model(x_t, sigmas[i] * s_in, data_dict)
         t, t_next = -sigmas[i].log(), -sigmas[i + 1].log()
         h = t_next - t
@@ -120,10 +119,10 @@ def sample_euler_ancestral(model, noise: torch.Tensor, data_dict: dict, **kwargs
 
     obs = data_dict["obs"]
 
-    for i in range(len(sigmas) - 1):
-        # apply conditioning
-        x_t[:, : obs.shape[1], : obs.shape[2]] = obs + torch.randn_like(obs) * sigmas[i]
+    # apply conditioning
+    x_t[:, : obs.shape[1], : obs.shape[2]] = obs
 
+    for i in range(len(sigmas) - 1):
         # compute x_{t-1}
         denoised = model(x_t, sigmas[i] * s_in, data_dict)
         # get ancestral steps
@@ -137,8 +136,8 @@ def sample_euler_ancestral(model, noise: torch.Tensor, data_dict: dict, **kwargs
         if sigma_down > 0:
             x_t = x_t + torch.randn_like(x_t) * sigma_up
 
-    # enforce conditioning
-    x_t[:, : obs.shape[1], : obs.shape[2]] = obs
+        # apply conditioning
+        x_t[:, : obs.shape[1], : obs.shape[2]] = obs + torch.randn_like(obs) * sigmas[i]
 
     return x_t
 
