@@ -26,10 +26,11 @@ def main(cfg: DictConfig) -> None:
     model_cfg.device = cfg.device
     model_cfg.env.impl.server_port = cfg.server_port
     model_cfg.env.impl.max_time = 100
+    model_cfg.env.eval_times = cfg.num_runs
     model_cfg.T_action = 1
     model_cfg.use_ema = False
-    model_cfg.num_envs = 25 * len(cfg.lambda_values)
-    model_cfg.env.impl.num_envs = 25 * len(cfg.lambda_values)
+    model_cfg.num_envs = 1 * len(cfg.lambda_values)
+    model_cfg.env.impl.num_envs = 1 * len(cfg.lambda_values)
     model_cfg.sampling_steps = cfg.sampling_steps
     model_cfg.wandb_mode = "disabled"
 
@@ -45,7 +46,6 @@ def main(cfg: DictConfig) -> None:
 
     # Evaluate
     if cfg["test_rollout"]:
-        workspace.env.eval_n_times = cfg["num_runs"]
         results_dict = workspace.env.simulate(
             workspace, real_time=True, lambda_values=[0]
         )

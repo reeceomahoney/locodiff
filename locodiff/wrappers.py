@@ -49,14 +49,23 @@ class ScalingWrapper(nn.Module):
 
     def loss(self, noise, sigma, data_dict):
         action = data_dict["action"]
+        obs = data_dict["obs"]
 
         noised_action = action + noise * sigma.view(-1, 1, 1)
+
+        noised_action[:, : obs.shape[1], : obs.shape[2]] = obs
 
         c_skip, c_out, c_in = self.get_scalings(sigma)
         model_output = self.model(noised_action * c_in, sigma, data_dict)
         target = (action - c_skip * noised_action) / c_out
 
-        loss = (model_output - target).pow(2).mean()
+        loss = (model_output - target).pow(2)
+
+        loss_mask = torch.ones_like(loss)
+        loss_mask[:, : obs.shape[1], : obs.shape[2]] = 0
+        loss = loss * loss_mask
+        loss = loss.mean()
+
         return loss
 
     def forward(self, x_t, sigma, data_dict, uncond=False):

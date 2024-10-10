@@ -240,7 +240,7 @@ class Workspace:
         pred_action = self.scaler.clip(pred_action)
         pred_action = self.scaler.inverse_scale_output(pred_action)
         pred_action = pred_action.cpu().numpy()
-        pred_action = pred_action[:, : self.T_action].copy()
+        pred_action = pred_action[:, : self.T_action, self.obs_dim:].copy()
 
         if self.use_ema:
             self.ema_helper.restore(self.agent.parameters())

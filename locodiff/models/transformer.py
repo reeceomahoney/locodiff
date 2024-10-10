@@ -37,7 +37,7 @@ class DiffusionTransformer(nn.Module):
         self.weight_decay = weight_decay
         self.ddpm = ddpm
 
-        self.action_emb = nn.Linear(self.act_dim, self.d_model)
+        self.action_emb = nn.Linear(self.act_dim + self.obs_dim, self.d_model)
         self.obs_emb = nn.Linear(self.obs_dim + 1, self.d_model)
         self.sigma_emb = nn.Linear(1, self.d_model)
         self.vel_cmd_emb = nn.Linear(3, self.d_model)
@@ -47,24 +47,13 @@ class DiffusionTransformer(nn.Module):
         self.drop = nn.Dropout(dropout)
 
         self.pos_emb = (
-            SinusoidalPosEmb(d_model)(torch.arange(T)).unsqueeze(0).to(device)
+            SinusoidalPosEmb(d_model)(torch.arange(T + T_cond - 1))
+            .unsqueeze(0)
+            .to(device)
         )
         self.cond_pos_emb = (
-            SinusoidalPosEmb(d_model)(torch.arange(T_cond + 2)).unsqueeze(0).to(device)
+            SinusoidalPosEmb(d_model)(torch.arange(1)).unsqueeze(0).to(device)
         )
-
-        # self.encoder = nn.TransformerEncoder(
-        #     nn.TransformerEncoderLayer(
-        #         d_model=self.d_model,
-        #         nhead=self.nhead,
-        #         dim_feedforward=4 * self.d_model,
-        #         dropout=dropout,
-        #         activation="gelu",
-        #         batch_first=True,
-        #         norm_first=True,
-        #     ),
-        #     num_layers=self.num_layers,
-        # )
 
         self.decoder = nn.TransformerDecoder(
             nn.TransformerDecoderLayer(
@@ -78,14 +67,14 @@ class DiffusionTransformer(nn.Module):
             ),
             num_layers=self.num_layers,
         )
-        mask = self.generate_mask(T)
+        mask = self.generate_mask(T + T_cond - 1)
         self.register_buffer("mask", mask)
 
         encoder_mask = self.generate_mask(T_cond + 2)
         self.register_buffer("encoder_mask", encoder_mask)
 
         self.ln_f = nn.LayerNorm(self.d_model)
-        self.action_pred = nn.Linear(d_model, self.act_dim)
+        self.action_pred = nn.Linear(d_model, self.act_dim + self.obs_dim)
 
         self.apply(self._init_weights)
         self.to(device)
@@ -203,20 +192,19 @@ class DiffusionTransformer(nn.Module):
         # skill_emb = self.skill_emb(data_dict["skill"]).unsqueeze(1)
         # vel_cmd_emb = self.vel_cmd_emb(data_dict["vel_cmd"]).unsqueeze(1)
 
-        obs = data_dict["obs"]
+        # obs = data_dict["obs"]
         # skill = data_dict["skill"].unsqueeze(1).expand(-1, obs.shape[1], -1)
-        vel_cmd = data_dict["vel_cmd"].unsqueeze(1).expand(-1, obs.shape[1], -1)
-        obs = torch.cat([obs, vel_cmd], dim=-1)
-        obs_emb = self.obs_emb(obs)
+        # vel_cmd = data_dict["vel_cmd"].unsqueeze(1).expand(-1, obs.shape[1], -1)
+        # obs = torch.cat([obs, vel_cmd], dim=-1)
+        # obs_emb = self.obs_emb(obs)
 
-        returns = self.mask_cond(data_dict["return"], uncond)
-        return_emb = self.return_emb(returns).unsqueeze(1)
+        # returns = self.mask_cond(data_dict["return"], uncond)
+        # return_emb = self.return_emb(returns).unsqueeze(1)
 
-        cond = torch.cat([sigma_emb, return_emb, obs_emb], dim=1)
+        # cond = torch.cat([sigma_emb, return_emb, obs_emb], dim=1)
+        cond = sigma_emb
         cond += self.cond_pos_emb
         cond = self.drop(cond)
-
-        # cond = self.encoder(cond, mask=self.encoder_mask)
 
         action_emb += self.pos_emb
         x = self.decoder(tgt=action_emb, memory=cond, tgt_mask=self.mask)

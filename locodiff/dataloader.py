@@ -162,7 +162,7 @@ class SlicerWrapper(Dataset):
 
     def _create_slices(self, T_cond, T, return_horizon):
         slices = []
-        window = T_cond + T + return_horizon - 1
+        window = T_cond + T - 1
         for i in range(len(self.dataset)):
             length = len(self.dataset[i]["obs"])
             if length >= window:

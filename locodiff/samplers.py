@@ -90,7 +90,7 @@ def sample_ddim(model, noise: torch.Tensor, data_dict: dict, **kwargs):
 
     for i in range(num_steps):
         # apply conditioning
-        noise[:, : obs.shape[1], :obs.shape[2]] = obs + torch.randn_like(obs) * sigmas[i]
+        x_t[:, : obs.shape[1], : obs.shape[2]] = obs #+ torch.randn_like(obs) * sigmas[i]
 
         denoised = model(x_t, sigmas[i] * s_in, data_dict)
         t, t_next = -sigmas[i].log(), -sigmas[i + 1].log()
@@ -98,7 +98,7 @@ def sample_ddim(model, noise: torch.Tensor, data_dict: dict, **kwargs):
         x_t = ((-t_next).exp() / (-t).exp()) * x_t - (-h).expm1() * denoised
 
     # enforce conditioning
-    x_t[:, : obs.shape[1], :obs.shape[2]] = obs
+    x_t[:, : obs.shape[1], : obs.shape[2]] = obs
 
     return x_t
 
@@ -116,7 +116,13 @@ def sample_euler_ancestral(model, noise: torch.Tensor, data_dict: dict, **kwargs
     sigmas = kwargs["sigmas"]
     x_t = noise
     s_in = x_t.new_ones([x_t.shape[0]])
+
+    obs = data_dict["obs"]
+
     for i in range(len(sigmas) - 1):
+        # apply conditioning
+        x_t[:, : obs.shape[1], : obs.shape[2]] = obs + torch.randn_like(obs) * sigmas[i]
+
         # compute x_{t-1}
         denoised = model(x_t, sigmas[i] * s_in, data_dict)
         # get ancestral steps
@@ -129,6 +135,9 @@ def sample_euler_ancestral(model, noise: torch.Tensor, data_dict: dict, **kwargs
         x_t = x_t + d * dt
         if sigma_down > 0:
             x_t = x_t + torch.randn_like(x_t) * sigma_up
+
+    # enforce conditioning
+    x_t[:, : obs.shape[1], : obs.shape[2]] = obs
 
     return x_t
 
@@ -187,10 +196,18 @@ def sample_ddpm(model, noise: torch.Tensor, data_dict: dict, **kwargs):
     noise_scheduler = kwargs["noise_scheduler"]
     x_t = noise
 
+    obs = data_dict["obs"]
+
     for t in noise_scheduler.timesteps:
+        # apply conditioning
+        x_t[:, : obs.shape[1], : obs.shape[2]] = obs
+
         t_pt = t.float().to(noise.device)
         output = model(x_t, t_pt.expand(x_t.shape[0]), data_dict)
         x_t = noise_scheduler.step(output, t, x_t).prev_sample
+
+    # enforce conditioning
+    x_t[:, : obs.shape[1], : obs.shape[2]] = obs
 
     return x_t
 
