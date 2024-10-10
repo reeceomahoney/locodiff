@@ -302,7 +302,7 @@ class Workspace:
         raw_action = batch.get("action", None)
         # skill = batch["skill"]
 
-        vel_cmd = batch.get("vel_cmd", None)
+        # vel_cmd = batch.get("vel_cmd", None)
         # if vel_cmd is None:
         #     vel_cmd = self.sample_vel_cmd(raw_obs.shape[0])
 
@@ -310,8 +310,6 @@ class Workspace:
         # if returns is None:
         #     returns = self.compute_returns(raw_obs, vel_cmd)
 
-        vel_cmd = vel_cmd.unsqueeze(1).expand(-1, raw_obs.shape[1], -1)
-        raw_obs = torch.cat([raw_obs, vel_cmd], dim=-1)
         obs = self.scaler.scale_input(raw_obs[:, : self.T_cond])
 
         if raw_action is None:
