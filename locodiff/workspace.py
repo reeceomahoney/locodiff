@@ -311,7 +311,7 @@ class Workspace:
         #     returns = self.compute_returns(raw_obs, vel_cmd)
 
         vel_cmd = vel_cmd.unsqueeze(1).expand(-1, raw_obs.shape[1], -1)
-        raw_obs = torch.cat([raw_obs, vel_cmd], dims=-1)
+        raw_obs = torch.cat([raw_obs, vel_cmd], dim=-1)
         obs = self.scaler.scale_input(raw_obs[:, : self.T_cond])
 
         if raw_action is None:
