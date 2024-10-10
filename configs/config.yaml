@@ -1,6 +1,6 @@
 _target_: locodiff.workspace.Workspace
 defaults:
-  - model: unet
+  - model: transformer
   - _self_
 
 wandb_project: locodiff
@@ -14,7 +14,7 @@ device: cuda
 use_ema: True
 
 #dims
-obs_dim: 33
+obs_dim: 36
 action_dim: 12
 skill_dim: 2
 T: 7
