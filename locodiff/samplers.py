@@ -120,7 +120,7 @@ def sample_euler_ancestral(model, noise: torch.Tensor, data_dict: dict, **kwargs
     obs = data_dict["obs"]
 
     # apply conditioning
-    x_t[:, : obs.shape[1], : obs.shape[2]] = obs
+    # x_t[:, : obs.shape[1], : obs.shape[2]] = obs
 
     for i in range(len(sigmas) - 1):
         # compute x_{t-1}
