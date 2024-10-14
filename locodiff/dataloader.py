@@ -44,7 +44,7 @@ class ExpertDataset(Dataset):
     def load_and_process_data(self, dataset_path):
         data = np.load(dataset_path, allow_pickle=True).item()
 
-        obs = data["obs"]
+        obs = data["obs"][..., :33]
         actions = data["action"]
         vel_cmds = data["vel_cmd"]
         skills = data["skill"]
@@ -72,7 +72,7 @@ class ExpertDataset(Dataset):
         processed_data = {
             "obs": obs,
             "action": actions,
-            "vel_cmd": vel_cmds,
+            # "vel_cmd": vel_cmds,
             "skill": skills,
             "mask": masks,
         }

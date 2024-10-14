@@ -14,7 +14,7 @@ device: cuda
 use_ema: True
 
 #dims
-obs_dim: 36
+obs_dim: 33
 action_dim: 12
 skill_dim: 2
 T: 50

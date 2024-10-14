@@ -312,9 +312,9 @@ class Workspace:
         raw_action = batch.get("action", None)
         # skill = batch["skill"]
 
-        # vel_cmd = batch.get("vel_cmd", None)
-        # if vel_cmd is None:
-        #     vel_cmd = self.sample_vel_cmd(raw_obs.shape[0])
+        vel_cmd = batch.get("vel_cmd", None)
+        if vel_cmd is None:
+            vel_cmd = self.sample_vel_cmd(raw_obs.shape[0])
 
         # returns = batch.get("return", None)
         # if returns is None:
@@ -338,7 +338,7 @@ class Workspace:
         processed_batch = {
             "obs": obs,
             "action": action,
-            # "vel_cmd": vel_cmd,
+            "vel_cmd": vel_cmd,
             # "skill": skill,
             # "return": returns,
         }
