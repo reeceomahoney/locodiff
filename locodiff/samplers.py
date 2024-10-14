@@ -86,12 +86,12 @@ def sample_ddim(model, noise: torch.Tensor, data_dict: dict, **kwargs):
     x_t = noise
     s_in = x_t.new_ones([x_t.shape[0]])
 
-    obs = data_dict["obs"]
+    # obs = data_dict["obs"]
 
     num_steps = kwargs.get("num_steps", len(sigmas) - 1)
 
     # apply conditioning
-    x_t[:, : obs.shape[1], : obs.shape[2]] = obs
+    # x_t[:, : obs.shape[1], : obs.shape[2]] = obs
 
     for i in range(num_steps):
         denoised = model(x_t, sigmas[i] * s_in, data_dict)
@@ -100,7 +100,7 @@ def sample_ddim(model, noise: torch.Tensor, data_dict: dict, **kwargs):
         x_t = ((-t_next).exp() / (-t).exp()) * x_t - (-h).expm1() * denoised
 
         # apply conditioning
-        x_t[:, : obs.shape[1], : obs.shape[2]] = obs + torch.randn_like(obs) * sigmas[i]
+        # x_t[:, : obs.shape[1], : obs.shape[2]] = obs + torch.randn_like(obs) * sigmas[i]
 
     return x_t
 

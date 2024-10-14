@@ -1,9 +1,9 @@
 import logging
-import matplotlib.pyplot as plt
 import os
 import sys
 from typing import Callable, Tuple
 
+import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import wandb
@@ -240,14 +240,14 @@ class Workspace:
         pred_action = self.scaler.clip(pred_action)
         pred_action = self.scaler.inverse_scale_output(pred_action)
         pred_action = pred_action.cpu().numpy()
-        pred_action = pred_action[:, : self.T_action, self.obs_dim:].copy()
+        pred_action = pred_action[:, : self.T_action, self.obs_dim :].copy()
 
         if self.use_ema:
             self.ema_helper.restore(self.agent.parameters())
 
         return pred_action
 
-    def encode(self, batch:dict):
+    def encode(self, batch: dict):
         data_dict = self.process_batch(batch)
 
         if self.use_ema:
@@ -328,8 +328,8 @@ class Workspace:
             action = self.scaler.scale_output(
                 torch.cat(
                     [
-                        raw_obs[:, : self.T_cond + self.T - 1],
-                        raw_action[:, : self.T_cond + self.T - 1],
+                        raw_obs[:, self.T_cond - 1 : self.T_cond + self.T - 1],
+                        raw_action[:, self.T_cond - 1 : self.T_cond + self.T - 1],
                     ],
                     dim=-1,
                 )
@@ -381,7 +381,7 @@ class Workspace:
         # self.plot_returns(returns)
 
         return returns.unsqueeze(-1)
-    
+
     def plot_returns(self, returns):
         plt.figure(figsize=(10, 5))
         plt.hist(returns.cpu().numpy(), bins=20)

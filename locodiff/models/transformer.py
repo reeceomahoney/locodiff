@@ -38,7 +38,7 @@ class DiffusionTransformer(nn.Module):
         self.ddpm = ddpm
 
         self.action_emb = nn.Linear(self.act_dim + self.obs_dim, self.d_model)
-        self.obs_emb = nn.Linear(self.obs_dim + 1, self.d_model)
+        self.obs_emb = nn.Linear(self.obs_dim, self.d_model)
         self.sigma_emb = nn.Linear(1, self.d_model)
         self.vel_cmd_emb = nn.Linear(3, self.d_model)
         self.return_emb = nn.Linear(1, self.d_model)
@@ -47,12 +47,10 @@ class DiffusionTransformer(nn.Module):
         self.drop = nn.Dropout(dropout)
 
         self.pos_emb = (
-            SinusoidalPosEmb(d_model)(torch.arange(T + T_cond - 1))
-            .unsqueeze(0)
-            .to(device)
+            SinusoidalPosEmb(d_model)(torch.arange(T)).unsqueeze(0).to(device)
         )
         self.cond_pos_emb = (
-            SinusoidalPosEmb(d_model)(torch.arange(1)).unsqueeze(0).to(device)
+            SinusoidalPosEmb(d_model)(torch.arange(T_cond + 1)).unsqueeze(0).to(device)
         )
 
         self.decoder = nn.TransformerDecoder(
@@ -67,7 +65,7 @@ class DiffusionTransformer(nn.Module):
             ),
             num_layers=self.num_layers,
         )
-        mask = self.generate_mask(T + T_cond - 1)
+        mask = self.generate_mask(T)
         self.register_buffer("mask", mask)
 
         encoder_mask = self.generate_mask(T_cond + 2)
@@ -188,7 +186,7 @@ class DiffusionTransformer(nn.Module):
 
         # embeddings
         action_emb = self.action_emb(noised_action)
-        # obs_emb = self.obs_emb(data_dict["obs"])
+        obs_emb = self.obs_emb(data_dict["obs"])
         # skill_emb = self.skill_emb(data_dict["skill"]).unsqueeze(1)
         # vel_cmd_emb = self.vel_cmd_emb(data_dict["vel_cmd"]).unsqueeze(1)
 
@@ -201,8 +199,7 @@ class DiffusionTransformer(nn.Module):
         # returns = self.mask_cond(data_dict["return"], uncond)
         # return_emb = self.return_emb(returns).unsqueeze(1)
 
-        # cond = torch.cat([sigma_emb, return_emb, obs_emb], dim=1)
-        cond = sigma_emb
+        cond = torch.cat([sigma_emb, obs_emb], dim=1)
         cond += self.cond_pos_emb
         cond = self.drop(cond)
 

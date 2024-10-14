@@ -17,13 +17,13 @@ use_ema: True
 obs_dim: 36
 action_dim: 12
 skill_dim: 2
-T: 4
-T_cond: 8
+T: 50
+T_cond: 2
 T_action: 1
 num_envs: 50
 
 # diffusion
-sampling_steps: 20
+sampling_steps: 3
 cond_mask_prob: 0.0
 
 # reward
@@ -44,7 +44,7 @@ agent:
   T_cond: ${T_cond}
   num_envs: ${num_envs}
   sampling_steps: ${sampling_steps}
-  sampler_type: euler_ancestral
+  sampler_type: ddim
   sigma_data: 0.5
   sigma_min: 0.001
   sigma_max: 80

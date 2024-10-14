@@ -64,7 +64,7 @@ class Agent(nn.Module):
         else:
             batch_size = data_dict["action"].shape[0]
 
-        noise = torch.randn((batch_size, self.T + self.T_cond - 1, self.obs_dim + self.action_dim)).to(
+        noise = torch.randn((batch_size, self.T, self.obs_dim + self.action_dim)).to(
             self.device
         )
         if self.sampler_type == "ddpm":
