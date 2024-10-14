@@ -71,6 +71,8 @@ def get_sampler(sampler_type: str) -> Callable:
         return sample_euler_ancestral
     elif sampler_type == "ddpm":
         return sample_ddpm
+    elif sampler_type == "encoder_ddim":
+        return encode_ddim
     else:
         raise ValueError(f"Unknown sampler type: {sampler_type}")
 
@@ -99,6 +101,25 @@ def sample_ddim(model, noise: torch.Tensor, data_dict: dict, **kwargs):
 
         # apply conditioning
         x_t[:, : obs.shape[1], : obs.shape[2]] = obs + torch.randn_like(obs) * sigmas[i]
+
+    return x_t
+
+
+@torch.no_grad()
+def encode_ddim(model, noise: torch.Tensor, data_dict: dict, **kwargs):
+    sigmas = kwargs["sigmas"]
+    sigmas[-1] = 1e-3
+    x_t = data_dict["action"]
+    s_in = x_t.new_ones([x_t.shape[0]])
+
+    num_steps = kwargs.get("num_steps", len(sigmas) - 1)
+
+    for i in reversed(range(num_steps)):
+        denoised = model(x_t, sigmas[i+1] * s_in, data_dict)
+        t, t_next = -sigmas[i+1].log(), -sigmas[i].log()
+        h = t_next - t
+        x_t_prev = ((-t).exp() / (-t_next).exp()) * (x_t + (-h).expm1() * denoised)
+        x_t = x_t_prev
 
     return x_t
 

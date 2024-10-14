@@ -84,6 +84,16 @@ class Agent(nn.Module):
             return x_0, x_0_max_return
         else:
             return x_0
+    
+    def encode(self, data_dict):
+        noise = None
+        sigmas = get_sigmas_exponential(
+            self.sampling_steps, self.sigma_min, self.sigma_max, self.device
+        )
+        kwargs = {"sigmas": sigmas}
+        x_0 = self.sampler(self.model, noise, data_dict, **kwargs)
+        return x_0
+
 
     def loss(self, data_dict) -> torch.Tensor:
         self.train()

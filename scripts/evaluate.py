@@ -2,12 +2,15 @@ import logging
 import os
 
 import hydra
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from omegaconf import DictConfig, OmegaConf
 
 from locodiff.classifier import ClassifierGuidedSampleModel
+from locodiff.samplers import get_sampler
 
 log = logging.getLogger(__name__)
 
@@ -83,7 +86,9 @@ def main(cfg: DictConfig) -> None:
         )
         workspace.env.cond_mask_prob = 0.1
 
-        workspace.agent.model = ClassifierGuidedSampleModel(workspace.agent.model, classifier, 1)
+        workspace.agent.model = ClassifierGuidedSampleModel(
+            workspace.agent.model, classifier, 1
+        )
         results_dict = workspace.env.simulate(
             workspace, real_time=False, lambda_values=cfg.lambda_values
         )
@@ -102,6 +107,15 @@ def main(cfg: DictConfig) -> None:
         # plt.xlabel("Lambda")
         # plt.ylabel("Velocity tracking return")
         # plt.show()
+    if cfg["test_encoder"]:
+        workspace.agent.sampler = get_sampler("encoder_ddim")
+        batch = next(iter(workspace.test_loader))
+        encoded_batch = workspace.encode(batch)
+        stds = encoded_batch.std(dim=(0,1))
+        stds = stds.cpu().numpy()
+        plt.bar(range(len(stds)), stds)
+        # plt.show()
+        plt.savefig("foo.png")
 
 
 if __name__ == "__main__":

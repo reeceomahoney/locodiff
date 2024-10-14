@@ -247,6 +247,16 @@ class Workspace:
 
         return pred_action
 
+    def encode(self, batch:dict):
+        data_dict = self.process_batch(batch)
+
+        if self.use_ema:
+            self.ema_helper.store(self.agent.parameters())
+            self.ema_helper.copy_to(self.agent.parameters())
+
+        out = self.agent.encode(data_dict)
+        return out
+
     def reset(self, done):
         self.obs_hist[done] = 0
         self.skill_hist[done] = 0
