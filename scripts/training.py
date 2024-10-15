@@ -8,12 +8,13 @@ import wandb
 from omegaconf import DictConfig, OmegaConf
 
 
-@hydra.main(version_base=None, config_path="../configs", config_name="config.yaml")
+@hydra.main(version_base=None, config_path="../configs", config_name="classifier.yaml")
 def main(cfg: DictConfig) -> None:
     # set seed
-    random.seed(cfg.env.seed)
-    np.random.seed(cfg.env.seed)
-    torch.manual_seed(cfg.env.seed)
+    seed = 6
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
 
     # debug mode
     if sys.gettrace() is not None:

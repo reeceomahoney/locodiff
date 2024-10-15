@@ -1,4 +1,7 @@
 _target_: locodiff.classifier_workspace.ClassifierWorkspace
+defaults:
+  - model: transformer
+  - _self_
 
 wandb_project: locodiff_classifier
 wandb_mode: online
@@ -6,32 +9,38 @@ wandb_mode: online
 # training
 train_steps: 5e5
 eval_every: 1000
-seed: 6
 device: cuda
 
 #dims
 obs_dim: 33
 action_dim: 12
 skill_dim: 2
-T: 4
-T_cond: 8
+T: 50
+T_cond: 2
 T_action: 1
-num_envs: 125
+num_envs: 50
 
 # diffusion
 sampling_steps: 10
 sigma_data: 0.5
 sigma_min: 0.001
 sigma_max: 80
+cond_mask_prob: 0.0
 
 # reward
 return_horizon: 50
-reward_fn: fwd_bwd
+reward_fn: vel_target_var
 
-agent_path: logs/2024-09-27/16-20-36/
+wrapper:
+  _target_: locodiff.wrappers.ScalingWrapper
+  _partial_: true
+  sigma_data: ${agent.sigma_data}
+
+agent_path: logs/2024-10-14/17-28-22/
 
 agent:
   _target_: locodiff.agent.Agent
+  _partial_: true
   obs_dim: ${obs_dim}
   action_dim: ${action_dim}
   T: ${T}
@@ -43,25 +52,8 @@ agent:
   sigma_min: 0.001
   sigma_max: 80
   cond_lambda: 1
-  cond_mask_prob: 0.0
+  cond_mask_prob: ${cond_mask_prob}
   device: ${device}
-  model:
-    _target_: locodiff.wrappers.ScalingWrapper
-    sigma_data: ${sigma_data}
-    model:
-      _target_: locodiff.transformer.DiffusionTransformer
-      obs_dim: ${obs_dim}
-      skill_dim: ${skill_dim}
-      act_dim: ${action_dim}
-      d_model: 128
-      nhead: 4
-      num_layers: 2
-      T: ${T}
-      T_cond: ${T_cond}
-      device: ${device}
-      cond_mask_prob: 0.0
-      dropout: 0.0
-      weight_decay: 1e-3
   noise_scheduler:
     _target_: diffusers.schedulers.scheduling_ddpm.DDPMScheduler
     num_train_timesteps: 3
@@ -72,15 +64,14 @@ agent:
     clip_sample: True
     prediction_type: epsilon
 
-
 classifier:
   _target_: locodiff.classifier.ClassifierTransformer
   obs_dim: ${obs_dim}
   skill_dim: ${skill_dim}
   act_dim: ${action_dim}
-  d_model: 128
+  d_model: 256
   nhead: 4
-  num_layers: 2
+  num_layers: 4
   T: ${T}
   T_cond: ${T_cond}
   device: ${device}

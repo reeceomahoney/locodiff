@@ -68,7 +68,7 @@ class ClassifierTransformer(nn.Module):
         self.ddpm = ddpm
 
         self.action_emb = nn.Linear(self.obs_dim + self.act_dim, self.d_model)
-        self.obs_emb = nn.Linear(self.obs_dim + 1, self.d_model)
+        self.obs_emb = nn.Linear(self.obs_dim + 3, self.d_model)
 
         self.drop = nn.Dropout(dropout)
 

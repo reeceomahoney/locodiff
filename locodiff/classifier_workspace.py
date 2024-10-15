@@ -13,7 +13,6 @@ from tqdm import tqdm, trange
 
 import locodiff.utils as utils
 import wandb
-from locodiff.agent import Agent
 
 # A logger for this file
 log = logging.getLogger(__name__)
@@ -23,7 +22,9 @@ class ClassifierWorkspace:
 
     def __init__(
         self,
-        agent: Agent,
+        model,
+        wrapper: Callable,
+        agent: Callable,
         classifier: nn.Module,
         optimizer: Callable,
         lr_scheduler: Callable,
@@ -33,7 +34,6 @@ class ClassifierWorkspace:
         wandb_mode: str,
         train_steps: int,
         eval_every: int,
-        seed: int,
         device: str,
         obs_dim: int,
         action_dim: int,
@@ -46,6 +46,7 @@ class ClassifierWorkspace:
         sigma_data: float,
         sigma_min: float,
         sigma_max: float,
+        cond_mask_prob: float,
         return_horizon: int,
         reward_fn: str,
     ):
@@ -57,11 +58,6 @@ class ClassifierWorkspace:
             self.output_dir = HydraConfig.get().runtime.output_dir
             wandb_mode = "online"
 
-        # set seed
-        random.seed(seed)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-
         # training
         self.train_steps = int(train_steps)
         self.eval_every = int(eval_every)
@@ -71,7 +67,7 @@ class ClassifierWorkspace:
         self.train_loader, self.test_loader, self.scaler = dataset_fn
 
         # agent
-        self.agent = agent
+        self.agent = agent(model=wrapper(model=model))
         self.agent.load_state_dict(
             torch.load(
                 os.path.join(agent_path, "model", "model.pt"), map_location=self.device
@@ -282,21 +278,30 @@ class ClassifierWorkspace:
         return {k: v.clone().to(self.device) for k, v in batch.items()}
 
     def sample_vel_cmd(self, batch_size):
-        vel_cmd = torch.randint(0, 2, (batch_size, 1), device=self.device).float()
-        return vel_cmd * 2 - 1
+        # vel_cmd = torch.randint(0, 2, (batch_size, 1), device=self.device).float()
+        # return vel_cmd * 2 - 1
+        vel_limits = [0.8, 0.5, 1.0]
+        vel_cmd = torch.rand(batch_size, 3, device=self.device)
+
+        for i in range(3):
+            vel_cmd[i] = vel_cmd[i] * 2 * vel_limits[i] - vel_limits[i]
+
+        return vel_cmd
 
     def compute_returns(self, obs, vel_cmd):
         rewards = utils.reward_function(obs, vel_cmd, self.reward_fn)
         rewards = rewards[:, self.T_cond - 1 :] - 1
+        rewards = (rewards - rewards.min()) / (rewards.max() - rewards.min())
+        return rewards.unsqueeze(-1)
 
-        gammas = torch.tensor([0.99**i for i in range(self.return_horizon)]).to(
-            self.device
-        )
-        returns = torch.zeros((obs.shape[0], self.T)).to(self.device)
-        for i in range(self.T):
-            ret = (rewards[:, i : i + self.return_horizon] * gammas).sum(dim=-1)
-            ret = torch.exp(ret / 10)
-            ret = (ret - ret.min()) / (ret.max() - ret.min())
-            returns[:, i] = ret
-
-        return returns.unsqueeze(-1)
+        # gammas = torch.tensor([0.99**i for i in range(self.return_horizon)]).to(
+        #     self.device
+        # )
+        # returns = torch.zeros((obs.shape[0], self.T)).to(self.device)
+        # for i in range(self.T):
+        #     ret = (rewards[:, i : i + self.return_horizon] * gammas).sum(dim=-1)
+        #     ret = torch.exp(ret / 10)
+        #     ret = (ret - ret.min()) / (ret.max() - ret.min())
+        #     returns[:, i] = ret
+        #
+        # return returns.unsqueeze(-1)
