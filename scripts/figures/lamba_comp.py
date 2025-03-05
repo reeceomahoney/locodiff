@@ -48,6 +48,8 @@ ax1.bar(
 ax1.set_xlabel(r"$\lambda$", fontsize=24, labelpad=20)
 ax1.set_ylabel("Rewards", fontsize=24, labelpad=20)
 ax1.tick_params(axis="y")
+ax1.set_axisbelow(True)
+ax1.set_ylim(0, 1.1)
 
 # Create a secondary y-axis for terminals
 ax2 = ax1.twinx()
@@ -61,8 +63,8 @@ ax2.grid(False)
 ax1.set_xticks(x)
 ax1.set_xticklabels(x_labels)
 ax1.set_title(
-    "Velocity Tracking Reward and Terminations for Different λ Values",
-    fontsize=24,
+    "Velocity tracking reward and terminations for different λ values",
+    fontsize=28,
     pad=20,
 )
 
@@ -78,10 +80,11 @@ ax1.legend(
     fontsize=24,
     fancybox=True,
     facecolor="white",
+    ncol=2,
 )
 
 # Add grid for better readability
-ax1.grid(True, linestyle="--")
+ax1.grid(True)
 ax1.set_axisbelow(True)
 
 # Ensure y-axes have a reasonable number of ticks
@@ -96,4 +99,4 @@ ax1.patch.set_linewidth(1.5)
 
 # Tight layout and save with high DPI
 plt.tight_layout()
-plt.show()
+plt.savefig("lambda_comp.pdf")
